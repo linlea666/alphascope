@@ -23,6 +23,7 @@ import numpy as np
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.research.holders import compute_wallet_captures
 from app.research.swings import Bar, Leg, zigzag
 
 log = logging.getLogger(__name__)
@@ -44,6 +45,9 @@ VALID_WINDOWS = {
 }
 MIN_DECISIONS = {"scalp": 30, "short": 15, "swing": 6, "macro": 3}
 GROUPS = {"all": None, "btc_eth": ("BTC", "ETH")}
+# Per-coin groups ("c:<coin>") are added for coins with at least the scale's minimum scored decisions.
+EXTREME = 0.8  # a decision in the best 20% of its window (buy near the low / sell near the high)
+MAKER_HEAVY = 0.8  # share of resting (non-crossing) fills above which a wallet looks like a market maker / grid
 N_PERM = 500
 PIVOT_TIME_TOL = 0.2   # share of the leg's duration
 PIVOT_PRICE_TOL = 0.25  # share of the leg's amplitude
@@ -216,13 +220,15 @@ class Scored:
     pivot: Pivot | None
 
 
-def permutation_test(items: list[Scored], market, span: tuple[int, int], rng: np.random.Generator) -> tuple[float, float]:
-    """(null mean, p) for the weighted mean location under circular time shifts within `span`."""
+def permutation_test(items: list[Scored], market, span: tuple[int, int], rng: np.random.Generator) -> tuple[float, float, float]:
+    """(null mean, p, null extreme share) for the weighted mean location under circular time shifts."""
     a, b = span
     length = max(b - a, 1)
     shifts = rng.integers(0, length, size=N_PERM)[:, None]
     num = np.zeros(N_PERM)
     den = np.zeros(N_PERM)
+    ext_num = np.zeros(N_PERM)
+    ext_den = np.zeros(N_PERM)
     actual_w = sum(i.weight for i in items)
     actual = sum(i.weight * i.loc for i in items) / actual_w
     by_coin: dict[str, list[Scored]] = {}
@@ -241,12 +247,15 @@ def permutation_test(items: list[Scored], market, span: tuple[int, int], rng: np
         ok = valid & ~np.isnan(loc)
         num += np.where(ok, loc * w, 0).sum(axis=1)
         den += np.where(ok, w, 0).sum(axis=1)
+        ext_num += (ok & (loc >= EXTREME)).sum(axis=1)
+        ext_den += ok.sum(axis=1)
     null = np.where(den > 0, num / np.where(den > 0, den, 1), np.nan)
     null = null[~np.isnan(null)]
     if null.size == 0:
-        return float("nan"), float("nan")
+        return float("nan"), float("nan"), float("nan")
     p = (1 + int((null >= actual - 1e-12).sum())) / (1 + null.size)
-    return float(null.mean()), p
+    extreme = float(ext_num.sum() / ext_den.sum()) if ext_den.sum() else float("nan")
+    return float(null.mean()), p, extreme
 
 
 def score_wallet(session: Session, wallet_id: int, as_of: datetime, market, rng: np.random.Generator) -> list[dict]:
@@ -287,6 +296,13 @@ def score_wallet(session: Session, wallet_id: int, as_of: datetime, market, rng:
               "st": s.status, "loc": s.loc, "wt": s.weight,
               "pts": datetime.fromtimestamp(s.pivot.minute * 60, tz=UTC) if s.pivot else None} for s in scored])
 
+    fills = session.execute(text("""
+        SELECT coin, time, crossed FROM fill WHERE wallet_id = :w AND crossed IS NOT NULL"""), {"w": wallet_id}).all()
+    fill_minutes = [(c, _minutes(t), bool(x)) for c, t, x in fills]
+    per_coin_counts: dict[tuple[str, str], int] = {}
+    for s_ in scored:
+        if s_.status == "scored":
+            per_coin_counts[(s_.scale, s_.coin)] = per_coin_counts.get((s_.scale, s_.coin), 0) + 1
     cycles = session.execute(text("""
         SELECT coin, scale, direction, opened_at, coalesce(closed_at, :as_of) AS end_at, status,
                realized_pnl - fees AS net FROM position_cycle WHERE wallet_id = :w"""),
@@ -296,7 +312,10 @@ def score_wallet(session: Session, wallet_id: int, as_of: datetime, market, rng:
     for scale in LADDER:
         for window, days in WINDOWS.items():
             start_min = now_min - days * 1440 if days else None
-            for group, coins in GROUPS.items():
+            groups = dict(GROUPS)
+            groups.update({f"c:{coin}": (coin,) for (sc, coin), n in per_coin_counts.items()
+                           if sc == scale and n >= MIN_DECISIONS[scale]})
+            for group, coins in groups.items():
                 def in_scope(coin: str, minute: int) -> bool:
                     return (coins is None or coin in coins) and (start_min is None or minute >= start_min)
 
@@ -306,10 +325,21 @@ def score_wallet(session: Session, wallet_id: int, as_of: datetime, market, rng:
                        "as_of": as_of, "n": len(items), "n_scored": len(ok), "loc": None, "null": None,
                        "edge": None, "edge_s": None, "p": None, "hits": sum(1 for s in ok if s.pivot),
                        "pivots": 0, "pivots_hit": 0, "precision": None, "recall": None, "align": None,
-                       "cycles": 0, "net": None}
+                       "cycles": 0, "net": None, "n_buy": 0, "n_sell": 0, "buy_loc": None, "sell_loc": None,
+                       "buy_ext": None, "sell_ext": None, "null_ext": None, "maker": None}
+                scoped_fills = [x for c, m, x in fill_minutes if in_scope(c, m)]
+                if scoped_fills:
+                    res["maker"] = sum(1 for x in scoped_fills if not x) / len(scoped_fills)
                 if ok:
                     w = sum(s.weight for s in ok) or 1.0
                     res["loc"] = sum(s.weight * s.loc for s in ok) / w
+                    for side, key in ((True, "buy"), (False, "sell")):
+                        part = [s for s in ok if s.buy == side]
+                        res[f"n_{key}"] = len(part)
+                        if part:
+                            pw = sum(s.weight for s in part) or 1.0
+                            res[f"{key}_loc"] = sum(s.weight * s.loc for s in part) / pw
+                            res[f"{key}_ext"] = sum(1 for s in part if s.loc >= EXTREME) / len(part)
                     res["precision"] = res["hits"] / len(ok)
                     # recall: pivots on traded coins inside the wallet's active span per coin
                     span_by_coin: dict[str, tuple[int, int]] = {}
@@ -356,9 +386,9 @@ def score_wallet(session: Session, wallet_id: int, as_of: datetime, market, rng:
                 else:
                     res["status"] = "scored"
                     span = (start_min if start_min is not None else min(s.minute for s in ok), now_min)
-                    null_mean, p = permutation_test(ok, market, span, rng)
+                    null_mean, p, null_ext = permutation_test(ok, market, span, rng)
                     if not math.isnan(null_mean):
-                        res["null"], res["p"] = null_mean, p
+                        res["null"], res["p"], res["null_ext"] = null_mean, p, null_ext
                         res["edge"] = res["loc"] - null_mean
                         res["edge_s"] = res["edge"] * len(ok) / (len(ok) + MIN_DECISIONS[scale])
                 results.append(res)
@@ -372,13 +402,16 @@ def run_timing(sf: sessionmaker[Session], seed: int = 7) -> dict:
         coins = s.execute(text("SELECT DISTINCT coin FROM trade_decision")).scalars().all()
         market = build_market(s, coins)
         wallets = s.execute(text("""
-            SELECT f.wallet_id, CASE WHEN f.status = 'synced' THEN now() ELSE f.latest_fill_at END AS as_of
+            SELECT f.wallet_id, CASE WHEN f.status = 'synced' THEN now() ELSE f.latest_fill_at END AS as_of,
+                   CASE WHEN coalesce(f.truncated, false) THEN f.earliest_fill_at ELSE f.requested_start END AS coverage
             FROM fill_sync f WHERE f.reconstructed_at IS NOT NULL""")).all()
         s.commit()
     all_rows: list[dict] = []
-    for wid, as_of in wallets:
+    captures = 0
+    for wid, as_of, coverage in wallets:
         with sf() as s:
             rows = score_wallet(s, wid, as_of, market, rng)
+            captures += compute_wallet_captures(s, wid, as_of, coverage, market)
             s.commit()
         all_rows.extend(rows)
     # Benjamini-Hochberg per (scale, window, group) across wallets
@@ -395,12 +428,15 @@ def run_timing(sf: sessionmaker[Session], seed: int = 7) -> dict:
             s.execute(text("""
                 INSERT INTO timing_score (wallet_id, scale, time_window, coin_group, version, as_of, status, n_decisions,
                   n_scored, location, null_mean, edge, edge_shrunk, p_value, q_value, pivot_hits, pivots, pivots_hit,
-                  precision, recall, alignment, cycles, net_pnl)
+                  precision, recall, alignment, cycles, net_pnl, n_buy, n_sell, buy_location, sell_location,
+                  buy_extreme, sell_extreme, null_extreme, maker_share)
                 VALUES (:w, :scale, :window, :group, :v, :as_of, :status, :n, :n_scored, :loc, :null, :edge, :edge_s,
-                  :p, :q, :hits, :pivots, :pivots_hit, :precision, :recall, :align, :cycles, :net)"""),
+                  :p, :q, :hits, :pivots, :pivots_hit, :precision, :recall, :align, :cycles, :net, :n_buy, :n_sell,
+                  :buy_loc, :sell_loc, :buy_ext, :sell_ext, :null_ext, :maker)"""),
                 [{**r, "q": r.get("q")} for r in all_rows])
         s.commit()
     scored = [r for r in all_rows if r["status"] == "scored"]
     return {"coins_with_series": len({c for c, _ in market}), "series": len(market), "wallets": len(wallets),
+            "leg_captures": captures,
             "scores": len(all_rows), "scored": len(scored),
             "significant_q10": sum(1 for r in scored if r.get("q") is not None and r["q"] < 0.1)}

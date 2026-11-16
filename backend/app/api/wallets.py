@@ -164,3 +164,70 @@ def wallet_positions(address: str, session: Session = Depends(get_session), limi
         "scales": scales,
         "cycles": [{k: (num(v) if hasattr(v, "is_finite") else v) for k, v in dict(c).items()} for c in cycles],
     }
+
+
+REPLAY_INTERVALS = {"15m": ("scalp", 15), "1h": ("short", 60), "4h": ("swing", 240), "1d": ("macro", 1440)}
+
+
+@router.get("/{address}/replay")
+def wallet_replay(
+    address: str,
+    session: Session = Depends(get_session),
+    coin: str | None = None,
+    interval: str = "1h",
+    end: str | None = Query(None, description="ISO time of the window end; default = the coin's last decision"),
+    bars: int = Query(300, ge=50, le=1000),
+):
+    """Candles of one coin with the wallet's buy/sell decisions and the timeframe's swing pivots (K-line replay)."""
+    address = address.lower()
+    if not ADDRESS_RE.match(address):
+        raise HTTPException(422, "invalid address")
+    if interval not in REPLAY_INTERVALS:
+        raise HTTPException(422, f"interval must be one of {sorted(REPLAY_INTERVALS)}")
+    wid = session.execute(text("SELECT id FROM wallet WHERE address = :a"), {"a": address}).scalar()
+    if wid is None:
+        raise HTTPException(404, "wallet not in database")
+    coins = session.execute(text("""
+        SELECT coin, count(*) AS decisions, max(started_at) AS last_at FROM trade_decision WHERE wallet_id = :w
+        GROUP BY coin ORDER BY count(*) DESC LIMIT 30"""), {"w": wid}).mappings().all()
+    if not coins:
+        return {"coins": [], "coin": None, "candles": [], "decisions": [], "pivots": []}
+    coin = coin or coins[0]["coin"]
+    scale, step = REPLAY_INTERVALS[interval]
+    end_ts = end or session.execute(text("""
+        SELECT max(started_at) FROM trade_decision WHERE wallet_id = :w AND coin = :c"""),
+        {"w": wid, "c": coin}).scalar()
+    if end_ts is None:
+        raise HTTPException(404, "no decisions for this coin")
+    params = {"c": coin, "iv": interval, "end": end_ts, "span": f"{bars * step} minutes",
+              "pad": f"{step * 20} minutes"}
+    candles = session.execute(text("""
+        SELECT DISTINCT ON (t) t, o, h, l, c FROM market_candle
+        WHERE coin = :c AND interval = :iv AND source IN ('binance_um', 'hyperliquid')
+          AND t > CAST(:end AS timestamptz) - CAST(:span AS interval) AND t <= CAST(:end AS timestamptz) + CAST(:pad AS interval)
+        ORDER BY t, (source = 'binance_um') DESC"""), params).all()
+    if candles:
+        lo_t, hi_t = candles[0][0], candles[-1][0]
+    else:
+        lo_t = hi_t = None
+    decisions = session.execute(text("""
+        SELECT d.started_at, d.side, d.kind, d.vwap, d.size, d.notional, d.pos_after, dt.location, dt.pivot_ts
+        FROM trade_decision d LEFT JOIN decision_timing dt ON dt.decision_id = d.id
+        WHERE d.wallet_id = :w AND d.coin = :c AND d.started_at >= :a AND d.started_at <= :b
+        ORDER BY d.started_at"""), {"w": wid, "c": coin, "a": lo_t, "b": hi_t}).mappings().all() if lo_t else []
+    pivots = session.execute(text("""
+        SELECT kind, ts, px, leg_change, confirmed FROM timing_pivot
+        WHERE coin = :c AND scale = :s AND ts >= CAST(:a AS timestamptz) - CAST(:pad AS interval)
+          AND ts <= CAST(:b AS timestamptz) + CAST(:pad AS interval) ORDER BY ts"""),
+        {"c": coin, "s": scale, "a": lo_t, "b": hi_t, "pad": f"{step * 60} minutes"}).mappings().all() if lo_t else []
+    return {
+        "coins": [dict(c) for c in coins],
+        "coin": coin,
+        "interval": interval,
+        "scale": scale,
+        "end": str(end_ts),
+        "candles": [[t, float(o), float(h), float(l), float(c)] for t, o, h, l, c in candles],
+        "decisions": [{**dict(d), "vwap": num(d["vwap"]), "size": num(d["size"]), "notional": num(d["notional"]),
+                       "pos_after": num(d["pos_after"]), "location": num(d["location"])} for d in decisions],
+        "pivots": [{**dict(p), "px": num(p["px"]), "leg_change": num(p["leg_change"])} for p in pivots],
+    }

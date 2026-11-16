@@ -324,6 +324,14 @@ export type TimingScore = {
   alignment: number | null;
   cycles: number;
   net_pnl: number | null;
+  n_buy: number | null;
+  n_sell: number | null;
+  buy_location: number | null;
+  sell_location: number | null;
+  buy_extreme: number | null;
+  sell_extreme: number | null;
+  null_extreme: number | null;
+  maker_share: number | null;
 };
 
 export type TimingBoard = {
@@ -331,8 +339,11 @@ export type TimingBoard = {
   scale: ScaleKey;
   window: string;
   group: string;
+  coin: string | null;
   sort: string;
   valid: boolean;
+  maker_heavy: number;
+  extreme: number;
   min_decisions: number;
   page: number;
   page_size: number;
@@ -395,6 +406,81 @@ export type ZoneResult = {
   }[];
 };
 
+export type HolderCycle = {
+  cycle_id: number;
+  qualifies: boolean;
+  status: "closed" | "flipped" | "open" | "data_end";
+  complete: boolean;
+  opened_at: string;
+  closed_at: string | null;
+  first_zone_exit_at: string | null;
+  entry_px: number;
+  exit_px: number | null;
+  zone_exit_px: number | null;
+  exited_in_zone_share: number;
+  holding_share: number;
+  max_notional: number | null;
+  net: number | null;
+  unrealized: number | null;
+  move_captured: number | null;
+  holding_days: number;
+  address?: string;
+  display_name?: string | null;
+  account_value?: number | null;
+  flags?: string[];
+  size_vs_equity: number | null;
+};
+
+export type HolderZones = {
+  freshness: Freshness;
+  query: { coin: string; direction: "long" | "short"; entry_min: number; entry_max: number; exit_min: number; exit_max: number; start: string; end: string; min_share: number };
+  last_price: number | null;
+  coverage: { archived: number; covering: number; queued_total: number };
+  qualifying: number;
+  rows: HolderCycle[];
+};
+
+export type LegList = {
+  coin: string;
+  legs: { leg_start: string; leg_end: string; direction: "up" | "down"; leg_change: number; confirmed: boolean; wallets: number }[];
+  coins: { coin: string; wallets: number }[];
+};
+
+export type LegCaptureRanking = {
+  freshness: Freshness;
+  coin: string;
+  leg_start: string | null;
+  filters: { min_aligned: number; min_notional: number; full_only: boolean };
+  rows: {
+    address: string;
+    display_name: string | null;
+    account_value: number | null;
+    leg_start: string;
+    leg_end: string;
+    direction: "up" | "down";
+    leg_change: number;
+    confirmed: boolean;
+    coverage: "full" | "partial";
+    time_aligned: number;
+    time_against: number;
+    max_notional: number;
+    avg_aligned_notional: number;
+    pnl_mark: number;
+    capture_ratio: number | null;
+  }[];
+};
+
+export type Replay = {
+  coins: { coin: string; decisions: number; last_at: string }[];
+  coin: string | null;
+  interval: string;
+  scale: ScaleKey;
+  end: string;
+  candles: [string, number, number, number, number][];
+  decisions: { started_at: string; side: "buy" | "sell"; kind: string; vwap: number; size: number; notional: number; pos_after: number; location: number | null; pivot_ts: string | null }[];
+  pivots: { kind: "H" | "L"; ts: string; px: number; leg_change: number; confirmed: boolean }[];
+};
+
 export const api = {
   rankings: (params: Record<string, string | number | boolean | undefined>) => get<Rankings>("/api/v1/rankings", params),
   wallet: (address: string) => get<WalletDetail>(`/api/v1/wallets/${encodeURIComponent(address)}`),
@@ -405,5 +491,11 @@ export const api = {
   timing: (params: Record<string, string | number | boolean | undefined>) => get<TimingBoard>("/api/v1/timing", params),
   walletTiming: (address: string) => get<WalletTiming>(`/api/v1/wallets/${encodeURIComponent(address)}/timing`),
   zones: (params: Record<string, string | number | boolean | undefined>) => get<ZoneResult>("/api/v1/zones", params),
+  timingCoins: (scale: string, window: string) => get<{ coins: { coin: string; wallets: number }[] }>("/api/v1/timing/coins", { scale, window }),
+  holderZones: (params: Record<string, string | number | boolean | undefined>) => get<HolderZones>("/api/v1/holders/zones", params),
+  holderLegs: (coin: string) => get<LegList>("/api/v1/holders/legs", { coin }),
+  holderCapture: (params: Record<string, string | number | boolean | undefined>) => get<LegCaptureRanking>("/api/v1/holders/capture", params),
+  replay: (address: string, params: Record<string, string | number | boolean | undefined>) =>
+    get<Replay>(`/api/v1/wallets/${encodeURIComponent(address)}/replay`, params),
   swingCandidates: (params: Record<string, string | number | boolean | undefined>) => get<SwingCandidates>("/api/v1/swings/candidates", params),
 };

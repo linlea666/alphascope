@@ -21,6 +21,7 @@ millisecond timestamp. Fills sharing a timestamp are therefore ordered by chaini
 (each fill starts where the previous one ended), not by tid.
 """
 
+import json
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -31,7 +32,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 log = logging.getLogger(__name__)
 
-RECON_VERSION = "p1"
+RECON_VERSION = "p2"  # p2: per-decision entry/exit legs stored on each cycle
 DECISION_GAP = timedelta(minutes=15)
 ZERO_TOL = Decimal("1e-9")
 # Holding-time boundaries (hours) of the timeframe ladder, see docs/09.
@@ -75,6 +76,9 @@ class Cycle:
     n_decisions: int = 0
     realized_pnl: Decimal = Decimal(0)
     fees: Decimal = Decimal(0)
+    # decision number -> [first time, size, size * price] for the opening / closing parts of the cycle
+    entry_legs: dict = field(default_factory=dict)
+    exit_legs: dict = field(default_factory=dict)
 
     def holding_hours(self, now: datetime) -> float:
         return ((self.closed_at or now) - self.opened_at).total_seconds() / 3600
@@ -146,6 +150,7 @@ def reconstruct(fills: list[FillRow]) -> Reconstruction:
     pos: Decimal | None = None
     cur: int | None = None  # index of the open cycle
     dec: Decision | None = None
+    dec_no = 0  # running decision number, keys the per-cycle entry/exit legs
 
     def close_decision():
         nonlocal dec
@@ -179,6 +184,7 @@ def reconstruct(fills: list[FillRow]) -> Reconstruction:
         if dec is None or dec.side != side or f.time - dec.ended_at > DECISION_GAP:
             close_decision()
             dec = Decision(side, f.time, f.time, sp, sp)
+            dec_no += 1
         dec.ended_at, dec.pos_after = f.time, after
         dec.n_fills += 1
         dec.size += f.sz
@@ -204,6 +210,9 @@ def reconstruct(fills: list[FillRow]) -> Reconstruction:
             c = out.cycles[cur]
             c.exit_sz += closing
             c.exit_val += closing * f.px
+            leg = c.exit_legs.setdefault(dec_no, [f.time, Decimal(0), Decimal(0)])
+            leg[1] += closing
+            leg[2] += closing * f.px
             c.realized_pnl += f.closed_pnl
             c.fees += f.fee * (closing / f.sz)
             c.n_fills += 1
@@ -219,6 +228,9 @@ def reconstruct(fills: list[FillRow]) -> Reconstruction:
             c = out.cycles[cur]
             c.entry_sz += opening
             c.entry_val += opening * f.px
+            leg = c.entry_legs.setdefault(dec_no, [f.time, Decimal(0), Decimal(0)])
+            leg[1] += opening
+            leg[2] += opening * f.px
             c.fees += f.fee * (opening / f.sz)
             c.n_fills += 1  # a flip fill counts for both the closed and the new cycle
         if cur is not None:
@@ -229,6 +241,10 @@ def reconstruct(fills: list[FillRow]) -> Reconstruction:
         pos = after
     close_decision()
     return out
+
+
+def _legs_json(legs: dict) -> str:
+    return json.dumps([[t.isoformat(), float(val / size), float(size)] for t, size, val in legs.values() if size])
 
 
 def rebuild_wallet(session: Session, wallet_id: int, now: datetime) -> dict:
@@ -250,15 +266,16 @@ def rebuild_wallet(session: Session, wallet_id: int, now: datetime) -> dict:
             hours = c.holding_hours(now)
             ids.append(session.execute(text("""
                 INSERT INTO position_cycle (wallet_id, coin, version, direction, opened_at, closed_at, status, complete,
-                  scale, holding_hours, entry_px, exit_px, max_size, max_notional, n_fills, n_decisions,
+                  scale, holding_hours, entry_px, exit_px, max_size, max_notional, n_fills, n_decisions, entries, exits,
                   realized_pnl, fees)
-                VALUES (:w, :coin, :v, :dir, :o, :cl, :st, :cmp, :scale, :h, :ep, :xp, :ms, :mn, :nf, :nd, :pnl, :fees)
+                VALUES (:w, :coin, :v, :dir, :o, :cl, :st, :cmp, :scale, :h, :ep, :xp, :ms, :mn, :nf, :nd, CAST(:entries AS jsonb), CAST(:exits AS jsonb), :pnl, :fees)
                 RETURNING id"""), {
                 "w": wallet_id, "coin": coin, "v": RECON_VERSION, "dir": "long" if c.direction > 0 else "short",
                 "o": c.opened_at, "cl": c.closed_at, "st": c.status, "cmp": c.complete, "scale": scale_for(hours),
                 "h": hours, "ep": c.entry_val / c.entry_sz if c.entry_sz else None,
                 "xp": c.exit_val / c.exit_sz if c.exit_sz else None, "ms": c.max_size, "mn": c.max_notional,
-                "nf": c.n_fills, "nd": c.n_decisions, "pnl": c.realized_pnl, "fees": c.fees}).scalar_one())
+                "nf": c.n_fills, "nd": c.n_decisions, "pnl": c.realized_pnl, "fees": c.fees,
+                "entries": _legs_json(c.entry_legs), "exits": _legs_json(c.exit_legs)}).scalar_one())
         if r.decisions:
             session.execute(text("""
                 INSERT INTO trade_decision (wallet_id, cycle_id, coin, version, kind, side, started_at, ended_at,
@@ -286,9 +303,11 @@ def rebuild_stale(sf: sessionmaker[Session], limit: int = 200) -> dict:
     now = datetime.now(UTC)
     with sf() as s:
         rows = s.execute(text("""
-            SELECT wallet_id, status, latest_fill_at FROM fill_sync WHERE n_fills > 0 AND last_synced_at IS NOT NULL
-              AND (reconstructed_at IS NULL OR reconstructed_at < last_synced_at)
-            ORDER BY last_synced_at LIMIT :n"""), {"n": limit}).all()
+            SELECT f.wallet_id, f.status, f.latest_fill_at FROM fill_sync f
+            WHERE f.n_fills > 0 AND f.last_synced_at IS NOT NULL
+              AND (f.reconstructed_at IS NULL OR f.reconstructed_at < f.last_synced_at
+                   OR EXISTS (SELECT 1 FROM position_cycle c WHERE c.wallet_id = f.wallet_id AND c.version <> :v))
+            ORDER BY f.last_synced_at LIMIT :n"""), {"n": limit, "v": RECON_VERSION}).all()
     totals = {"wallets": 0, "cycles": 0, "decisions": 0, "breaks": 0}
     for wid, status, latest in rows:
         with sf() as s:

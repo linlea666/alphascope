@@ -66,11 +66,12 @@ def test_permutation_detects_bottom_buyer_and_not_random_buyer():
                        "scored", None) for i, h in enumerate(hours)]
 
     span = (t0 + 20 * 60, t0 + 1980 * 60)
-    null_mean, p = permutation_test(scored(lows), market, span, np.random.default_rng(1))
+    null_mean, p, null_ext = permutation_test(scored(lows), market, span, np.random.default_rng(1))
     assert len(lows) >= 20 and p < 0.01 and null_mean == pytest.approx(0.5, abs=0.15)
+    assert 0 < null_ext < 0.5  # random times rarely land in the best 20% of the window
 
     rand_hours = np.random.default_rng(3).integers(30, 1950, size=40)
-    _, p_noise = permutation_test(scored(rand_hours), market, span, np.random.default_rng(2))
+    _, p_noise, _ = permutation_test(scored(rand_hours), market, span, np.random.default_rng(2))
     assert p_noise > 0.05
 
 

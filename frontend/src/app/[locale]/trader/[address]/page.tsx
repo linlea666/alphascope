@@ -5,15 +5,23 @@ import { CopyButton } from "@/components/CopyButton";
 import { EquityChart } from "@/components/EquityChart";
 import { Freshness } from "@/components/Freshness";
 import { PositionCycles } from "@/components/PositionCycles";
+import { REPLAY_BARS, ReplayPanel } from "@/components/ReplayPanel";
 import { TimingPanel } from "@/components/TimingPanel";
 import { Badge, Panel, td, th } from "@/components/ui";
-import { api, ApiError, type Metric, type WalletDetail, type WalletPositions, type WalletTiming, type Window } from "@/lib/api";
+import { api, ApiError, type Metric, type WalletDetail, type Replay, type WalletPositions, type WalletTiming, type Window } from "@/lib/api";
 import { fmtNum, fmtPct, fmtTime, fmtUsd, signClass, splitNote } from "@/lib/format";
 
 const WINDOWS: Window[] = ["day", "week", "month", "alltime"];
 
-export default async function TraderPage({ params }: { params: Promise<{ address: string }> }) {
+export default async function TraderPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ address: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const { address } = await params;
+  const search = await searchParams;
   const t = await getTranslations();
   const locale = await getLocale();
   let d: WalletDetail;
@@ -32,9 +40,10 @@ export default async function TraderPage({ params }: { params: Promise<{ address
     return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
   }
   // Position cycles exist only for wallets whose fills are archived; a failure here must not break the page.
-  const [positions, timing]: [WalletPositions | null, WalletTiming | null] = await Promise.all([
+  const [positions, timing, replay]: [WalletPositions | null, WalletTiming | null, Replay | null] = await Promise.all([
     api.walletPositions(address).catch(() => null),
     api.walletTiming(address).catch(() => null),
+    api.replay(address, { coin: search.rc, interval: search.ri || "1h", end: search.re, bars: REPLAY_BARS }).catch(() => null),
   ]);
   const w = d.wallet;
   const enriched = d.metrics.length > 0;
@@ -179,6 +188,8 @@ export default async function TraderPage({ params }: { params: Promise<{ address
       <PositionCycles data={positions} />
 
       <TimingPanel data={timing} />
+
+      <ReplayPanel address={w.address} data={replay} search={search} />
 
       <Panel title={t("trader.computedTitle")} hint={t("trader.computedHint")}>
         {enriched ? <MetricsTable metrics={d.metrics} note={note} /> : <p className="text-sm text-muted">{t("trader.notEnrichedHint")}</p>}

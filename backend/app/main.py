@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import rankings, swings, system, timing, wallets, zones
+from app.api import holders, rankings, swings, system, timing, wallets, zones
 
 app = FastAPI(title="AlphaScope API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allow_methods=["GET"],
@@ -12,6 +12,7 @@ app.include_router(system.router)
 app.include_router(swings.router)
 app.include_router(timing.router)
 app.include_router(zones.router)
+app.include_router(holders.router)
 
 
 @app.get("/healthz")

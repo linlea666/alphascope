@@ -420,6 +420,9 @@ class PositionCycle(Base):
     n_decisions: Mapped[int] = mapped_column(Integer)
     realized_pnl: Mapped[Decimal] = mapped_column(Numeric)
     fees: Mapped[Decimal] = mapped_column(Numeric)
+    # Per-decision legs of the cycle: [[iso time, vwap, size], ...] (size in coin units, positive)
+    entries: Mapped[list | None] = mapped_column(JSONB)
+    exits: Mapped[list | None] = mapped_column(JSONB)
 
     __table_args__ = (Index("ix_position_cycle_wallet", "wallet_id", "coin", "opened_at"),
                       Index("ix_position_cycle_scale", "scale", "closed_at"))
@@ -502,7 +505,7 @@ class TimingScore(Base):
     wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
     scale: Mapped[str] = mapped_column(String(8), primary_key=True)
     window: Mapped[str] = mapped_column("time_window", String(8), primary_key=True)
-    coin_group: Mapped[str] = mapped_column(String(8), primary_key=True)  # all | btc_eth
+    coin_group: Mapped[str] = mapped_column(String(48), primary_key=True)  # all | btc_eth | c:<coin>
     version: Mapped[str] = mapped_column(String(16))
     as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(16))  # scored | insufficient | invalid_window
@@ -522,5 +525,39 @@ class TimingScore(Base):
     alignment: Mapped[Decimal | None] = _num()
     cycles: Mapped[int] = mapped_column(Integer)
     net_pnl: Mapped[Decimal | None] = _num()
+    # buy / sell split: mean location and share of decisions in the best 20% of the window
+    n_buy: Mapped[int | None] = mapped_column(Integer)
+    n_sell: Mapped[int | None] = mapped_column(Integer)
+    buy_location: Mapped[Decimal | None] = _num()
+    sell_location: Mapped[Decimal | None] = _num()
+    buy_extreme: Mapped[Decimal | None] = _num()
+    sell_extreme: Mapped[Decimal | None] = _num()
+    null_extreme: Mapped[Decimal | None] = _num()  # same share under random time shifts (~0.2)
+    maker_share: Mapped[Decimal | None] = _num()  # share of fills that rested on the book (not crossed)
 
     __table_args__ = (Index("ix_timing_score_rank", "scale", "time_window", "coin_group", "edge_shrunk"),)
+
+
+class LegCapture(Base):
+    """How much of a macro swing leg a wallet held and captured on that coin (version c1)."""
+
+    __tablename__ = "leg_capture"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    coin: Mapped[str] = mapped_column(String(48), primary_key=True)
+    leg_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    leg_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    direction: Mapped[str] = mapped_column(String(4))  # up | down
+    leg_change: Mapped[Decimal] = mapped_column(Numeric)
+    confirmed: Mapped[bool] = mapped_column(Boolean)
+    coverage: Mapped[str] = mapped_column(String(8))  # full | partial (fills start after the leg start)
+    time_aligned: Mapped[Decimal] = mapped_column(Numeric)  # share of leg time positioned with the leg
+    time_against: Mapped[Decimal] = mapped_column(Numeric)
+    max_notional: Mapped[Decimal] = mapped_column(Numeric)
+    avg_aligned_notional: Mapped[Decimal] = mapped_column(Numeric)
+    pnl_mark: Mapped[Decimal] = mapped_column(Numeric)  # mark-to-market PnL on the coin during the leg
+    capture_ratio: Mapped[Decimal | None] = _num()  # pnl / (max notional * |leg move|)
+    version: Mapped[str] = mapped_column(String(16))
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_leg_capture_rank", "coin", "leg_start", "capture_ratio"),)

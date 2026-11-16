@@ -10,8 +10,8 @@ import { fmtNum, fmtPct, fmtUsd, signClass } from "@/lib/format";
 
 const SCALES: ScaleKey[] = ["scalp", "short", "swing", "macro"];
 const WINDOWS = ["7d", "30d", "90d", "all"] as const;
-const GROUPS = ["all", "btc_eth"] as const;
-const SORTS = ["edge", "location", "precision", "recall", "pnl", "q"] as const;
+const GROUPS = ["all", "btc_eth", "coin"] as const;
+const SORTS = ["edge", "two_sided", "location", "precision", "recall", "pnl", "q"] as const;
 const VALID: Record<ScaleKey, string[]> = {
   scalp: ["7d", "30d", "90d"],
   short: ["7d", "30d", "90d", "all"],
@@ -30,6 +30,7 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
   const sort = SORTS.includes(sp.sort as (typeof SORTS)[number]) ? sp.sort! : "edge";
   const sig = sp.sig === "1";
   const small = sp.small === "1";
+  const noMakers = sp.nomm === "1";
   const page = Math.max(1, Number(sp.page) || 1);
   const t = await getTranslations("timing");
   const tt = await getTranslations("trader");
@@ -38,8 +39,17 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
   const locale = await getLocale();
 
   let d: TimingBoard;
+  let coins: { coin: string; wallets: number }[] = [];
+  let coin = sp.coin;
   try {
-    d = await api.timing({ scale, window, group, sort, significant_only: sig || undefined, include_insufficient: small || undefined, page, page_size: PAGE_SIZE });
+    if (group === "coin") {
+      coins = (await api.timingCoins(scale, window)).coins;
+      coin = coin && coins.some((c) => c.coin === coin) ? coin : coins[0]?.coin;
+    }
+    d =
+      group === "coin" && !coin
+        ? { freshness: (await api.timing({ scale, window, page_size: 1 })).freshness, scale, window, group, coin: null, sort, valid: VALID[scale].includes(window), maker_heavy: 0.8, extreme: 0.8, min_decisions: 0, page: 1, page_size: PAGE_SIZE, total: 0, rows: [] }
+        : await api.timing({ scale, window, group, coin: group === "coin" ? coin : undefined, sort, significant_only: sig || undefined, include_insufficient: small || undefined, exclude_makers: noMakers || undefined, page, page_size: PAGE_SIZE });
   } catch (e) {
     return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
   }
@@ -48,11 +58,13 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
     const base: Record<string, string> = { scale, window, group, sort };
     if (sig) base.sig = "1";
     if (small) base.small = "1";
+    if (noMakers) base.nomm = "1";
+    if (group === "coin" && coin) base.coin = coin;
     return { ...base, ...Object.fromEntries(Object.entries(over).map(([k, v]) => [k, String(v)])) };
   };
   const tab = (active: boolean) => `px-3 py-1 ${active ? "bg-accent text-white" : "text-muted hover:text-text"}`;
   const sortLabel: Record<string, string> = {
-    edge: t("sortEdge"), location: t("sortLocation"), precision: t("sortPrecision"), recall: t("sortRecall"), pnl: t("sortPnl"), q: t("sortQ"),
+    edge: t("sortEdge"), two_sided: t("sortTwoSided"), location: t("sortLocation"), precision: t("sortPrecision"), recall: t("sortRecall"), pnl: t("sortPnl"), q: t("sortQ"),
   };
 
   return (
@@ -81,7 +93,7 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
           <div className="flex overflow-hidden rounded border border-border">
             {GROUPS.map((g) => (
               <Link key={g} href={{ pathname: "/timing", query: q({ group: g, page: 1 }) }} className={tab(g === group)}>
-                {t(`groups.${g}`)}
+                {g === "coin" ? t("coinTab") : t(`groups.${g}`)}
               </Link>
             ))}
           </div>
@@ -91,7 +103,20 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
           <Link href={{ pathname: "/timing", query: { ...q({ page: 1 }), small: small ? "0" : "1" } }} className={`rounded border px-2 py-1 text-xs ${small ? "border-accent text-accent" : "border-border text-muted"}`}>
             {t("includeInsufficient")}
           </Link>
+          <Link href={{ pathname: "/timing", query: { ...q({ page: 1 }), nomm: noMakers ? "0" : "1" } }} className={`rounded border px-2 py-1 text-xs ${noMakers ? "border-accent text-accent" : "border-border text-muted"}`}>
+            {t("excludeMakers", { p: fmtPct(d.maker_heavy, locale, 0, false) })}
+          </Link>
         </div>
+        {group === "coin" && (
+          <div className="mt-3 flex flex-wrap gap-1 text-xs">
+            <span className="py-1 text-muted">{t("pickCoin")}:</span>
+            {coins.map((c) => (
+              <Link key={c.coin} href={{ pathname: "/timing", query: { ...q({ page: 1 }), coin: c.coin } }} className={`rounded border px-2 py-1 ${c.coin === coin ? "border-accent text-accent" : "border-border text-muted hover:text-text"}`}>
+                {c.coin} <span className="text-muted">{c.wallets}</span>
+              </Link>
+            ))}
+          </div>
+        )}
         <div className="mt-3 flex flex-wrap gap-1 text-xs">
           <span className="py-1 text-muted">{t("sort")}:</span>
           {SORTS.map((s) => (
@@ -120,6 +145,7 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
                   <th className={`${th} text-right`} title={t("locationHint")}>{t("location")} ⓘ</th>
                   <th className={`${th} text-right`} title={t("edgeHint")}>{t("edge")} ⓘ</th>
                   <th className={`${th} text-right`} title={t("qHint")}>{t("q")} ⓘ</th>
+                  <th className={`${th} text-right`} title={t("twoSidedHint")}>{t("buyExt")} / {t("sellExt")} · {t("nullExt")} ⓘ</th>
                   <th className={`${th} text-right`} title={t("precisionHint")}>{t("precision")} ⓘ</th>
                   <th className={`${th} text-right`} title={t("recallHint")}>{t("recall")} ⓘ</th>
                   <th className={`${th} text-right`} title={t("alignmentHint")}>{t("alignment")} ⓘ</th>
@@ -149,6 +175,12 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
                     <td className={`${td} num text-right`}>
                       {r.q_value === null ? "—" : r.q_value < 0.1 ? <Badge tone="up">{fmtNum(r.q_value, locale, 3)}</Badge> : <span className="text-muted">{fmtNum(r.q_value, locale, 2)}</span>}
                     </td>
+                    <td className={`${td} num text-right`}>
+                      <span className={r.buy_extreme !== null && r.null_extreme !== null && r.buy_extreme > 2 * r.null_extreme ? "text-up" : ""}>{fmtPct(r.buy_extreme, locale, 0, false)}</span>
+                      {" / "}
+                      <span className={r.sell_extreme !== null && r.null_extreme !== null && r.sell_extreme > 2 * r.null_extreme ? "text-up" : ""}>{fmtPct(r.sell_extreme, locale, 0, false)}</span>
+                      <span className="text-xs text-muted"> · {fmtPct(r.null_extreme, locale, 0, false)}</span>
+                    </td>
                     <td className={`${td} num text-right`}>{fmtPct(r.precision, locale, 0, false)}</td>
                     <td className={`${td} num text-right`}>
                       {fmtPct(r.recall, locale, 0, false)} <span className="text-xs text-muted">({r.pivots_hit}/{r.pivots})</span>
@@ -156,7 +188,14 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
                     <td className={`${td} num text-right`}>{fmtPct(r.alignment, locale, 0, false)}</td>
                     <td className={`${td} num text-right ${signClass(r.net_pnl)}`}>{fmtUsd(r.net_pnl, locale)}</td>
                     <td className={td}>
-                      <FlagBadges flags={r.flags} hide={["inactive_30d"]} />
+                      <span className="flex flex-wrap gap-1">
+                        {r.maker_share !== null && r.maker_share > d.maker_heavy && (
+                          <Badge tone="warn" title={t("makerHint", { p: fmtPct(d.maker_heavy, locale, 0, false) })}>
+                            {t("makerBadge")} {fmtPct(r.maker_share, locale, 0, false)}
+                          </Badge>
+                        )}
+                        <FlagBadges flags={r.flags} hide={["inactive_30d"]} />
+                      </span>
                     </td>
                   </tr>
                 ))}
