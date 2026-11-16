@@ -88,12 +88,27 @@ erDiagram
 | `alert_rule` | P2 | `id` | owner, wallet_id/condition, channel, last_fired_at | — |
 | `data_quality_report` | P1 | (ingest_run_id, check) | check, severity, affected, details | 例如：fills 与 portfolio PnL 对账差异 |
 
+## 4.1 第二、三轮新增的表（已建）
+
+| 表 | 主键 | 说明 |
+|---|---|---|
+| `market_candle` | (source, coin, interval, t) | `source` = `hyperliquid`（自记录）或 `binance_um`（批量导入，1m 聚合出其他周期） |
+| `market_file` | (source, path) | 已导入文件台账（SHA256、行数），保证导入幂等 |
+| `market_symbol` | (coin, source) | Hyperliquid 币名 → 外部合约，带比价校验结果 |
+| `swing_leg` / `wallet_leg_return` / `wallet_swing_profile` | 见 08 | 波段、分段收益、运气概率 |
+| `fill` | (wallet_id, tid, side) | 归档成交；`tid` 不按时间排序，排序见 T2 |
+| `fill_sync` | wallet_id | 归档队列与覆盖范围、截断标记、重建时间、断档数 |
+| `position_cycle` | id | 仓位周期：方向、开平时间、状态（closed / flipped / open）、是否完整、级别、均价、最大仓位、净盈亏 |
+| `trade_decision` | id | 决策：open / add / reduce / close / flip，成交前后仓位，VWAP |
+
 ## 5. 完整性约束与边界处理
 
 | 场景 | 处理 |
 |---|---|
 | 同一成交被重复采集 | `fill` 唯一键 (wallet_id, tid) + `ON CONFLICT DO NOTHING` |
-| 同一订单多次部分成交 | 按 `oid` 聚合成一个执行；统计时以 `tid` 为最小单位 |
+| 同一订单多次部分成交 | 同币种、同方向、间隔 15 分钟内的成交合并为一个决策 |
+| 同一毫秒的多笔成交 | `tid` 不按时间顺序；按 startPosition 串链排序 |
+| 现货成交 | 不参与仓位重建（余额会被手续费、转账改变） |
 | 跨零翻仓（`Long > Short`） | 在 `start_position` 符号翻转处拆分，前一个 episode 关闭、后一个开启，成交量按比例分配 |
 | 历史开仓缺失（第一笔成交是平仓） | episode 标记 `complete=false, incomplete_reason='open_before_window'`，不参与胜率计算 |
 | 多币种同时持仓 | episode 按 (wallet, coin) 独立 |

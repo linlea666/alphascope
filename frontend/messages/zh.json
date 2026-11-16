@@ -188,13 +188,50 @@
     "seriesAll": "全历史",
     "equity": "账户净值",
     "cumPnl": "累计 PnL",
-    "positionsTitle": "当前持仓",
     "positionsAt": "采集于 {time}",
     "noPositions": "采集时没有持仓。",
     "snapshotsTitle": "排行榜快照历史",
     "snapshotsHint": "系统每 6 小时保存一次完整快照；历史从本系统开始采集时算起。",
     "tierHistory": "层级变化",
-    "hours": "{n} 小时"
+    "hours": "{n} 小时",
+    "coverageText": "成交覆盖：{n} 条，自 {from} 起；最近同步 {synced}",
+    "breaks": "仓位链断档 {n} 处",
+    "scale": "级别",
+    "cycles": "周期",
+    "winRate": "胜率",
+    "netPnl": "净盈亏",
+    "medianHold": "持仓中位数",
+    "openNow": "持有中",
+    "scales": {
+      "scalp": "超短 <4h",
+      "short": "短线 4h–3d",
+      "swing": "波段 3d–3w",
+      "macro": "大周期 >3w"
+    },
+    "recentCycles": "最近的仓位周期",
+    "dir": {
+      "long": "多",
+      "short": "空"
+    },
+    "status": {
+      "closed": "已平",
+      "flipped": "反手",
+      "open": "持有中",
+      "data_end": "数据截止"
+    },
+    "incomplete": "不完整",
+    "entryExit": "开 / 平均价",
+    "hold": "持仓",
+    "decisions": "决策",
+    "days": "{n} 天",
+    "period": "区间",
+    "coin": "币种",
+    "truncated": "早期成交已截断",
+    "cyclesTitle": "仓位周期（按级别）",
+    "cyclesHint": "由逐笔成交还原：每条成交都带有成交前仓位，可以精确串出仓位路径。同一币种、同一方向、间隔 15 分钟以内的成交算一次决策；从开仓到平仓或反手为一个周期，按持仓时长分级。胜率只统计完整且已结束的周期（扣除手续费），括号内为 95% 置信区间。",
+    "cyclesNone": "这个钱包的成交还没有归档。成交归档目前只覆盖大周期研究的候选钱包。",
+    "positionsTitle": "当前持仓",
+    "syncIncomplete": "成交同步尚未完成，统计截至 {date}；剩余成交会在后续批次补齐（优先抢救其他钱包的早期成交）。"
   },
   "health": {
     "title": "数据健康与系统状态",
@@ -213,7 +250,18 @@
     "started": "开始",
     "duration": "耗时",
     "summary": "摘要",
-    "error": "错误"
+    "error": "错误",
+    "marketTitle": "行情数据覆盖",
+    "marketHint": "币安 U 本位永续 1 分钟线来自 data.binance.vision（逐个文件校验 SHA256）；Hyperliquid K 线由本系统从启动起自行记录。",
+    "source": "来源",
+    "coin": "币种",
+    "rows1m": "1 分钟线",
+    "range": "范围",
+    "symbolsTitle": "币种映射校验",
+    "symbolsHint": "用 Hyperliquid 的真实成交价和币安同一分钟的收盘价对比；比价中位数偏离 1 超过 1% 的映射不使用。",
+    "ratio": "比价中位数",
+    "p95": "P95 偏差",
+    "samples": "样本"
   },
   "status": {
     "success": "成功",

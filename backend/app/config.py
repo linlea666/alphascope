@@ -35,6 +35,14 @@ class Settings(BaseSettings):
     market_intervals: str = "1d,4h,1h,15m,1m"
     market_interval_minutes: int = 60
 
+    # Binance USDT-M klines from data.binance.vision: core coins with long history, plus the most-traded
+    # coins of archived wallets from shortly before the fill archive starts.
+    binance_core_coins: str = "BTC,ETH,SOL"
+    binance_core_start: str = "2025-01-01"
+    binance_fill_coins: int = 20
+    binance_fill_start: str = "2026-06-01"
+    binance_interval_hours: int = 6
+
     # Swing research: fills of candidates are archived from this date (start of the current cycle).
     swing_coin: str = "BTC"
     swing_fill_start: str = "2026-07-01"

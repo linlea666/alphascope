@@ -15,6 +15,8 @@
 - FastAPI 查询接口 + Next.js 中英双语前端（总览 / 排行榜 / 交易员 / 数据健康）
 - K 线自记录（BTC/ETH/SOL/HYPE，1m–1d）
 - **大周期研究第一阶段**：ZigZag 客观划分波段、全体钱包分段收益与运气概率初筛、候选钱包成交抢救性归档（见 [docs/08](docs/08-swing-event-research.md)）
+- 币安 U 本位永续 1 分钟 K 线批量导入（data.binance.vision，SHA256 校验）与币种映射校验
+- 从逐笔成交重建仓位路径、交易决策和仓位周期（按超短 / 短线 / 波段 / 大周期分级），并能与交易所实时持仓对账
 - APScheduler 后台调度（共享限流预算）、一键安装 / 一键更新脚本（systemd，参考 bian）
 
 ## 本地开发

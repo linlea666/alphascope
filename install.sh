@@ -21,7 +21,7 @@ command -v flock >/dev/null || fail '缺少 flock（apt install util-linux）'
 exec 8>"$(dirname "$TARGET")/.alphascope-install.lock"
 flock -n 8 || fail '另一个安装正在进行'
 available=$(df -Pk "$(dirname "$TARGET")" | awk 'END {print $4}')
-(( available >= 5 * 1024 * 1024 )) || fail '至少需要 5 GiB 可用磁盘（原始数据归档会持续增长）'
+(( available >= 10 * 1024 * 1024 )) || fail '至少需要 10 GiB 可用磁盘（K 线、成交与原始归档会持续增长）'
 memory=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
 swap=$(awk '/SwapTotal/ {print $2}' /proc/meminfo)
 (( memory >= 1024 * 1024 )) || fail '至少需要 1 GiB 内存'

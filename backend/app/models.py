@@ -242,6 +242,7 @@ class MarketCandle(Base):
 
     __tablename__ = "market_candle"
 
+    source: Mapped[str] = mapped_column(String(16), primary_key=True)  # hyperliquid | binance_um
     coin: Mapped[str] = mapped_column(String(32), primary_key=True)
     interval: Mapped[str] = mapped_column(String(8), primary_key=True)
     t: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
@@ -356,3 +357,95 @@ class FillSync(Base):
     queued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     error: Mapped[str | None] = mapped_column(Text)
+    reconstructed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    recon_breaks: Mapped[int | None] = mapped_column(Integer)  # startPosition chain breaks (missing fills)
+
+
+# --- Binance klines & position reconstruction (migration 0003) ---
+
+
+class MarketFile(Base):
+    """Ledger of imported bulk files, so imports are idempotent and auditable."""
+
+    __tablename__ = "market_file"
+
+    source: Mapped[str] = mapped_column(String(16), primary_key=True)
+    path: Mapped[str] = mapped_column(Text, primary_key=True)
+    coin: Mapped[str] = mapped_column(String(32))
+    interval: Mapped[str] = mapped_column(String(8))
+    period: Mapped[str] = mapped_column(String(10))  # 2026-08 (monthly) or 2026-11-15 (daily)
+    sha256: Mapped[str] = mapped_column(String(64))
+    rows: Mapped[int] = mapped_column(Integer)
+    imported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class MarketSymbol(Base):
+    """Hyperliquid coin -> external market symbol, validated against Hyperliquid prices."""
+
+    __tablename__ = "market_symbol"
+
+    coin: Mapped[str] = mapped_column(String(48), primary_key=True)
+    source: Mapped[str] = mapped_column(String(16), primary_key=True)
+    symbol: Mapped[str | None] = mapped_column(String(32))
+    multiplier: Mapped[Decimal] = mapped_column(Numeric)  # HL price = external price * multiplier
+    status: Mapped[str] = mapped_column(String(16))  # valid | invalid | unavailable | unsupported
+    median_ratio: Mapped[Decimal | None] = _num()
+    basis_p95_bps: Mapped[Decimal | None] = _num()
+    n_samples: Mapped[int] = mapped_column(Integer, default=0)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    notes: Mapped[str | None] = mapped_column(Text)
+
+
+class PositionCycle(Base):
+    """A position from flat (or first observed) to flat or a flip, rebuilt from fills."""
+
+    __tablename__ = "position_cycle"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"))
+    coin: Mapped[str] = mapped_column(String(48))
+    version: Mapped[str] = mapped_column(String(16))
+    direction: Mapped[str] = mapped_column(String(5))  # long | short
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(8))  # closed | flipped | open
+    complete: Mapped[bool] = mapped_column(Boolean)  # false: opened before our first fill, or a chain break inside
+    scale: Mapped[str] = mapped_column(String(8))  # scalp | short | swing | macro (by holding time)
+    holding_hours: Mapped[float] = mapped_column(Numeric)
+    entry_px: Mapped[Decimal | None] = _num()  # size-weighted average of opening/adding fills
+    exit_px: Mapped[Decimal | None] = _num()  # size-weighted average of reducing/closing fills
+    max_size: Mapped[Decimal] = mapped_column(Numeric)
+    max_notional: Mapped[Decimal] = mapped_column(Numeric)
+    n_fills: Mapped[int] = mapped_column(Integer)
+    n_decisions: Mapped[int] = mapped_column(Integer)
+    realized_pnl: Mapped[Decimal] = mapped_column(Numeric)
+    fees: Mapped[Decimal] = mapped_column(Numeric)
+
+    __table_args__ = (Index("ix_position_cycle_wallet", "wallet_id", "coin", "opened_at"),
+                      Index("ix_position_cycle_scale", "scale", "closed_at"))
+
+
+class TradeDecision(Base):
+    """Consecutive same-side fills on one coin within a short gap, i.e. one trading decision."""
+
+    __tablename__ = "trade_decision"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"))
+    cycle_id: Mapped[int | None] = mapped_column(ForeignKey("position_cycle.id", ondelete="CASCADE"))
+    coin: Mapped[str] = mapped_column(String(48))
+    version: Mapped[str] = mapped_column(String(16))
+    kind: Mapped[str] = mapped_column(String(8))  # open | add | reduce | close | flip
+    side: Mapped[str] = mapped_column(String(4))  # buy | sell
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ended_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    n_fills: Mapped[int] = mapped_column(Integer)
+    size: Mapped[Decimal] = mapped_column(Numeric)
+    notional: Mapped[Decimal] = mapped_column(Numeric)
+    vwap: Mapped[Decimal] = mapped_column(Numeric)
+    pos_before: Mapped[Decimal] = mapped_column(Numeric)
+    pos_after: Mapped[Decimal] = mapped_column(Numeric)
+    realized_pnl: Mapped[Decimal] = mapped_column(Numeric)
+    fee: Mapped[Decimal] = mapped_column(Numeric)
+
+    __table_args__ = (Index("ix_trade_decision_wallet", "wallet_id", "coin", "started_at"),)

@@ -28,7 +28,8 @@ def swings_overview(session: Session = Depends(get_session), since: str = "2026-
     coin = get_settings().swing_coin
     major = _legs(session, coin, "major")
     candles = session.execute(text("""
-        SELECT t, o, h, l, c FROM market_candle WHERE coin = :coin AND interval = '1d' AND t >= CAST(:since AS date)
+        SELECT t, o, h, l, c FROM market_candle
+        WHERE source = 'hyperliquid' AND coin = :coin AND interval = '1d' AND t >= CAST(:since AS date)
         ORDER BY t"""), {"coin": coin, "since": since}).all()
     leg_stats = {r.leg_id: r for r in session.execute(text("""
         SELECT leg_id, count(*) AS covered, avg((twr > 0)::int) AS profitable_share,

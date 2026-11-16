@@ -85,16 +85,37 @@ def data_health(session: Session = Depends(get_session)):
         SELECT DISTINCT ON (kind) kind, status, started_at, finished_at FROM ingest_run
         WHERE status IN ('success', 'not_modified', 'partial') ORDER BY kind, started_at DESC""")).mappings().all()
     tables = {}
-    for t in ("wallet", "leaderboard_snapshot", "leaderboard_row", "equity_point", "wallet_metric",
-              "account_snapshot", "position_snapshot", "raw_object", "wallet_tier_history"):
+    for t in ("wallet", "leaderboard_snapshot", "wallet_metric", "account_snapshot", "raw_object",
+              "wallet_tier_history", "position_cycle", "market_file"):
         tables[t] = session.execute(text(f"SELECT count(*) FROM {t}")).scalar_one()
+    # Large append-only tables: planner estimate (exact counts would scan millions of rows).
+    for t, n in session.execute(text("""
+        SELECT relname, greatest(reltuples, 0)::bigint FROM pg_class
+        WHERE relname IN ('leaderboard_row', 'equity_point', 'position_snapshot', 'fill', 'trade_decision',
+                          'market_candle')""")).all():
+        tables[f"{t} (≈)"] = n
     raw = session.execute(text("""
         SELECT source, count(*) AS n, sum(size_bytes) AS bytes FROM raw_object GROUP BY source""")).mappings().all()
     weight_24h = session.execute(text("""
         SELECT coalesce(sum((stats->'api'->>'weight')::numeric), 0) FROM ingest_run
         WHERE kind = 'enrich' AND started_at > now() - interval '24 hours'""")).scalar_one()
+    # Binance coverage comes from the import ledger (scanning millions of candles would be slow);
+    # Hyperliquid candles are a small, index-bounded range.
+    market = session.execute(text("""
+        SELECT 'binance_um' AS source, coin, sum(rows) AS m1, min(period) AS first_t, max(period) AS last_t
+        FROM market_file WHERE source = 'binance_um' GROUP BY coin
+        UNION ALL
+        SELECT 'hyperliquid', coin, count(*) FILTER (WHERE interval = '1m'), min(t)::date::text, max(t)::text
+        FROM market_candle WHERE source = 'hyperliquid' GROUP BY coin
+        ORDER BY 1, 3 DESC""")).mappings().all()
+    symbols = session.execute(text("""
+        SELECT coin, symbol, status, median_ratio, basis_p95_bps, n_samples, checked_at, notes FROM market_symbol
+        ORDER BY status, coin""")).mappings().all()
     return {
         "freshness": data_as_of(session),
+        "market_data": [dict(m) for m in market],
+        "symbols": [{**dict(r), "median_ratio": num(r["median_ratio"]), "basis_p95_bps": num(r["basis_p95_bps"])}
+                    for r in symbols],
         "latest_success": [dict(r) for r in latest],
         "runs": [dict(r) for r in runs],
         "tables": tables,

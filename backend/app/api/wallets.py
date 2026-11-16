@@ -1,3 +1,5 @@
+import math
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -100,4 +102,65 @@ def wallet_detail(address: str, session: Session = Depends(get_session)):
         "tier_history": [dict(t) for t in tiers],
         "account": clean(account) if account else None,
         "positions": [clean(p) for p in positions],
+    }
+
+
+SCALE_ORDER = ("scalp", "short", "swing", "macro")
+
+
+def wilson(wins: int, n: int, z: float = 1.96) -> tuple[float, float] | None:
+    """95% Wilson interval for a win rate; honest about small samples."""
+    if n == 0:
+        return None
+    p = wins / n
+    denom = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return centre - half, centre + half
+
+
+@router.get("/{address}/positions")
+def wallet_positions(address: str, session: Session = Depends(get_session), limit: int = Query(40, ge=1, le=200)):
+    address = address.lower()
+    if not ADDRESS_RE.match(address):
+        raise HTTPException(422, "invalid address")
+    wid = session.execute(text("SELECT id FROM wallet WHERE address = :a"), {"a": address}).scalar()
+    if wid is None:
+        raise HTTPException(404, "wallet not in database")
+    coverage = session.execute(text("""
+        SELECT status, reason, requested_start, earliest_fill_at, latest_fill_at, n_fills, truncated, last_synced_at,
+               reconstructed_at, recon_breaks FROM fill_sync WHERE wallet_id = :w"""), {"w": wid}).mappings().first()
+    # A cycle still open where an incomplete sync stops is a data boundary, not a held position.
+    sync_complete = bool(coverage and coverage["status"] == "synced")
+    by_scale = {r.scale: r for r in session.execute(text("""
+        SELECT scale, count(*) AS cycles,
+               count(*) FILTER (WHERE complete AND status <> 'open') AS complete_closed,
+               count(*) FILTER (WHERE complete AND status <> 'open' AND realized_pnl - fees > 0) AS wins,
+               sum(realized_pnl - fees) FILTER (WHERE status <> 'open') AS net_pnl,
+               percentile_cont(0.5) WITHIN GROUP (ORDER BY holding_hours) AS median_hours,
+               count(*) FILTER (WHERE status = 'open') AS open_now
+        FROM position_cycle WHERE wallet_id = :w GROUP BY scale"""), {"w": wid}).all()}
+    scales = []
+    for sc in SCALE_ORDER:
+        r = by_scale.get(sc)
+        if r is None:
+            scales.append({"scale": sc, "cycles": 0})
+            continue
+        ci = wilson(r.wins, r.complete_closed)
+        scales.append({"scale": sc, "cycles": r.cycles, "complete_closed": r.complete_closed, "wins": r.wins,
+                       "win_rate": r.wins / r.complete_closed if r.complete_closed else None,
+                       "win_rate_ci": list(ci) if ci else None, "net_pnl": num(r.net_pnl),
+                       "median_hours": num(r.median_hours), "open_now": r.open_now if sync_complete else None})
+    cycles = session.execute(text("""
+        SELECT coin, direction, opened_at, closed_at,
+               CASE WHEN status = 'open' AND NOT :done THEN 'data_end' ELSE status END AS status,
+               complete, scale, holding_hours, entry_px, exit_px,
+               max_notional, n_fills, n_decisions, realized_pnl - fees AS net_pnl
+        FROM position_cycle WHERE wallet_id = :w ORDER BY coalesce(closed_at, now()) DESC, opened_at DESC
+        LIMIT :n"""), {"w": wid, "n": limit, "done": sync_complete}).mappings().all()
+    return {
+        "coverage": dict(coverage) if coverage else None,
+        "sync_complete": sync_complete,
+        "scales": scales,
+        "cycles": [{k: (num(v) if hasattr(v, "is_finite") else v) for k, v in dict(c).items()} for c in cycles],
     }

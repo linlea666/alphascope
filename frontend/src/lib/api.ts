@@ -170,6 +170,8 @@ export type Run = {
 
 export type DataHealth = {
   freshness: Freshness;
+  market_data: { source: string; coin: string; m1: number; first_t: string; last_t: string }[];
+  symbols: { coin: string; symbol: string | null; status: string; median_ratio: number | null; basis_p95_bps: number | null; n_samples: number; checked_at: string; notes: string | null }[];
   latest_success: { kind: string; status: string; started_at: string; finished_at: string | null }[];
   runs: Run[];
   tables: Record<string, number>;
@@ -255,9 +257,55 @@ export type SwingCandidates = {
   rows: SwingCandidate[];
 };
 
+export type ScaleKey = "scalp" | "short" | "swing" | "macro";
+
+export type WalletPositions = {
+  coverage: {
+    status: string;
+    reason: string;
+    requested_start: string;
+    earliest_fill_at: string | null;
+    latest_fill_at: string | null;
+    n_fills: number;
+    truncated: boolean | null;
+    last_synced_at: string | null;
+    reconstructed_at: string | null;
+    recon_breaks: number | null;
+  } | null;
+  sync_complete: boolean;
+  scales: {
+    scale: ScaleKey;
+    cycles: number;
+    complete_closed?: number;
+    wins?: number;
+    win_rate?: number | null;
+    win_rate_ci?: [number, number] | null;
+    net_pnl?: number | null;
+    median_hours?: number | null;
+    open_now?: number | null;
+  }[];
+  cycles: {
+    coin: string;
+    direction: "long" | "short";
+    opened_at: string;
+    closed_at: string | null;
+    status: "closed" | "flipped" | "open" | "data_end";
+    complete: boolean;
+    scale: ScaleKey;
+    holding_hours: number;
+    entry_px: number | null;
+    exit_px: number | null;
+    max_notional: number;
+    n_fills: number;
+    n_decisions: number;
+    net_pnl: number;
+  }[];
+};
+
 export const api = {
   rankings: (params: Record<string, string | number | boolean | undefined>) => get<Rankings>("/api/v1/rankings", params),
   wallet: (address: string) => get<WalletDetail>(`/api/v1/wallets/${encodeURIComponent(address)}`),
+  walletPositions: (address: string) => get<WalletPositions>(`/api/v1/wallets/${encodeURIComponent(address)}/positions`),
   overview: () => get<Overview>("/api/v1/overview"),
   dataHealth: () => get<DataHealth>("/api/v1/data-health"),
   swings: () => get<SwingOverview>("/api/v1/swings"),

@@ -20,7 +20,7 @@ sudo bash /tmp/alphascope-install.sh            # 默认装到 /opt/alphascope
 ```
 
 安装脚本会依次：
-1. 检查系统、磁盘（≥ 5 GiB）和内存（≥ 1 GiB，构建前端建议内存 + swap ≥ 2 GiB）；
+1. 检查系统、磁盘（≥ 10 GiB；首次导入币安 K 线约 1.5 GB，之后每年约 2–3 GB）和内存（≥ 1 GiB，构建前端建议内存 + swap ≥ 2 GiB）；
 2. 克隆仓库并校验来源；
 3. 安装缺少的系统包（git、PostgreSQL、Python 3.11+）；
 4. 创建用户、目录、配置和数据库；

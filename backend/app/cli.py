@@ -4,6 +4,7 @@
   python -m app.cli enrich [--limit N] [--address 0x...]
   python -m app.cli tiers
   python -m app.cli market | swings | fills [--limit N]
+  python -m app.cli binance [--max-files N] | positions | reconcile [--limit N]
 """
 
 import argparse
@@ -15,11 +16,14 @@ from pathlib import Path
 
 from app.config import get_settings
 from app.db import session_factory
+from app.ingest.binance_ingest import import_binance
 from app.ingest.fill_sync import sync_fills
 from app.ingest.leaderboard_ingest import LeaderboardInput, ingest_leaderboard
 from app.ingest.market_ingest import record_candles
 from app.ingest.portfolio_ingest import enrich_batch
 from app.ingest.runs import mark_abandoned_runs
+from app.research.positions import rebuild_stale
+from app.research.reconcile import reconcile
 from app.research.swings import run_swings
 from app.sources.raw_store import LocalRawStore
 from app.tiering import recompute_tiers
@@ -39,6 +43,11 @@ def main() -> None:
     sub.add_parser("swings", help="recompute swing legs, per-wallet leg returns and fill candidates")
     fl = sub.add_parser("fills", help="archive fills for queued wallets")
     fl.add_argument("--limit", type=int)
+    bn = sub.add_parser("binance", help="import Binance USDT-M klines from data.binance.vision")
+    bn.add_argument("--max-files", type=int)
+    sub.add_parser("positions", help="rebuild position cycles and decisions for wallets with new fills")
+    rc = sub.add_parser("reconcile", help="sync fills, rebuild and compare positions with clearinghouseState")
+    rc.add_argument("--limit", type=int, default=5)
     args = p.parse_args()
 
     settings = get_settings()
@@ -54,6 +63,12 @@ def main() -> None:
         result = run_swings(sf, settings)
     elif args.cmd == "fills":
         result = asyncio.run(sync_fills(sf, settings, store, args.limit))
+    elif args.cmd == "binance":
+        result = asyncio.run(import_binance(sf, settings, args.max_files))
+    elif args.cmd == "positions":
+        result = rebuild_stale(sf)
+    elif args.cmd == "reconcile":
+        result = asyncio.run(reconcile(sf, settings, store, args.limit))
     elif args.cmd == "enrich":
         result = asyncio.run(enrich_batch(sf, settings, store, args.limit, args.address))
     else:

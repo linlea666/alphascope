@@ -106,6 +106,65 @@ export default async function DataHealthPage() {
         </Panel>
       </div>
 
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Panel title={t("health.marketTitle")} hint={t("health.marketHint")}>
+          <div className="-mx-4 max-h-96 overflow-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  <th className={th}>{t("health.source")}</th>
+                  <th className={th}>{t("health.coin")}</th>
+                  <th className={`${th} text-right`}>{t("health.rows1m")}</th>
+                  <th className={th}>{t("health.range")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.market_data.map((m) => (
+                  <tr key={`${m.source}-${m.coin}`} className="border-t border-border/60">
+                    <td className={`${td} text-xs text-muted`}>{m.source}</td>
+                    <td className={td}>{m.coin}</td>
+                    <td className={`${td} num text-right`}>{fmtNum(m.m1, locale)}</td>
+                    <td className={`${td} num text-xs text-muted`}>
+                      {m.first_t.slice(0, 10)} → {m.last_t.slice(0, 10)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+        <Panel title={t("health.symbolsTitle")} hint={t("health.symbolsHint")}>
+          <div className="-mx-4 max-h-96 overflow-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  <th className={th}>{t("health.coin")}</th>
+                  <th className={th}>{t("health.status")}</th>
+                  <th className={`${th} text-right`}>{t("health.ratio")}</th>
+                  <th className={`${th} text-right`}>{t("health.p95")}</th>
+                  <th className={`${th} text-right`}>{t("health.samples")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.symbols.map((s) => (
+                  <tr key={s.coin} className="border-t border-border/60" title={s.notes ?? undefined}>
+                    <td className={td}>
+                      {s.coin} <span className="text-xs text-muted">{s.symbol}</span>
+                    </td>
+                    <td className={td}>
+                      <Badge tone={s.status === "valid" ? "up" : s.status === "invalid" ? "down" : "neutral"}>{s.status}</Badge>
+                    </td>
+                    <td className={`${td} num text-right`}>{s.median_ratio === null ? "—" : fmtNum(s.median_ratio, locale, 4)}</td>
+                    <td className={`${td} num text-right text-muted`}>{s.basis_p95_bps === null ? "—" : `${fmtNum(s.basis_p95_bps, locale, 1)} bp`}</td>
+                    <td className={`${td} num text-right`}>{fmtNum(s.n_samples, locale)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
+      </div>
+
       <Panel title={t("health.runs")}>
         <div className="-mx-4 overflow-x-auto">
           <table className="w-full text-sm">

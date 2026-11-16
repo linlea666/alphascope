@@ -188,13 +188,50 @@
     "seriesAll": "All history",
     "equity": "Account value",
     "cumPnl": "Cumulative PnL",
-    "positionsTitle": "Open positions",
     "positionsAt": "Fetched {time}",
     "noPositions": "No open positions when fetched.",
     "snapshotsTitle": "Leaderboard snapshot history",
     "snapshotsHint": "A full snapshot is stored every 6 hours; history starts when this system began collecting.",
     "tierHistory": "Tier changes",
-    "hours": "{n} h"
+    "hours": "{n} h",
+    "coverageText": "Fill coverage: {n} fills since {from}; last synced {synced}",
+    "breaks": "{n} position-chain gaps",
+    "scale": "Timeframe",
+    "cycles": "Cycles",
+    "winRate": "Win rate",
+    "netPnl": "Net PnL",
+    "medianHold": "Median hold",
+    "openNow": "Open",
+    "scales": {
+      "scalp": "Scalp <4h",
+      "short": "Short 4h–3d",
+      "swing": "Swing 3d–3w",
+      "macro": "Macro >3w"
+    },
+    "recentCycles": "Recent position cycles",
+    "dir": {
+      "long": "Long",
+      "short": "Short"
+    },
+    "status": {
+      "closed": "Closed",
+      "flipped": "Flipped",
+      "open": "Open",
+      "data_end": "data ends"
+    },
+    "incomplete": "incomplete",
+    "entryExit": "Avg entry / exit",
+    "hold": "Held",
+    "decisions": "Decisions",
+    "days": "{n} d",
+    "period": "Period",
+    "coin": "Coin",
+    "truncated": "early fills truncated",
+    "cyclesTitle": "Position cycles by timeframe",
+    "cyclesHint": "Rebuilt from fills: each fill carries the position before it, so the path is exact. Same-coin, same-side fills less than 15 minutes apart form one decision; a cycle runs from open to flat or flip and is graded by holding time. Win rate counts complete, finished cycles net of fees; brackets show the 95% interval.",
+    "cyclesNone": "Fills for this wallet are not archived yet. The fill archive currently covers swing-research candidates.",
+    "positionsTitle": "Open positions",
+    "syncIncomplete": "Fill sync not finished; figures run to {date}. The rest follows in later batches (other wallets' early fills are rescued first)."
   },
   "health": {
     "title": "Data health & system status",
@@ -213,7 +250,18 @@
     "started": "Started",
     "duration": "Duration",
     "summary": "Summary",
-    "error": "Error"
+    "error": "Error",
+    "marketTitle": "Market data coverage",
+    "marketHint": "Binance USDT-M 1m klines from data.binance.vision (each file SHA256-verified); Hyperliquid candles recorded by this system since it started.",
+    "source": "Source",
+    "coin": "Coin",
+    "rows1m": "1m candles",
+    "range": "Range",
+    "symbolsTitle": "Symbol mapping checks",
+    "symbolsHint": "Hyperliquid fill prices compared with the Binance close of the same minute; mappings whose median ratio is more than 1% from 1 are not used.",
+    "ratio": "Median ratio",
+    "p95": "P95 deviation",
+    "samples": "Samples"
   },
   "status": {
     "success": "Success",

@@ -68,4 +68,5 @@ def test_overview_and_health(client):
     assert o["counts"]["new_24h"] == 0  # the seed import is not "newly discovered"
     h = client.get("/api/v1/data-health").json()
     assert h["tables"]["wallet"] == o["counts"]["total"]
+    assert "market_data" in h and "symbols" in h
     assert h["latest_success"][0]["kind"] == "leaderboard"
