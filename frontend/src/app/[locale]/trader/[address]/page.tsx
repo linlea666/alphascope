@@ -9,6 +9,7 @@ import { REPLAY_BARS, ReplayPanel } from "@/components/ReplayPanel";
 import { TimingPanel } from "@/components/TimingPanel";
 import { AlertButton } from "@/components/AlertButton";
 import { WatchButton } from "@/components/WatchButton";
+import { Link } from "@/i18n/routing";
 import { getWatchContext } from "@/lib/watch";
 import { Badge, Panel, td, th } from "@/components/ui";
 import { api, ApiError, type Metric, type WalletDetail, type Replay, type WalletPositions, type WalletTiming, type Window } from "@/lib/api";
@@ -65,6 +66,9 @@ export default async function TraderPage({
             <h1 className="text-xl font-semibold tracking-tight">{watchCtx.aliases[w.address] ?? w.display_name ?? t("trader.titleFallback")}</h1>
             <WatchButton address={w.address} watched={watchCtx.watched.has(w.address)} />
             <AlertButton address={w.address} subscribed={watchCtx.alerted.has(w.address)} />
+            <Link href={{ pathname: "/sims", query: { new: 1, leader: w.address } }} className="rounded border border-border px-2 py-0.5 text-xs text-muted hover:text-accent">
+              ⧉ {t("trader.copySim")}
+            </Link>
             <TierBadge tier={w.tier} />
             <FlagBadges flags={[...w.flags, ...w.enrichment_flags]} />
           </div>

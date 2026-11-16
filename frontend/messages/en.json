@@ -16,7 +16,8 @@
     "holders": "Swing holders",
     "watchlist": "Watchlist",
     "alerts": "Alerts",
-    "settings": "Settings"
+    "settings": "Settings",
+    "sims": "Copy sim"
   },
   "common": {
     "dataAsOf": "Data as of",
@@ -238,7 +239,8 @@
     "cyclesHint": "Rebuilt from fills: each fill carries the position before it, so the path is exact. Same-coin, same-side fills less than 15 minutes apart form one decision; a cycle runs from open to flat or flip and is graded by holding time. Win rate counts complete, finished cycles net of fees; brackets show the 95% interval.",
     "cyclesNone": "Fills for this wallet are not archived yet. The fill archive currently covers swing-research candidates.",
     "positionsTitle": "Open positions",
-    "syncIncomplete": "Fill sync not finished; figures run to {date}. The rest follows in later batches (other wallets' early fills are rescued first)."
+    "syncIncomplete": "Fill sync not finished; figures run to {date}. The rest follows in later batches (other wallets' early fills are rescued first).",
+    "copySim": "Copy sim"
   },
   "health": {
     "title": "Data health & system status",
@@ -660,5 +662,216 @@
     "events": "Changes this round",
     "notRunning": "The live process is not running yet (it starts automatically after deployment).",
     "error": "Error"
+  },
+  "sims": {
+    "title": "Copy simulation",
+    "subtitle": "Paper-follow traders at live mid prices: every 30 s their positions are read and the simulated book is adjusted to your capital and rules, with fees, slippage, funding and liquidation. Simulations are independent.",
+    "new": "+ New simulation",
+    "periods": {
+      "1d": "24h",
+      "7d": "7 days",
+      "30d": "30 days",
+      "all": "All"
+    },
+    "tz": "Daily figures use {tz}",
+    "stats": {
+      "active": "Running / total",
+      "capital": "Capital",
+      "equity": "Equity",
+      "periodPnl": "PnL ({p})",
+      "trades": "Fills",
+      "costs": "Trading costs",
+      "costsSub": "fees {fee} · slippage {slip} · funding {fund}",
+      "pnl": "Total PnL",
+      "unrealized": "Unrealized PnL",
+      "mdd": "Max drawdown",
+      "exposure": "Gross exposure / equity"
+    },
+    "listTitle": "All simulations",
+    "listHint": "Copy return = change in simulated equity. Leader return uses their account value, which includes deposits and withdrawals, so treat it as a reference. Retention = copy return ÷ leader return: how much delay, slippage and sizing limits gave up.",
+    "cols": {
+      "sim": "Simulation",
+      "leader": "Leader",
+      "equity": "Equity",
+      "total": "Total",
+      "period": "Period",
+      "leaderRet": "Leader",
+      "leaderHint": "Leader account value change (includes transfers)",
+      "retention": "Retention",
+      "retentionHint": "Copy return ÷ leader return; blank when the leader moved under 0.5%",
+      "mdd": "Period MDD",
+      "winRate": "Win rate",
+      "costs": "Period costs",
+      "exposure": "Leverage",
+      "status": "Status"
+    },
+    "closedN": "{n} closed cycles",
+    "positionsN": "{n} positions",
+    "status": {
+      "running": "Running",
+      "paused": "Paused",
+      "stopped": "Stopped"
+    },
+    "reason": {
+      "manual": "stopped manually",
+      "drawdown": "drawdown stop",
+      "liquidated": "liquidated"
+    },
+    "empty": "No simulations yet. Use “Copy sim” on a trader page, or enter an address above.",
+    "calendarTitle": "Daily PnL calendar",
+    "calendarHint": "All simulations combined; daily PnL = last equity of the day − last equity of the previous day. Darker = larger.",
+    "weekOf": "Week (Mon)",
+    "weekdays": [
+      "M",
+      "T",
+      "W",
+      "T",
+      "F",
+      "S",
+      "S"
+    ],
+    "noDaily": "No daily data yet; it appears after the first full day.",
+    "corrTitle": "Correlation between simulations",
+    "corrHint": "Correlation of daily returns, computed with at least {n} common days. High correlation means the leaders bet the same way and diversify little.",
+    "following": "Following",
+    "since": "since {t}",
+    "stoppedAt": "stopped {t}",
+    "back": "All simulations",
+    "capitalOf": "of {v}",
+    "periodTitle": "Performance by period",
+    "periodHint": "Return, drawdown and closed-cycle statistics per period. A cycle runs from flat to flat on one coin (a flip closes one and opens another); PnL is net of fees and funding.",
+    "rows": {
+      "pnl": "PnL",
+      "return": "Return",
+      "leaderRet": "Leader return (incl. transfers)",
+      "retention": "Retention",
+      "mdd": "Max drawdown",
+      "cycles": "Closed cycles",
+      "winRate": "Win rate",
+      "profitFactor": "Profit factor",
+      "avgWinLoss": "Avg win / avg loss",
+      "medianHold": "Median holding time"
+    },
+    "hours": "{n} h",
+    "chartTitle": "Return curve",
+    "chartHint": "Top: simulated return and the leader's account value change (dashed, includes transfers). Bottom: daily PnL ({tz}).",
+    "chart": {
+      "sim": "Copy return",
+      "leader": "Leader account change",
+      "daily": "Daily PnL",
+      "empty": "Waiting for the first equity snapshot (the live process runs every 30 s)."
+    },
+    "posTitle": "Positions vs leader",
+    "posHint": "Simulated positions with the leader's latest size. Positions the leader held before the start are not chased (the entry would differ); they are followed after the leader closes or flips them.",
+    "pos": {
+      "coin": "Coin",
+      "size": "Size",
+      "entry": "Entry",
+      "mark": "Mark",
+      "value": "Notional",
+      "upnl": "uPnL",
+      "leader": "Leader",
+      "state": "State"
+    },
+    "pendingUntil": "delayed, fills {t}",
+    "followed": "following",
+    "preexisting": "pre-existing, not followed",
+    "preexistingHint": "The leader held this before the simulation started; it is followed after a close or flip. Tick “copy existing positions” when creating to follow at once.",
+    "noPositions": "No open positions.",
+    "coinTitle": "PnL by coin",
+    "coin": {
+      "net": "Net",
+      "realized": "Realized",
+      "unrealized": "Unrealized",
+      "fees": "Fees",
+      "funding": "Funding",
+      "trades": "Fills"
+    },
+    "cycleTitle": "Trade cycles",
+    "cycleHint": "Latest 100; open cycles show as open.",
+    "cycle": {
+      "opened": "Opened",
+      "closed": "Closed",
+      "peak": "Peak size",
+      "pnl": "PnL",
+      "open": "open"
+    },
+    "tradesTitle": "Fills",
+    "tradesHint": "Latest 200. Fill price = mid ± slippage; cost = fee + slippage (funding listed separately).",
+    "trade": {
+      "time": "Time",
+      "kind": "Action",
+      "size": "Size",
+      "mid": "Mid",
+      "px": "Price",
+      "cost": "Cost",
+      "realized": "Realized",
+      "after": "Position after",
+      "leader": "Leader size",
+      "buy": "Buy",
+      "sell": "Sell",
+      "delayed": "delayed",
+      "kinds": {
+        "funding": "Funding",
+        "liquidation": "Liquidation",
+        "stop": "Stop",
+        "trade": "Fill"
+      }
+    },
+    "noTrades": "No fills yet.",
+    "editParams": "Edit parameters",
+    "editHint": "Changes apply to later rebalancing only; history is not recomputed.",
+    "controls": {
+      "pause": "Pause",
+      "resume": "Resume",
+      "stop": "Stop",
+      "stopping": "Stopping…",
+      "delete": "Delete",
+      "confirmStop": "Stopping closes every simulated position at the next cycle's live prices and cannot be undone. Stop?",
+      "confirmDelete": "Deleting removes all fills and equity history of this simulation. Delete?"
+    },
+    "form": {
+      "leader": "Leader address",
+      "leaderHint": "Must be a wallet in the database (every leaderboard address is)",
+      "name": "Name",
+      "capital": "Capital (USD)",
+      "sizing": "Sizing",
+      "sizings": {
+        "equity_ratio": "Equity ratio",
+        "fixed_multiple": "Fixed multiple",
+        "fixed_cap": "Fixed USD per coin"
+      },
+      "sizingHints": {
+        "equity_ratio": "They put 40% of equity in, you put 40% (× factor). Closest to real copy trading.",
+        "fixed_multiple": "Size = their size × factor, regardless of your capital.",
+        "fixed_cap": "A fixed USD amount per coin; direction only."
+      },
+      "factor": "Factor",
+      "factorHint": "1 = proportional; 0.5 = half size",
+      "capPerCoin": "USD per coin",
+      "maxLeverage": "Max leverage",
+      "maxLeverageHint": "Scales down when gross exposure exceeds equity × this",
+      "include": "Only these coins",
+      "includeHint": "Empty = all perps",
+      "exclude": "Exclude coins",
+      "delay": "Delay (s)",
+      "delayHint": "Simulates human reaction time",
+      "fee": "Fee (bp)",
+      "feeHint": "4.5 = 0.045% taker",
+      "slippage": "Slippage (bp)",
+      "slippageHint": "Fixed offset from mid",
+      "drawdown": "Drawdown stop (%)",
+      "drawdownHint": "Close everything and stop past this drawdown from peak",
+      "off": "off",
+      "minTrade": "Min trade (USD)",
+      "rebalance": "Rebalance threshold (%)",
+      "rebalanceHint": "Skip when target and current differ by less",
+      "followAdjust": "Follow adds and trims (off: only opens, closes and flips)",
+      "copyExisting": "Copy the leader's existing positions (open now at current prices)",
+      "create": "Start simulation",
+      "save": "Save parameters",
+      "saving": "Submitting…",
+      "saved": "Saved; applies from the next cycle."
+    }
   }
 }

@@ -21,6 +21,7 @@ from app import settings_store
 from app.alerts.diff import Pos, diff, parse_clearinghouse
 from app.alerts.mailer import Ev, Sub, compose, in_quiet_hours, passes, ready, send
 from app.config import Settings, get_settings
+from app.sim.engine import step_simulations
 from app.db import session_factory
 from app.sources.hl_client import HyperliquidInfoClient, WeightBucket
 
@@ -187,6 +188,19 @@ def notify_pending(sf: sessionmaker[Session], now: datetime | None = None, sende
     return {"sent": sent, "held": held, "skipped": skipped, "failed": failed}
 
 
+async def fetch_market_meta(client: HyperliquidInfoClient) -> tuple[dict[str, Decimal], dict[str, int]]:
+    """Hourly funding rate and max leverage per perp coin (one metaAndAssetCtxs call)."""
+    meta, ctxs = (await client.info({"type": "metaAndAssetCtxs"})).data
+    funding: dict[str, Decimal] = {}
+    max_lev: dict[str, int] = {}
+    for asset, ctx in zip(meta["universe"], ctxs):
+        if ctx.get("funding") is not None:
+            funding[asset["name"]] = Decimal(ctx["funding"])
+        if asset.get("maxLeverage"):
+            max_lev[asset["name"]] = int(asset["maxLeverage"])
+    return funding, max_lev
+
+
 def write_status(sf: sessionmaker[Session], status: dict) -> None:
     with sf() as s:
         settings_store.put(s, "live_status", status)
@@ -199,6 +213,9 @@ async def run(settings: Settings) -> None:
     budget = settings.hl_weight_per_minute * settings.live_weight_safety
     async with HyperliquidInfoClient(settings.hl_info_url, budget, settings.hl_timeout_seconds, settings.hl_max_retries,
                                      bucket=WeightBucket(budget)) as client:
+        market_hour: datetime | None = None
+        funding: dict[str, Decimal] | None = None
+        max_lev: dict[str, int] = {}
         while True:
             t0 = time.monotonic()
             with sf() as s:
@@ -208,13 +225,16 @@ async def run(settings: Settings) -> None:
             try:
                 r = await poll_once(sf, client, float(live.get("liq_risk_pct") or 5))
                 status.update({k: v for k, v in r.items() if k != "mids"})
-                # S3 hook: copy simulations react to the same snapshot (imported lazily, optional module)
-                try:
-                    from app.sim.engine import step_simulations
-                except ImportError:
-                    step_simulations = None
-                if step_simulations is not None:
-                    status["sim"] = step_simulations(sf, r.get("mids") or {})
+                # funding rates and per-coin max leverage change slowly: refresh once per hour
+                hour = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+                if market_hour != hour:
+                    try:
+                        funding, max_lev = await fetch_market_meta(client)
+                        market_hour = hour
+                    except Exception:  # noqa: BLE001 — keep the previous values, retry next cycle
+                        log.warning("metaAndAssetCtxs failed", exc_info=True)
+                # copy simulations react to the same snapshot
+                status["sim"] = step_simulations(sf, r.get("mids") or {}, funding, max_lev)
                 status["notify"] = notify_pending(sf)
             except Exception as exc:  # noqa: BLE001 — keep the monitor alive
                 log.exception("live cycle failed")

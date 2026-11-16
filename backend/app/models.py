@@ -698,3 +698,87 @@ class Notification(Base):
     error: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# --- Copy simulation S3 (migration 0008) ---
+
+
+class CopySim(Base):
+    """A forward-only simulated copy of one leader with its own capital, positions and ledger."""
+
+    __tablename__ = "copy_sim"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    owner: Mapped[str] = mapped_column(String(32), default="default", server_default="default")
+    name: Mapped[str] = mapped_column(String(64))
+    leader_wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), index=True)
+    status: Mapped[str] = mapped_column(String(12))  # running | paused | stopped
+    stop_reason: Mapped[str | None] = mapped_column(String(32))  # manual | drawdown | liquidated
+    capital: Mapped[Decimal] = mapped_column(Numeric)
+    sizing: Mapped[str] = mapped_column(String(16))  # equity_ratio | fixed_multiple | fixed_cap
+    size_factor: Mapped[Decimal] = mapped_column(Numeric)
+    cap_per_coin: Mapped[Decimal | None] = _num()
+    max_leverage: Mapped[Decimal] = mapped_column(Numeric)
+    coins_include: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
+    coins_exclude: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
+    follow_adjust: Mapped[bool] = mapped_column(Boolean, default=True)  # also follow increases / decreases
+    copy_existing: Mapped[bool] = mapped_column(Boolean, default=False)  # mirror positions open at start
+    delay_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    fee_bps: Mapped[Decimal] = mapped_column(Numeric)
+    slippage_bps: Mapped[Decimal] = mapped_column(Numeric)
+    min_trade_usd: Mapped[Decimal] = mapped_column(Numeric)
+    rebalance_pct: Mapped[Decimal] = mapped_column(Numeric)
+    stop_drawdown_pct: Mapped[Decimal | None] = _num()
+    cash: Mapped[Decimal] = mapped_column(Numeric)  # capital + realized - fees - funding
+    peak_equity: Mapped[Decimal] = mapped_column(Numeric)
+    state: Mapped[dict] = mapped_column(JSONB, default=dict)  # followed coins, baseline, pending delayed orders
+    last_funding_hour: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_equity_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    stopped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SimPosition(Base):
+    __tablename__ = "sim_position"
+
+    sim_id: Mapped[int] = mapped_column(ForeignKey("copy_sim.id", ondelete="CASCADE"), primary_key=True)
+    coin: Mapped[str] = mapped_column(String(48), primary_key=True)
+    size: Mapped[Decimal] = mapped_column(Numeric)
+    entry_px: Mapped[Decimal] = mapped_column(Numeric)
+    opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    mark_px: Mapped[Decimal | None] = _num()  # live mid at the last cycle
+
+
+class SimTrade(Base):
+    __tablename__ = "sim_trade"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    sim_id: Mapped[int] = mapped_column(ForeignKey("copy_sim.id", ondelete="CASCADE"))
+    t: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    coin: Mapped[str] = mapped_column(String(48))
+    kind: Mapped[str] = mapped_column(String(12))  # trade | funding | liquidation | stop
+    side: Mapped[str | None] = mapped_column(String(4))  # buy | sell
+    size: Mapped[Decimal] = mapped_column(Numeric)
+    mid: Mapped[Decimal | None] = _num()
+    px: Mapped[Decimal | None] = _num()
+    fee: Mapped[Decimal] = mapped_column(Numeric, default=0)
+    slippage_cost: Mapped[Decimal] = mapped_column(Numeric, default=0)
+    funding: Mapped[Decimal] = mapped_column(Numeric, default=0)  # paid (+) / received (-)
+    realized_pnl: Mapped[Decimal] = mapped_column(Numeric, default=0)  # price PnL of the closed part
+    position_after: Mapped[Decimal] = mapped_column(Numeric)
+    leader_szi: Mapped[Decimal | None] = _num()
+    reason: Mapped[str | None] = mapped_column(String(32))
+
+    __table_args__ = (Index("ix_sim_trade_sim_t", "sim_id", "t"),)
+
+
+class SimEquity(Base):
+    __tablename__ = "sim_equity"
+
+    sim_id: Mapped[int] = mapped_column(ForeignKey("copy_sim.id", ondelete="CASCADE"), primary_key=True)
+    t: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    equity: Mapped[Decimal] = mapped_column(Numeric)
+    cash: Mapped[Decimal] = mapped_column(Numeric)
+    unrealized: Mapped[Decimal] = mapped_column(Numeric)
+    gross_exposure: Mapped[Decimal] = mapped_column(Numeric)
+    leader_equity: Mapped[Decimal | None] = _num()

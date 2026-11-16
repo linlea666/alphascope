@@ -555,6 +555,126 @@ export type AppSettings = {
   live_status: { cycle_started_at?: string; interval_seconds?: number; wallets?: number; events?: number; errors?: number; cycle_seconds?: number; error?: string; notify?: Record<string, number> };
 };
 
+export type SimStatus = "running" | "paused" | "stopped";
+export type SimSizing = "equity_ratio" | "fixed_multiple" | "fixed_cap";
+
+export type SimSummary = {
+  id: number;
+  name: string;
+  status: SimStatus;
+  stop_reason: "manual" | "drawdown" | "liquidated" | null;
+  stop_pending: boolean;
+  capital: number;
+  cash: number;
+  peak_equity: number;
+  sizing: SimSizing;
+  size_factor: number;
+  max_leverage: number;
+  delay_seconds: number;
+  created_at: string;
+  stopped_at: string | null;
+  leader: string;
+  leader_name: string | null;
+  equity: number;
+  equity_at: string | null;
+  gross_exposure: number | null;
+  trades: number;
+  fees: number;
+  slippage: number;
+  funding: number;
+  max_dd: number | null;
+  open_positions: number;
+  pnl: number;
+  return: number | null;
+};
+
+export type SimParams = {
+  sizing: SimSizing;
+  size_factor: number;
+  cap_per_coin: number | null;
+  max_leverage: number;
+  coins_include: string[];
+  coins_exclude: string[];
+  follow_adjust: boolean;
+  copy_existing: boolean;
+  delay_seconds: number;
+  fee_bps: number;
+  slippage_bps: number;
+  min_trade_usd: number;
+  rebalance_pct: number;
+  stop_drawdown_pct: number | null;
+};
+
+export type SimPeriod = "1d" | "7d" | "30d" | "all";
+
+export type SimPeriodStats = {
+  pnl: number;
+  return: number | null;
+  max_dd: number;
+  leader_return: number | null;
+  retention: number | null;
+  closed: number;
+  win_rate: number | null;
+  avg_win: number | null;
+  avg_loss: number | null;
+  profit_factor: number | null;
+  median_hold_hours: number | null;
+};
+
+export type SimDaily = { day: string; pnl: number; return: number | null; equity: number };
+
+export type SimDetail = {
+  summary: SimSummary;
+  analytics: {
+    timezone: string;
+    periods: Record<SimPeriod, SimPeriodStats>;
+    daily: SimDaily[];
+    per_coin: { coin: string; realized: number; unrealized: number; fees: number; slippage: number; funding: number; net: number; trades: number }[];
+    cycles: { coin: string; side: 1 | -1; opened_at: string; closed_at: string | null; pnl: number; fees: number; funding: number; max_notional: number; trades: number }[];
+  };
+  params: SimParams;
+  state: { followed?: string[]; baseline?: Record<string, number>; pending?: Record<string, { target: string; due: string }>; started_at?: string };
+  positions: { coin: string; size: number; entry_px: number; opened_at: string; mark: number | null }[];
+  leader_positions: { coin: string; szi: number; value: number | null }[];
+  trades: {
+    t: string;
+    coin: string;
+    kind: "trade" | "funding" | "liquidation" | "stop";
+    side: "buy" | "sell" | null;
+    size: number;
+    mid: number | null;
+    px: number | null;
+    fee: number;
+    slippage_cost: number;
+    funding: number;
+    realized_pnl: number;
+    position_after: number | null;
+    leader_szi: number | null;
+    reason: string | null;
+  }[];
+  equity: [string, number, number, number | null][];
+};
+
+export type SimDashboard = {
+  period: SimPeriod;
+  timezone: string;
+  sims: (SimSummary & { period: SimPeriodStats & { trades: number; fees: number; slippage: number; funding: number } })[];
+  portfolio: {
+    count: number;
+    active: number;
+    capital: number;
+    equity: number;
+    pnl: number;
+    period_pnl: number;
+    period_fees: number;
+    period_funding: number;
+    period_slippage: number;
+    period_trades: number;
+  };
+  calendar: { day: string; pnl: number; sims: number }[];
+  correlation: { ids: number[]; matrix: (number | null)[][]; min_days: number };
+};
+
 export const api = {
   rankings: (params: Record<string, string | number | boolean | undefined>) => get<Rankings>("/api/v1/rankings", params),
   wallet: (address: string) => get<WalletDetail>(`/api/v1/wallets/${encodeURIComponent(address)}`),
@@ -577,5 +697,7 @@ export const api = {
   holderCapture: (params: Record<string, string | number | boolean | undefined>) => get<LegCaptureRanking>("/api/v1/holders/capture", params),
   replay: (address: string, params: Record<string, string | number | boolean | undefined>) =>
     get<Replay>(`/api/v1/wallets/${encodeURIComponent(address)}/replay`, params),
+  simDashboard: (period: SimPeriod) => get<SimDashboard>("/api/v1/sims/dashboard", { period }),
+  sim: (id: number) => get<SimDetail>(`/api/v1/sims/${id}`),
   swingCandidates: (params: Record<string, string | number | boolean | undefined>) => get<SwingCandidates>("/api/v1/swings/candidates", params),
 };

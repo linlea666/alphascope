@@ -58,3 +58,7 @@ export function splitNote(note: string): [string, number | undefined] {
   const [key, n] = note.split(":");
   return [key, n === undefined ? undefined : Number(n)];
 }
+
+export function simStatusTone(s: "running" | "paused" | "stopped"): "up" | "warn" | "neutral" {
+  return s === "running" ? "up" : s === "paused" ? "warn" : "neutral";
+}

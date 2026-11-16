@@ -14,6 +14,7 @@ export async function Nav() {
     { href: "/zones", label: t("zones") },
     { href: "/watchlist", label: t("watchlist") },
     { href: "/alerts", label: t("alerts") },
+    { href: "/sims", label: t("sims") },
     { href: "/data-health", label: t("dataHealth") },
     { href: "/settings", label: t("settings") },
   ] as const;

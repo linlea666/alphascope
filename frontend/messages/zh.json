@@ -16,7 +16,8 @@
     "holders": "波段持仓者",
     "watchlist": "我的收藏",
     "alerts": "仓位提醒",
-    "settings": "设置"
+    "settings": "设置",
+    "sims": "模拟跟单"
   },
   "common": {
     "dataAsOf": "数据时间",
@@ -238,7 +239,8 @@
     "cyclesHint": "由逐笔成交还原：每条成交都带有成交前仓位，可以精确串出仓位路径。同一币种、同一方向、间隔 15 分钟以内的成交算一次决策；从开仓到平仓或反手为一个周期，按持仓时长分级。胜率只统计完整且已结束的周期（扣除手续费），括号内为 95% 置信区间。",
     "cyclesNone": "这个钱包的成交还没有归档。成交归档目前只覆盖大周期研究的候选钱包。",
     "positionsTitle": "当前持仓",
-    "syncIncomplete": "成交同步尚未完成，统计截至 {date}；剩余成交会在后续批次补齐（优先抢救其他钱包的早期成交）。"
+    "syncIncomplete": "成交同步尚未完成，统计截至 {date}；剩余成交会在后续批次补齐（优先抢救其他钱包的早期成交）。",
+    "copySim": "模拟跟单"
   },
   "health": {
     "title": "数据健康与系统状态",
@@ -660,5 +662,216 @@
     "events": "本轮变动",
     "notRunning": "实时进程尚未运行（部署后会自动启动）。",
     "error": "错误"
+  },
+  "sims": {
+    "title": "模拟跟单",
+    "subtitle": "用实时中间价模拟跟随交易员：每 30 秒读取他的持仓，按你的资金和规则调整模拟仓位，计入手续费、滑点、资金费和强平。多个模拟互不影响。",
+    "new": "＋ 新建模拟",
+    "periods": {
+      "1d": "24 小时",
+      "7d": "7 天",
+      "30d": "30 天",
+      "all": "全部"
+    },
+    "tz": "按日统计使用 {tz} 时区",
+    "stats": {
+      "active": "运行中 / 全部",
+      "capital": "投入资金",
+      "equity": "当前净值",
+      "periodPnl": "{p}盈亏",
+      "trades": "成交笔数",
+      "costs": "交易成本",
+      "costsSub": "手续费 {fee} · 滑点 {slip} · 资金费 {fund}",
+      "pnl": "累计盈亏",
+      "unrealized": "浮动盈亏",
+      "mdd": "最大回撤",
+      "exposure": "总敞口 / 净值"
+    },
+    "listTitle": "全部模拟",
+    "listHint": "跟随者收益 = 模拟净值变化；交易员收益用他的账户净值变化计算，包含出入金，仅作参照。收益保留率 = 模拟收益 ÷ 交易员收益，体现延迟、滑点和规模限制吃掉了多少。",
+    "cols": {
+      "sim": "模拟",
+      "leader": "交易员",
+      "equity": "净值",
+      "total": "累计",
+      "period": "本期",
+      "leaderRet": "交易员本期",
+      "leaderHint": "交易员账户净值变化（含出入金）",
+      "retention": "保留率",
+      "retentionHint": "模拟收益 ÷ 交易员收益；交易员波动小于 0.5% 时不计算",
+      "mdd": "本期回撤",
+      "winRate": "胜率",
+      "costs": "本期成本",
+      "exposure": "杠杆",
+      "status": "状态"
+    },
+    "closedN": "{n} 个已平仓周期",
+    "positionsN": "{n} 个持仓",
+    "status": {
+      "running": "运行中",
+      "paused": "已暂停",
+      "stopped": "已停止"
+    },
+    "reason": {
+      "manual": "手动停止",
+      "drawdown": "触发回撤止损",
+      "liquidated": "已强平"
+    },
+    "empty": "还没有模拟。在交易员页点「模拟跟单」，或在上方输入地址创建。",
+    "calendarTitle": "每日盈亏日历",
+    "calendarHint": "所有模拟合计；每日盈亏 = 当日最后净值 − 前一日最后净值。颜色越深金额越大。",
+    "weekOf": "周（周一）",
+    "weekdays": [
+      "一",
+      "二",
+      "三",
+      "四",
+      "五",
+      "六",
+      "日"
+    ],
+    "noDaily": "还没有按日数据，运行满一天后出现。",
+    "corrTitle": "模拟之间的相关性",
+    "corrHint": "每日收益的相关系数，至少 {n} 个共同交易日才计算。相关性高说明这些交易员押的是同一方向，分散效果有限。",
+    "following": "跟随",
+    "since": "开始于 {t}",
+    "stoppedAt": "停止于 {t}",
+    "back": "全部模拟",
+    "capitalOf": "初始 {v}",
+    "periodTitle": "分周期表现",
+    "periodHint": "周期内的收益、回撤和已平仓周期统计。一个周期 = 某币种从空仓开仓到再次空仓（反手算两个周期），盈亏已扣手续费和资金费。",
+    "rows": {
+      "pnl": "盈亏",
+      "return": "收益率",
+      "leaderRet": "交易员收益（含出入金）",
+      "retention": "收益保留率",
+      "mdd": "最大回撤",
+      "cycles": "已平仓周期",
+      "winRate": "胜率",
+      "profitFactor": "盈亏比（总盈 ÷ 总亏）",
+      "avgWinLoss": "平均盈 / 平均亏",
+      "medianHold": "持仓时长中位数"
+    },
+    "hours": "{n} 小时",
+    "chartTitle": "收益曲线",
+    "chartHint": "上：模拟收益率与交易员账户净值变化（虚线，含出入金）；下：每日盈亏（{tz}）。",
+    "chart": {
+      "sim": "模拟收益",
+      "leader": "交易员净值变化",
+      "daily": "每日盈亏",
+      "empty": "等待第一次净值快照（实时进程每 30 秒运行一次）。"
+    },
+    "posTitle": "持仓对照",
+    "posHint": "左侧为模拟仓位，「交易员」列为他最新的持仓数量。启动前已有的仓位默认不追（中途上车价格不同），等他平掉或反手后才开始跟。",
+    "pos": {
+      "coin": "币种",
+      "size": "数量",
+      "entry": "开仓价",
+      "mark": "标记价",
+      "value": "名义价值",
+      "upnl": "浮盈",
+      "leader": "交易员",
+      "state": "状态"
+    },
+    "pendingUntil": "延迟下单，{t} 执行",
+    "followed": "跟随中",
+    "preexisting": "启动前已有，不跟",
+    "preexistingHint": "交易员在模拟开始前就持有此仓位；平仓或反手后开始跟随。创建时勾选「同步已有仓位」可直接跟。",
+    "noPositions": "当前没有持仓。",
+    "coinTitle": "分币种盈亏",
+    "coin": {
+      "net": "净盈亏",
+      "realized": "已实现",
+      "unrealized": "未实现",
+      "fees": "手续费",
+      "funding": "资金费",
+      "trades": "笔数"
+    },
+    "cycleTitle": "交易周期",
+    "cycleHint": "最近 100 个，未平仓的显示为持仓中。",
+    "cycle": {
+      "opened": "开仓",
+      "closed": "平仓",
+      "peak": "最大仓位",
+      "pnl": "盈亏",
+      "open": "持仓中"
+    },
+    "tradesTitle": "成交记录",
+    "tradesHint": "最近 200 条。成交价 = 中间价 ± 滑点；成本 = 手续费 + 滑点（资金费单列）。",
+    "trade": {
+      "time": "时间",
+      "kind": "动作",
+      "size": "数量",
+      "mid": "中间价",
+      "px": "成交价",
+      "cost": "成本",
+      "realized": "已实现",
+      "after": "成交后仓位",
+      "leader": "交易员仓位",
+      "buy": "买入",
+      "sell": "卖出",
+      "delayed": "延迟",
+      "kinds": {
+        "funding": "资金费",
+        "liquidation": "强平",
+        "stop": "止损/停止",
+        "trade": "成交"
+      }
+    },
+    "noTrades": "还没有成交。",
+    "editParams": "修改参数",
+    "editHint": "修改只影响之后的调仓，不会重算历史。",
+    "controls": {
+      "pause": "暂停",
+      "resume": "继续",
+      "stop": "停止",
+      "stopping": "停止中…",
+      "delete": "删除",
+      "confirmStop": "停止后会在下一轮用实时价格平掉全部模拟仓位，且无法恢复。确定停止？",
+      "confirmDelete": "删除会清除这个模拟的全部成交和净值记录，确定删除？"
+    },
+    "form": {
+      "leader": "交易员地址",
+      "leaderHint": "须是已入库的钱包（排行榜里的地址都在）",
+      "name": "名称",
+      "capital": "模拟资金（USD）",
+      "sizing": "仓位计算",
+      "sizings": {
+        "equity_ratio": "按净值比例",
+        "fixed_multiple": "固定倍数",
+        "fixed_cap": "每币固定金额"
+      },
+      "sizingHints": {
+        "equity_ratio": "他用 40% 净值开仓，你也用 40%（× 系数）。最接近真实跟单。",
+        "fixed_multiple": "仓位 = 他的仓位 × 系数，与你的资金无关。",
+        "fixed_cap": "每个币开固定美元金额，只跟方向。"
+      },
+      "factor": "系数",
+      "factorHint": "1 = 等比例；0.5 = 半仓跟",
+      "capPerCoin": "每币金额（USD）",
+      "maxLeverage": "最高杠杆",
+      "maxLeverageHint": "总敞口超过 净值 × 此值 时等比缩小",
+      "include": "只跟这些币",
+      "includeHint": "留空 = 全部永续币种",
+      "exclude": "排除币种",
+      "delay": "延迟（秒）",
+      "delayHint": "模拟人工反应时间",
+      "fee": "手续费（bp）",
+      "feeHint": "4.5 = 吃单费率 0.045%",
+      "slippage": "滑点（bp）",
+      "slippageHint": "相对中间价的固定偏移",
+      "drawdown": "回撤止损（%）",
+      "drawdownHint": "从最高净值回撤超过即全部平仓并停止",
+      "off": "不启用",
+      "minTrade": "最小调仓金额（USD）",
+      "rebalance": "调仓阈值（%）",
+      "rebalanceHint": "目标与当前仓位差异小于此比例时不动",
+      "followAdjust": "跟随加减仓（不勾选则只跟开仓、平仓、反手）",
+      "copyExisting": "同步交易员已有仓位（按当前价格立即开仓）",
+      "create": "开始模拟",
+      "save": "保存参数",
+      "saving": "提交中…",
+      "saved": "已保存，下一轮生效。"
+    }
   }
 }
