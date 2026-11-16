@@ -72,14 +72,24 @@ sudo alphascope swings          # 以服务用户身份执行后端命令（mark
 本地开发机已经积累的快照和抢救下来的成交，迁移后可以继续使用：
 
 ```bash
-# 本地
-pg_dump -Fc alphascope > alphascope.dump
-rsync -a data/raw/ root@服务器:/opt/alphascope/data/raw/
-scp alphascope.dump root@服务器:/tmp/
+# 本地：先停掉本地 worker，避免导出后继续写入
+pkill -f app.worker
+# 币安 K 线不必上传（体积大，服务器会自动重新下载）；Hyperliquid 自记录的 K 线单独导出（过期就取不回）
+pg_dump -Fc --exclude-table-data=market_candle --exclude-table-data=market_file -f alphascope.dump alphascope
+psql alphascope -c "\copy (select source, coin, interval, t, o, h, l, c, v, n, fetched_at from market_candle where source='hyperliquid') to 'hl_candles.csv' csv"
+COPYFILE_DISABLE=1 tar -czf raw.tgz -C data raw          # macOS：不打包扩展属性
+scp alphascope.dump hl_candles.csv raw.tgz root@服务器:/root/
 
 # 服务器
-chown -R alphascope:alphascope /opt/alphascope/data/raw
-sudo /opt/alphascope/start.sh restore /tmp/alphascope.dump   # 会先自动备份服务器当前数据库
+cd /opt/alphascope
+echo yes | ./start.sh restore /root/alphascope.dump       # 会先自动备份服务器当前数据库
+systemctl stop alphascope-worker
+P="runuser -u postgres -- psql -q -d alphascope"
+$P -c "CREATE TABLE hl_import (LIKE market_candle)"
+$P -c "\copy hl_import (source, coin, interval, t, o, h, l, c, v, n, fetched_at) from stdin csv" < /root/hl_candles.csv
+$P -c "INSERT INTO market_candle SELECT * FROM hl_import ON CONFLICT DO NOTHING; DROP TABLE hl_import"
+tar -xzf /root/raw.tgz -C data && chown -R alphascope:alphascope data/raw
+systemctl start alphascope-worker
 ```
 
 迁移完成后，记得停掉本地的 worker（`pkill -f app.worker`），避免两边同时采集、数据分叉。

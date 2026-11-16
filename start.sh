@@ -146,7 +146,6 @@ PY
         systemctl stop "${SERVICES[@]}"
         runuser -u postgres -- pg_restore --clean --if-exists --no-owner --role=alphascope -d alphascope < "$f" \
             || warn 'pg_restore 报告了警告（通常可忽略），继续'
-        runuser -u postgres -- psql -q -d alphascope -c 'REASSIGN OWNED BY postgres TO alphascope' || true
         migrate
         systemctl start "${SERVICES[@]}"
         verify_services
