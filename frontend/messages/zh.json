@@ -40,7 +40,8 @@
     "official": "官方",
     "computed": "自算",
     "yes": "是",
-    "no": "否"
+    "no": "否",
+    "copyFailed": "复制失败，请手动选中地址"
   },
   "windows": {
     "day": "1D",

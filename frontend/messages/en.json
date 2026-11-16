@@ -40,7 +40,8 @@
     "official": "Official",
     "computed": "Computed",
     "yes": "Yes",
-    "no": "No"
+    "no": "No",
+    "copyFailed": "Copy failed, select the address manually"
   },
   "windows": {
     "day": "1D",

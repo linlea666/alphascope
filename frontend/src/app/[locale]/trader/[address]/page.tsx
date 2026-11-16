@@ -63,8 +63,8 @@ export default async function TraderPage({
             <FlagBadges flags={[...w.flags, ...w.enrichment_flags]} />
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="num break-all text-sm text-muted">{w.address}</span>
-            <CopyButton text={w.address} label={t("common.copy")} done={t("common.copied")} />
+            <span className="num break-all text-sm text-muted select-all">{w.address}</span>
+            <CopyButton text={w.address} label={t("common.copy")} done={t("common.copied")} failed={t("common.copyFailed")} />
             <a href={`https://hypurrscan.io/address/${w.address}`} target="_blank" rel="noreferrer" className="text-xs text-accent hover:underline">
               {t("common.viewOnExplorer")} ↗
             </a>
