@@ -13,7 +13,8 @@
     "swings": "大周期",
     "timing": "节奏榜",
     "zones": "关键价位",
-    "holders": "波段持仓者"
+    "holders": "波段持仓者",
+    "watchlist": "我的收藏"
   },
   "common": {
     "dataAsOf": "数据时间",
@@ -513,5 +514,43 @@
     "sell": "卖",
     "top": "局部高点",
     "bottom": "局部低点"
+  },
+  "watch": {
+    "add": "收藏",
+    "edit": "编辑收藏",
+    "watched": "已收藏",
+    "loading": "加载中…",
+    "groups": "分组",
+    "newGroup": "新分组名称",
+    "alias": "自定义名称",
+    "aliasHint": "例如：抄底哥",
+    "note": "备注",
+    "tags": "标签（逗号分隔）",
+    "save": "保存",
+    "saving": "保存中…",
+    "remove": "取消收藏",
+    "title": "我的收藏",
+    "subtitle": "按分组管理关注的钱包。收藏的钱包会优先归档成交，保证后续评分、回放和提醒有完整数据。",
+    "all": "全部",
+    "manage": "管理分组",
+    "rename": "改名",
+    "delete": "删除",
+    "create": "新建分组",
+    "confirmDelete": "删除分组「{name}」？组内收藏会一起移除（钱包数据不受影响）。",
+    "empty": "这个分组还没有钱包。在任意页面点钱包旁的 ☆ 即可收藏。",
+    "cols": {
+      "wallet": "钱包",
+      "equity": "净值",
+      "pnl7": "7D 盈亏",
+      "pnl30": "30D 盈亏",
+      "positions": "主要持仓",
+      "timing": "最佳时机超额",
+      "archive": "成交归档",
+      "note": "备注 / 标签",
+      "added": "收藏于"
+    },
+    "archiving": "归档中",
+    "archived": "{n} 条",
+    "queued": "排队中"
   }
 }

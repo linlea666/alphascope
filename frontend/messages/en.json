@@ -13,7 +13,8 @@
     "swings": "Macro swings",
     "timing": "Timing",
     "zones": "Price zones",
-    "holders": "Swing holders"
+    "holders": "Swing holders",
+    "watchlist": "Watchlist"
   },
   "common": {
     "dataAsOf": "Data as of",
@@ -513,5 +514,43 @@
     "sell": "Sell",
     "top": "Local high",
     "bottom": "Local low"
+  },
+  "watch": {
+    "add": "Watch",
+    "edit": "Edit watch",
+    "watched": "Watching",
+    "loading": "Loading…",
+    "groups": "Groups",
+    "newGroup": "New group name",
+    "alias": "Custom name",
+    "aliasHint": "e.g. Dip buyer",
+    "note": "Note",
+    "tags": "Tags (comma separated)",
+    "save": "Save",
+    "saving": "Saving…",
+    "remove": "Unwatch",
+    "title": "Watchlist",
+    "subtitle": "Wallets you follow, by group. Watched wallets get their fills archived first, so scores, replay and alerts have complete data.",
+    "all": "All",
+    "manage": "Manage groups",
+    "rename": "Rename",
+    "delete": "Delete",
+    "create": "New group",
+    "confirmDelete": "Delete group “{name}”? Its entries are removed (wallet data is kept).",
+    "empty": "No wallets in this group yet. Click ☆ next to any wallet to add it.",
+    "cols": {
+      "wallet": "Wallet",
+      "equity": "Equity",
+      "pnl7": "7D PnL",
+      "pnl30": "30D PnL",
+      "positions": "Main positions",
+      "timing": "Best timing excess",
+      "archive": "Fill archive",
+      "note": "Note / tags",
+      "added": "Added"
+    },
+    "archiving": "archiving",
+    "archived": "{n} fills",
+    "queued": "queued"
   }
 }

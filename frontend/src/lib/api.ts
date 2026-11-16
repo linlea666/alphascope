@@ -481,11 +481,36 @@ export type Replay = {
   pivots: { kind: "H" | "L"; ts: string; px: number; leg_change: number; confirmed: boolean }[];
 };
 
+export type Watchlist = {
+  groups: { id: number; name: string; color: string | null; sort: number; n: number }[];
+  items: {
+    item_id: number;
+    group_id: number;
+    note: string | null;
+    tags: string[];
+    created_at: string;
+    address: string;
+    display_name: string | null;
+    alias: string | null;
+    account_value: number | null;
+    week_pnl: number | null;
+    month_pnl: number | null;
+    tier: string | null;
+    flags: string[];
+    sync_status: string | null;
+    n_fills: number | null;
+    best_edge: number | null;
+    positions: { coin: string; szi: number; value: number }[];
+  }[];
+};
+
 export const api = {
   rankings: (params: Record<string, string | number | boolean | undefined>) => get<Rankings>("/api/v1/rankings", params),
   wallet: (address: string) => get<WalletDetail>(`/api/v1/wallets/${encodeURIComponent(address)}`),
   walletPositions: (address: string) => get<WalletPositions>(`/api/v1/wallets/${encodeURIComponent(address)}/positions`),
   overview: () => get<Overview>("/api/v1/overview"),
+  watchlist: () => get<Watchlist>("/api/v1/watch"),
+  watchAliases: () => get<{ aliases: Record<string, string> }>("/api/v1/watch/aliases"),
   dataHealth: () => get<DataHealth>("/api/v1/data-health"),
   swings: () => get<SwingOverview>("/api/v1/swings"),
   timing: (params: Record<string, string | number | boolean | undefined>) => get<TimingBoard>("/api/v1/timing", params),

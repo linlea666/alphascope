@@ -7,6 +7,8 @@ import { Freshness } from "@/components/Freshness";
 import { PositionCycles } from "@/components/PositionCycles";
 import { REPLAY_BARS, ReplayPanel } from "@/components/ReplayPanel";
 import { TimingPanel } from "@/components/TimingPanel";
+import { WatchButton } from "@/components/WatchButton";
+import { getWatchContext } from "@/lib/watch";
 import { Badge, Panel, td, th } from "@/components/ui";
 import { api, ApiError, type Metric, type WalletDetail, type Replay, type WalletPositions, type WalletTiming, type Window } from "@/lib/api";
 import { fmtNum, fmtPct, fmtTime, fmtUsd, signClass, splitNote } from "@/lib/format";
@@ -46,6 +48,7 @@ export default async function TraderPage({
     api.replay(address, { coin: search.rc, interval: search.ri || "1h", end: search.re, bars: REPLAY_BARS }).catch(() => null),
   ]);
   const w = d.wallet;
+  const watchCtx = await getWatchContext();
   const enriched = d.metrics.length > 0;
 
   const note = (n: string) => {
@@ -58,7 +61,8 @@ export default async function TraderPage({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="text-xl font-semibold tracking-tight">{w.display_name ?? t("trader.titleFallback")}</h1>
+            <h1 className="text-xl font-semibold tracking-tight">{watchCtx.aliases[w.address] ?? w.display_name ?? t("trader.titleFallback")}</h1>
+            <WatchButton address={w.address} watched={watchCtx.watched.has(w.address)} />
             <TierBadge tier={w.tier} />
             <FlagBadges flags={[...w.flags, ...w.enrichment_flags]} />
           </div>

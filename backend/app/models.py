@@ -561,3 +561,44 @@ class LegCapture(Base):
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (Index("ix_leg_capture_rank", "coin", "leg_start", "capture_ratio"),)
+
+
+# --- Watchlists S1 (migration 0006). Single owner today; the owner column keeps multi-user possible. ---
+
+
+class WatchGroup(Base):
+    __tablename__ = "watch_group"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    owner: Mapped[str] = mapped_column(String(32), default="default", server_default="default")
+    name: Mapped[str] = mapped_column(String(64))
+    color: Mapped[str | None] = mapped_column(String(16))
+    sort: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("owner", "name"),)
+
+
+class WatchItem(Base):
+    __tablename__ = "watch_item"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    group_id: Mapped[int] = mapped_column(ForeignKey("watch_group.id", ondelete="CASCADE"))
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), index=True)
+    note: Mapped[str | None] = mapped_column(Text)
+    tags: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("group_id", "wallet_id"),)
+
+
+class WalletAlias(Base):
+    """The owner's own name for a wallet; shown everywhere instead of the address."""
+
+    __tablename__ = "wallet_alias"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    owner: Mapped[str] = mapped_column(String(32), primary_key=True, default="default", server_default="default")
+    alias: Mapped[str] = mapped_column(String(64))
+    note: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
