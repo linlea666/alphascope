@@ -1,0 +1,58 @@
+import type { ReactNode } from "react";
+
+export function Panel({ title, hint, children, actions }: { title?: ReactNode; hint?: ReactNode; children: ReactNode; actions?: ReactNode }) {
+  return (
+    <section className="rounded-lg border border-border bg-panel">
+      {(title || actions) && (
+        <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border px-4 py-3">
+          <div>
+            {title && <h2 className="text-sm font-semibold">{title}</h2>}
+            {hint && <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted">{hint}</p>}
+          </div>
+          {actions}
+        </div>
+      )}
+      <div className="p-4">{children}</div>
+    </section>
+  );
+}
+
+export function Stat({ label, value, sub }: { label: ReactNode; value: ReactNode; sub?: ReactNode }) {
+  return (
+    <div className="rounded-lg border border-border bg-panel px-4 py-3">
+      <div className="text-xs text-muted">{label}</div>
+      <div className="num mt-1 text-xl font-semibold">{value}</div>
+      {sub && <div className="mt-0.5 text-xs text-muted">{sub}</div>}
+    </div>
+  );
+}
+
+export function Badge({ children, tone = "neutral", title }: { children: ReactNode; tone?: "neutral" | "warn" | "up" | "down" | "accent"; title?: string }) {
+  const tones = {
+    neutral: "border-border text-muted",
+    warn: "border-warn/40 text-warn",
+    up: "border-up/40 text-up",
+    down: "border-down/40 text-down",
+    accent: "border-accent/40 text-accent",
+  };
+  return (
+    <span title={title} className={`inline-flex items-center whitespace-nowrap rounded border px-1.5 py-0.5 text-[11px] leading-none ${tones[tone]}`}>
+      {children}
+    </span>
+  );
+}
+
+export function PageHeader({ title, subtitle, children }: { title: ReactNode; subtitle?: ReactNode; children?: ReactNode }) {
+  return (
+    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        {subtitle && <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted">{subtitle}</p>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+export const th = "px-3 py-2 text-left text-xs font-medium text-muted whitespace-nowrap";
+export const td = "px-3 py-2 whitespace-nowrap";

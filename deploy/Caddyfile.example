@@ -1,0 +1,5 @@
+# Reverse proxy with automatic HTTPS. Replace the domain; the API stays private (web calls it internally).
+alphascope.example.com {
+    encode gzip
+    reverse_proxy 127.0.0.1:3000
+}
