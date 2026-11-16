@@ -34,12 +34,16 @@ class Settings(BaseSettings):
     market_coins: str = "BTC,ETH,SOL,HYPE"
     market_intervals: str = "1d,4h,1h,15m,1m"
     market_interval_minutes: int = 60
+    # Also record Hyperliquid candles for the most-traded archived coins Binance cannot cover
+    # (HIP-3 stocks/commodities, Hyperliquid-only tokens); no 1m for these to keep volume bounded.
+    market_fill_coins: int = 40
+    market_fill_intervals: str = "1d,4h,1h,15m"
 
     # Binance USDT-M klines from data.binance.vision: core coins with long history, plus the most-traded
     # coins of archived wallets from shortly before the fill archive starts.
     binance_core_coins: str = "BTC,ETH,SOL"
     binance_core_start: str = "2025-01-01"
-    binance_fill_coins: int = 20
+    binance_fill_coins: int = 40
     binance_fill_start: str = "2026-06-01"
     binance_interval_hours: int = 6
 
@@ -47,6 +51,9 @@ class Settings(BaseSettings):
     swing_coin: str = "BTC"
     swing_fill_start: str = "2026-07-01"
     swing_max_candidates: int = 600
+    # Broader fill archive for price-zone research (who bought the lows / sold the highs): clean active
+    # tier-B wallets, lowest turnover first (their older fills are still inside the API window).
+    macro_scan_max: int = 1500
     fill_batch_size: int = 15
     fill_interval_minutes: int = 10
     fill_max_pages: int = 12

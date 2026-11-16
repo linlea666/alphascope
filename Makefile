@@ -1,7 +1,7 @@
 PY := backend/.venv/bin/python
 LIMIT ?= 200
 
-.PHONY: setup migrate ingest-leaderboard enrich tiers market swings fills binance positions reconcile api worker web-dev web-build test lint shellcheck check
+.PHONY: setup migrate ingest-leaderboard enrich tiers market swings fills binance positions reconcile timing api worker web-dev web-build test lint shellcheck check
 
 setup: ## create venv, install backend + frontend deps, migrate
 	test -d backend/.venv || python3.11 -m venv backend/.venv
@@ -32,6 +32,9 @@ binance: ## import Binance USDT-M klines (only missing files)
 
 positions: ## rebuild position cycles for wallets with new fills
 	cd backend && .venv/bin/python -m app.cli positions
+
+timing: ## recompute multi-timeframe timing scores
+	cd backend && .venv/bin/python -m app.cli timing
 
 reconcile: ## compare rebuilt positions with live clearinghouse positions
 	cd backend && .venv/bin/python -m app.cli reconcile --limit 10

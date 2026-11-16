@@ -13,6 +13,7 @@ dependencies = [
   "pydantic>=2.7",
   "pydantic-settings>=2.3",
   "apscheduler>=3.10,<4",
+  "numpy>=2.0",
 ]
 
 [project.optional-dependencies]

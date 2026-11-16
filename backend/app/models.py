@@ -448,4 +448,79 @@ class TradeDecision(Base):
     realized_pnl: Mapped[Decimal] = mapped_column(Numeric)
     fee: Mapped[Decimal] = mapped_column(Numeric)
 
-    __table_args__ = (Index("ix_trade_decision_wallet", "wallet_id", "coin", "started_at"),)
+    __table_args__ = (Index("ix_trade_decision_wallet", "wallet_id", "coin", "started_at"),
+                      Index("ix_trade_decision_coin_time", "coin", "started_at"),
+                      Index("ix_trade_decision_cycle", "cycle_id", "ended_at"))
+
+
+# --- Timing scorecard T3 (migration 0004) ---
+
+
+class TimingPivot(Base):
+    """Swing pivots per coin and timeframe scale (zigzag on the scale's candle interval)."""
+
+    __tablename__ = "timing_pivot"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    coin: Mapped[str] = mapped_column(String(48))
+    scale: Mapped[str] = mapped_column(String(8))
+    version: Mapped[str] = mapped_column(String(16))
+    kind: Mapped[str] = mapped_column(String(1))  # H top | L bottom
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    px: Mapped[Decimal] = mapped_column(Numeric)
+    leg_change: Mapped[Decimal] = mapped_column(Numeric)  # move of the leg that ends at this pivot
+    leg_hours: Mapped[float] = mapped_column(Numeric)
+    confirmed: Mapped[bool] = mapped_column(Boolean)
+
+    __table_args__ = (UniqueConstraint("coin", "scale", "version", "ts", "kind"),
+                      Index("ix_timing_pivot_lookup", "coin", "scale", "ts"))
+
+
+class DecisionTiming(Base):
+    """Location of one decision within its scale's price window (retrospective by construction)."""
+
+    __tablename__ = "decision_timing"
+
+    decision_id: Mapped[int] = mapped_column(ForeignKey("trade_decision.id", ondelete="CASCADE"), primary_key=True)
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"))
+    coin: Mapped[str] = mapped_column(String(48))
+    scale: Mapped[str] = mapped_column(String(8))
+    version: Mapped[str] = mapped_column(String(16))
+    t: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    side: Mapped[str] = mapped_column(String(4))
+    status: Mapped[str] = mapped_column(String(8))  # scored | pending (window not complete yet) | no_data
+    location: Mapped[Decimal | None] = _num()  # 1 = bought the window low / sold the window high
+    weight: Mapped[Decimal] = mapped_column(Numeric)
+    pivot_ts: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # matched pivot, if any
+
+    __table_args__ = (Index("ix_decision_timing_wallet", "wallet_id", "scale", "t"),)
+
+
+class TimingScore(Base):
+    __tablename__ = "timing_score"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    scale: Mapped[str] = mapped_column(String(8), primary_key=True)
+    window: Mapped[str] = mapped_column("time_window", String(8), primary_key=True)
+    coin_group: Mapped[str] = mapped_column(String(8), primary_key=True)  # all | btc_eth
+    version: Mapped[str] = mapped_column(String(16))
+    as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(16))  # scored | insufficient | invalid_window
+    n_decisions: Mapped[int] = mapped_column(Integer)
+    n_scored: Mapped[int] = mapped_column(Integer)
+    location: Mapped[Decimal | None] = _num()
+    null_mean: Mapped[Decimal | None] = _num()
+    edge: Mapped[Decimal | None] = _num()
+    edge_shrunk: Mapped[Decimal | None] = _num()
+    p_value: Mapped[Decimal | None] = _num()
+    q_value: Mapped[Decimal | None] = _num()
+    pivot_hits: Mapped[int] = mapped_column(Integer)
+    pivots: Mapped[int] = mapped_column(Integer)
+    pivots_hit: Mapped[int] = mapped_column(Integer)
+    precision: Mapped[Decimal | None] = _num()
+    recall: Mapped[Decimal | None] = _num()
+    alignment: Mapped[Decimal | None] = _num()
+    cycles: Mapped[int] = mapped_column(Integer)
+    net_pnl: Mapped[Decimal | None] = _num()
+
+    __table_args__ = (Index("ix_timing_score_rank", "scale", "time_window", "coin_group", "edge_shrunk"),)

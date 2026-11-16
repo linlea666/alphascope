@@ -9,6 +9,8 @@ export async function Nav() {
     { href: "/", label: t("overview") },
     { href: "/rankings", label: t("rankings") },
     { href: "/swings", label: t("swings") },
+    { href: "/timing", label: t("timing") },
+    { href: "/zones", label: t("zones") },
     { href: "/data-health", label: t("dataHealth") },
   ] as const;
   return (

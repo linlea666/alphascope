@@ -5,8 +5,9 @@ import { CopyButton } from "@/components/CopyButton";
 import { EquityChart } from "@/components/EquityChart";
 import { Freshness } from "@/components/Freshness";
 import { PositionCycles } from "@/components/PositionCycles";
+import { TimingPanel } from "@/components/TimingPanel";
 import { Badge, Panel, td, th } from "@/components/ui";
-import { api, ApiError, type Metric, type WalletDetail, type WalletPositions, type Window } from "@/lib/api";
+import { api, ApiError, type Metric, type WalletDetail, type WalletPositions, type WalletTiming, type Window } from "@/lib/api";
 import { fmtNum, fmtPct, fmtTime, fmtUsd, signClass, splitNote } from "@/lib/format";
 
 const WINDOWS: Window[] = ["day", "week", "month", "alltime"];
@@ -31,7 +32,10 @@ export default async function TraderPage({ params }: { params: Promise<{ address
     return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
   }
   // Position cycles exist only for wallets whose fills are archived; a failure here must not break the page.
-  const positions: WalletPositions | null = await api.walletPositions(address).catch(() => null);
+  const [positions, timing]: [WalletPositions | null, WalletTiming | null] = await Promise.all([
+    api.walletPositions(address).catch(() => null),
+    api.walletTiming(address).catch(() => null),
+  ]);
   const w = d.wallet;
   const enriched = d.metrics.length > 0;
 
@@ -173,6 +177,8 @@ export default async function TraderPage({ params }: { params: Promise<{ address
       </Panel>
 
       <PositionCycles data={positions} />
+
+      <TimingPanel data={timing} />
 
       <Panel title={t("trader.computedTitle")} hint={t("trader.computedHint")}>
         {enriched ? <MetricsTable metrics={d.metrics} note={note} /> : <p className="text-sm text-muted">{t("trader.notEnrichedHint")}</p>}

@@ -53,28 +53,33 @@ async def record_candles(sf: sessionmaker[Session], settings: Settings) -> dict:
         last = {(c, i): t for c, i, t in s.execute(text(
             "SELECT coin, interval, max(t) FROM market_candle WHERE source = :src GROUP BY coin, interval"),
             {"src": SOURCE}).all()}
+        extra = s.execute(text("""
+            SELECT coin FROM fill WHERE coin NOT LIKE '@%' AND coin NOT LIKE '%/%'
+              AND coin NOT IN (SELECT coin FROM market_symbol WHERE source = 'binance_um' AND status = 'valid')
+            GROUP BY coin ORDER BY sum(px * sz) DESC LIMIT :n"""), {"n": settings.market_fill_coins}).scalars().all()
+    plan = [(c, i) for c in _csv(settings.market_coins) for i in _csv(settings.market_intervals)]
+    plan += [(c, i) for c in extra if c not in _csv(settings.market_coins) for i in _csv(settings.market_fill_intervals)]
     now_ms = int(time.time() * 1000)
     stored: dict[str, int] = {}
     errors: list[str] = []
     budget = settings.hl_weight_per_minute * settings.hl_weight_safety
     async with HyperliquidInfoClient(settings.hl_info_url, budget, settings.hl_timeout_seconds,
                                      settings.hl_max_retries) as client:
-        for coin in _csv(settings.market_coins):
-            for interval in _csv(settings.market_intervals):
-                step = INTERVAL_MS[interval]
-                prev = last.get((coin, interval))
-                start = int(prev.timestamp() * 1000) if prev else now_ms - step * API_MAX_CANDLES
-                try:
-                    r = await client.info({"type": "candleSnapshot",
-                                           "req": {"coin": coin, "interval": interval, "startTime": start,
-                                                   "endTime": now_ms}})
-                except Exception as exc:  # noqa: BLE001 — one series must not stop the others
-                    errors.append(f"{coin}/{interval}: {exc!r}"[:200])
-                    continue
-                with sf() as s:
-                    stored[f"{coin}/{interval}"] = store_candles(s, candle_rows(coin, interval, r.data,
-                                                                                datetime.now(UTC)))
-                    s.commit()
+        for coin, interval in plan:
+            step = INTERVAL_MS[interval]
+            prev = last.get((coin, interval))
+            start = int(prev.timestamp() * 1000) if prev else now_ms - step * API_MAX_CANDLES
+            try:
+                r = await client.info({"type": "candleSnapshot",
+                                       "req": {"coin": coin, "interval": interval, "startTime": start,
+                                               "endTime": now_ms}})
+            except Exception as exc:  # noqa: BLE001 — one series must not stop the others
+                errors.append(f"{coin}/{interval}: {exc!r}"[:200])
+                continue
+            with sf() as s:
+                stored[f"{coin}/{interval}"] = store_candles(s, candle_rows(coin, interval, r.data,
+                                                                            datetime.now(UTC)))
+                s.commit()
         stats = {"stored": stored, "errors": errors, "api": client.usage.as_dict(),
                  "duration_s": round(time.monotonic() - t0, 2)}
     with sf() as s:

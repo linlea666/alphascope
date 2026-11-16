@@ -4,7 +4,7 @@
   python -m app.cli enrich [--limit N] [--address 0x...]
   python -m app.cli tiers
   python -m app.cli market | swings | fills [--limit N]
-  python -m app.cli binance [--max-files N] | positions | reconcile [--limit N]
+  python -m app.cli binance [--max-files N] | positions | reconcile [--limit N] | timing
 """
 
 import argparse
@@ -24,6 +24,7 @@ from app.ingest.portfolio_ingest import enrich_batch
 from app.ingest.runs import mark_abandoned_runs
 from app.research.positions import rebuild_stale
 from app.research.reconcile import reconcile
+from app.research.timing import run_timing
 from app.research.swings import run_swings
 from app.sources.raw_store import LocalRawStore
 from app.tiering import recompute_tiers
@@ -48,6 +49,7 @@ def main() -> None:
     sub.add_parser("positions", help="rebuild position cycles and decisions for wallets with new fills")
     rc = sub.add_parser("reconcile", help="sync fills, rebuild and compare positions with clearinghouseState")
     rc.add_argument("--limit", type=int, default=5)
+    sub.add_parser("timing", help="recompute pivots, decision timing and timing scores")
     args = p.parse_args()
 
     settings = get_settings()
@@ -67,6 +69,8 @@ def main() -> None:
         result = asyncio.run(import_binance(sf, settings, args.max_files))
     elif args.cmd == "positions":
         result = rebuild_stale(sf)
+    elif args.cmd == "timing":
+        result = run_timing(sf)
     elif args.cmd == "reconcile":
         result = asyncio.run(reconcile(sf, settings, store, args.limit))
     elif args.cmd == "enrich":

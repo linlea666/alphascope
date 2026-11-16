@@ -18,6 +18,7 @@ from app.ingest.market_ingest import record_candles
 from app.ingest.portfolio_ingest import enrich_batch
 from app.ingest.runs import mark_abandoned_runs
 from app.research.positions import rebuild_stale
+from app.research.timing import run_timing
 from app.research.swings import run_swings
 from app.sources.raw_store import LocalRawStore
 
@@ -68,6 +69,10 @@ def main() -> None:
         r = rebuild_stale(sf)
         log.info("positions: wallets=%s cycles=%s breaks=%s", r["wallets"], r["cycles"], r["breaks"])
 
+    def timing_job() -> None:
+        r = run_timing(sf)
+        log.info("timing: wallets=%s scored=%s significant=%s", r["wallets"], r["scored"], r["significant_q10"])
+
     sched = BlockingScheduler(timezone="UTC", job_defaults={"coalesce": True, "max_instances": 1,
                                                              "misfire_grace_time": 300})
     now = datetime.now(UTC)
@@ -85,6 +90,8 @@ def main() -> None:
     sched.add_job(binance_job, "interval", hours=settings.binance_interval_hours,
                   next_run_time=now + timedelta(minutes=7), id="binance")
     sched.add_job(positions_job, "interval", minutes=10, next_run_time=now + timedelta(minutes=4), id="positions")
+    # Timing scores depend on new fills, candles and pivots; recomputing every few hours is enough.
+    sched.add_job(timing_job, "interval", hours=3, next_run_time=now + timedelta(minutes=15), id="timing")
     log.info("worker started: leaderboard every %dm, enrich %d wallets every %dm",
              settings.leaderboard_interval_minutes, settings.enrich_batch_size, settings.enrich_interval_minutes)
     try:

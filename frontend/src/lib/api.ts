@@ -302,6 +302,99 @@ export type WalletPositions = {
   }[];
 };
 
+export type TimingScore = {
+  scale: ScaleKey;
+  time_window: "7d" | "30d" | "90d" | "all";
+  coin_group: "all" | "btc_eth";
+  status: "scored" | "insufficient" | "invalid_window";
+  as_of: string;
+  n_decisions: number;
+  n_scored: number;
+  location: number | null;
+  null_mean: number | null;
+  edge: number | null;
+  edge_shrunk: number | null;
+  p_value: number | null;
+  q_value: number | null;
+  pivot_hits: number;
+  pivots: number;
+  pivots_hit: number;
+  precision: number | null;
+  recall: number | null;
+  alignment: number | null;
+  cycles: number;
+  net_pnl: number | null;
+};
+
+export type TimingBoard = {
+  freshness: Freshness;
+  scale: ScaleKey;
+  window: string;
+  group: string;
+  sort: string;
+  valid: boolean;
+  min_decisions: number;
+  page: number;
+  page_size: number;
+  total: number;
+  rows: (Omit<TimingScore, "scale" | "time_window" | "coin_group"> & {
+    rank: number;
+    address: string;
+    display_name: string | null;
+    account_value: number | null;
+    tier: string | null;
+    flags: string[];
+  })[];
+};
+
+export type WalletTiming = {
+  version: string;
+  valid_windows: Record<ScaleKey, string[]>;
+  min_decisions: Record<ScaleKey, number>;
+  scores: TimingScore[];
+  calendar: { day: string; scale: ScaleKey; n: number; location: number | null; hits: number }[];
+  decision_status: Record<string, number>;
+};
+
+export type ZoneSide = {
+  decisions: number;
+  notional: number | null;
+  avg_px: number | null;
+  first_at: string;
+  last_at: string;
+  cycles: number;
+  closed: number;
+  open: number;
+  data_end: number;
+  realized_net: number;
+  unrealized: number;
+  avg_exit_px: number | null;
+  max_holding_hours: number | null;
+};
+
+export type ZoneQuery = { coin: string; side: "long" | "short"; px_min: number; px_max: number; start: string; end: string };
+
+export type ZoneResult = {
+  freshness: Freshness;
+  query: { first: ZoneQuery; second: ZoneQuery | null };
+  coverage: { archived: number; covering: number; queued_total: number };
+  total: number;
+  rows: {
+    address: string;
+    display_name: string | null;
+    account_value: number | null;
+    tier: string | null;
+    flags: string[];
+    earliest_fill_at: string | null;
+    truncated: boolean | null;
+    sync_status: string | null;
+    macro_edge: number | null;
+    macro_q: number | null;
+    zone: ZoneSide;
+    also?: ZoneSide;
+  }[];
+};
+
 export const api = {
   rankings: (params: Record<string, string | number | boolean | undefined>) => get<Rankings>("/api/v1/rankings", params),
   wallet: (address: string) => get<WalletDetail>(`/api/v1/wallets/${encodeURIComponent(address)}`),
@@ -309,5 +402,8 @@ export const api = {
   overview: () => get<Overview>("/api/v1/overview"),
   dataHealth: () => get<DataHealth>("/api/v1/data-health"),
   swings: () => get<SwingOverview>("/api/v1/swings"),
+  timing: (params: Record<string, string | number | boolean | undefined>) => get<TimingBoard>("/api/v1/timing", params),
+  walletTiming: (address: string) => get<WalletTiming>(`/api/v1/wallets/${encodeURIComponent(address)}/timing`),
+  zones: (params: Record<string, string | number | boolean | undefined>) => get<ZoneResult>("/api/v1/zones", params),
   swingCandidates: (params: Record<string, string | number | boolean | undefined>) => get<SwingCandidates>("/api/v1/swings/candidates", params),
 };

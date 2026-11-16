@@ -259,8 +259,10 @@ def screen_wallets(session: Session, settings: Settings, now: datetime) -> dict:
             ON CONFLICT (wallet_id) DO UPDATE SET priority = greatest(fill_sync.priority, EXCLUDED.priority),
               requested_start = least(fill_sync.requested_start, EXCLUDED.requested_start)"""),
             {"w": p["w"], "prio": len(ranked) - rank, "start": start, "now": now})
+    scanned = enqueue_macro_scan(session, settings, start, now)
     return {
         "legs": len(legs),
+        "macro_scan_queued": scanned,
         "wallets_with_points": len(points),
         "wallets_screened": len(returns),
         "leg_rows": len(leg_rows),
@@ -269,6 +271,22 @@ def screen_wallets(session: Session, settings: Settings, now: datetime) -> dict:
         "queued_for_fills": len(ranked),
         "p_profitable_in_every_leg": math.prod(base.values()) if base else None,
     }
+
+
+def enqueue_macro_scan(session: Session, settings: Settings, start: datetime, now: datetime) -> int:
+    """Queue clean, active tier-B wallets for fill archiving, lowest turnover first, below swing candidates."""
+    rows = session.execute(text("""
+        SELECT id FROM wallet
+        WHERE present_in_latest AND tier = 'B' AND account_value >= :min_av AND month_vlm > 0
+          AND NOT (quality_flags && CAST(:noise AS text[]) OR enrichment_flags && CAST(:noise AS text[]))
+        ORDER BY month_vlm / account_value ASC
+        LIMIT :n"""), {"min_av": MIN_CANDIDATE_AV, "noise": list(NOISE), "n": settings.macro_scan_max}).scalars().all()
+    for rank, wid in enumerate(rows):
+        session.execute(text("""
+            INSERT INTO fill_sync (wallet_id, reason, priority, requested_start, status, n_fills, queued_at)
+            VALUES (:w, 'macro_scan', :prio, :start, 'queued', 0, :now)
+            ON CONFLICT (wallet_id) DO NOTHING"""), {"w": wid, "prio": -(rank + 1), "start": start, "now": now})
+    return len(rows)
 
 
 def run_swings(sf, settings: Settings) -> dict:
