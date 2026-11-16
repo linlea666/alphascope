@@ -12,7 +12,7 @@ usage() {
     cat <<'TXT'
 用法：sudo ./start.sh <命令>
   status            服务状态、健康检查、最近一次采集
-  logs [服务]       实时日志（api / worker / web，默认全部；Ctrl+C 退出）
+  logs [服务]       实时日志（api / worker / live / web，默认全部；Ctrl+C 退出）
   restart           重启全部服务
   stop              停止全部服务（数据保留）
   start             启动全部服务
@@ -103,9 +103,9 @@ PY
         ;;
     logs)
         case "${2:-all}" in
-            api|worker|web) journalctl -u "alphascope-$2" -n 200 -f ;;
-            all) journalctl -u alphascope-api -u alphascope-worker -u alphascope-web -n 200 -f ;;
-            *) fail '用法：./start.sh logs [api|worker|web]' ;;
+            api|worker|live|web) journalctl -u "alphascope-$2" -n 200 -f ;;
+            all) journalctl -u alphascope-api -u alphascope-worker -u alphascope-live -u alphascope-web -n 200 -f ;;
+            *) fail '用法：./start.sh logs [api|worker|live|web]' ;;
         esac
         ;;
     doctor)

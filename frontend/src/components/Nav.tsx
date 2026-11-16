@@ -13,7 +13,9 @@ export async function Nav() {
     { href: "/holders", label: t("holders") },
     { href: "/zones", label: t("zones") },
     { href: "/watchlist", label: t("watchlist") },
+    { href: "/alerts", label: t("alerts") },
     { href: "/data-health", label: t("dataHealth") },
+    { href: "/settings", label: t("settings") },
   ] as const;
   return (
     <header className="sticky top-0 z-20 border-b border-border bg-bg/90 backdrop-blur">

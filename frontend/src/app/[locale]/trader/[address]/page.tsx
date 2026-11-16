@@ -7,6 +7,7 @@ import { Freshness } from "@/components/Freshness";
 import { PositionCycles } from "@/components/PositionCycles";
 import { REPLAY_BARS, ReplayPanel } from "@/components/ReplayPanel";
 import { TimingPanel } from "@/components/TimingPanel";
+import { AlertButton } from "@/components/AlertButton";
 import { WatchButton } from "@/components/WatchButton";
 import { getWatchContext } from "@/lib/watch";
 import { Badge, Panel, td, th } from "@/components/ui";
@@ -63,6 +64,7 @@ export default async function TraderPage({
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold tracking-tight">{watchCtx.aliases[w.address] ?? w.display_name ?? t("trader.titleFallback")}</h1>
             <WatchButton address={w.address} watched={watchCtx.watched.has(w.address)} />
+            <AlertButton address={w.address} subscribed={watchCtx.alerted.has(w.address)} />
             <TierBadge tier={w.tier} />
             <FlagBadges flags={[...w.flags, ...w.enrichment_flags]} />
           </div>

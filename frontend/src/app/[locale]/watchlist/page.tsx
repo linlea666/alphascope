@@ -1,10 +1,12 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { AddressLink } from "@/components/AddressLink";
+import { AlertButton } from "@/components/AlertButton";
 import { ApiErrorState } from "@/components/ApiErrorState";
 import { Badge, PageHeader, Panel, td, th } from "@/components/ui";
 import { WatchGroupsManager } from "@/components/WatchGroupsManager";
 import { Link } from "@/i18n/routing";
 import { api, ApiError, type Watchlist } from "@/lib/api";
+import { getWatchContext } from "@/lib/watch";
 import { fmtNum, fmtTime, fmtUsd, signClass } from "@/lib/format";
 
 export default async function WatchlistPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
@@ -18,6 +20,7 @@ export default async function WatchlistPage({ searchParams }: { searchParams: Pr
     return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
   }
   const gid = sp.g ? Number(sp.g) : null;
+  const { alerted } = await getWatchContext();
   const seen = new Set<string>();
   // "All" shows each wallet once; a group shows its own entries
   const items = d.items.filter((i) => (gid ? i.group_id === gid : !seen.has(i.address) && (seen.add(i.address), true)));
@@ -60,7 +63,10 @@ export default async function WatchlistPage({ searchParams }: { searchParams: Pr
                 {items.map((i) => (
                   <tr key={i.item_id} className="border-t border-border/60 align-top hover:bg-panel-2">
                     <td className={td}>
-                      <AddressLink address={i.address} name={i.display_name} />
+                      <span className="flex items-start gap-2">
+                        <AddressLink address={i.address} name={i.display_name} />
+                        <AlertButton address={i.address} subscribed={alerted.has(i.address)} compact />
+                      </span>
                     </td>
                     <td className={`${td} num text-right`}>{fmtUsd(i.account_value, locale)}</td>
                     <td className={`${td} num text-right ${signClass(i.week_pnl)}`}>{fmtUsd(i.week_pnl, locale)}</td>

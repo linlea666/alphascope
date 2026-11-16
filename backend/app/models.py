@@ -602,3 +602,99 @@ class WalletAlias(Base):
     alias: Mapped[str] = mapped_column(String(64))
     note: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# --- Live monitoring & email alerts S2 (migration 0007) ---
+
+
+class AppSetting(Base):
+    """Owner settings (SMTP, live monitor). Secrets are Fernet-encrypted in `secret` and never returned."""
+
+    __tablename__ = "app_setting"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSONB, default=dict)
+    secret: Mapped[str | None] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AlertSubscription(Base):
+    __tablename__ = "alert_subscription"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    owner: Mapped[str] = mapped_column(String(32), default="default", server_default="default")
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    events: Mapped[list[str]] = mapped_column(ARRAY(Text))  # open increase decrease close flip leverage liq_risk
+    min_notional: Mapped[Decimal] = mapped_column(Numeric, default=0)
+    min_change_pct: Mapped[Decimal] = mapped_column(Numeric, default=0)
+    coins: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")  # empty = all
+    recipients: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")  # empty = default
+    quiet_start: Mapped[int | None] = mapped_column(Integer)  # local hour 0-23
+    quiet_end: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (UniqueConstraint("owner", "wallet_id"),)
+
+
+class LiveAccount(Base):
+    __tablename__ = "live_account"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    account_value: Mapped[Decimal | None] = _num()
+    total_ntl_pos: Mapped[Decimal | None] = _num()
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str | None] = mapped_column(Text)
+
+
+class LivePosition(Base):
+    """Last seen position per monitored wallet and coin (the baseline the next poll is compared with)."""
+
+    __tablename__ = "live_position"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    coin: Mapped[str] = mapped_column(String(48), primary_key=True)
+    szi: Mapped[Decimal] = mapped_column(Numeric)
+    entry_px: Mapped[Decimal | None] = _num()
+    position_value: Mapped[Decimal | None] = _num()
+    unrealized_pnl: Mapped[Decimal | None] = _num()
+    leverage: Mapped[int | None] = mapped_column(Integer)
+    leverage_type: Mapped[str | None] = mapped_column(String(16))
+    liquidation_px: Mapped[Decimal | None] = _num()
+    liq_risk: Mapped[bool] = mapped_column(Boolean, default=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class PositionEvent(Base):
+    __tablename__ = "position_event"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"))
+    coin: Mapped[str] = mapped_column(String(48))
+    kind: Mapped[str] = mapped_column(String(12))  # open increase decrease close flip leverage liq_risk
+    t: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    szi_before: Mapped[Decimal] = mapped_column(Numeric)
+    szi_after: Mapped[Decimal] = mapped_column(Numeric)
+    px: Mapped[Decimal | None] = _num()  # mid price when detected
+    notional_change: Mapped[Decimal | None] = _num()
+    details: Mapped[dict] = mapped_column(JSONB, default=dict)
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    notify_status: Mapped[str] = mapped_column(String(12), default="pending")  # pending sent skipped failed
+
+    __table_args__ = (Index("ix_position_event_wallet_t", "wallet_id", "t"),
+                      Index("ix_position_event_pending", "notify_status", "t"))
+
+
+class Notification(Base):
+    __tablename__ = "notification"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    wallet_id: Mapped[int | None] = mapped_column(ForeignKey("wallet.id"))
+    event_ids: Mapped[list[int]] = mapped_column(ARRAY(BigInteger), default=list)
+    recipients: Mapped[list[str]] = mapped_column(ARRAY(Text))
+    subject: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(12))  # sent failed
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    error: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

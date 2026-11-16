@@ -3,7 +3,7 @@
 # shellcheck disable=SC2034
 REPO_RE='^(https://github\.com/linlea666/alphascope(\.git)?|git@github\.com:linlea666/alphascope(\.git)?|ssh://git@github\.com/linlea666/alphascope(\.git)?)$'
 SVC_USER=alphascope
-SERVICES=(alphascope-api.service alphascope-worker.service alphascope-web.service)
+SERVICES=(alphascope-api.service alphascope-worker.service alphascope-live.service alphascope-web.service)
 NODE_MAJOR=22
 DEFAULT_API_PORT=8610
 DEFAULT_WEB_PORT=3200
@@ -165,6 +165,8 @@ ALPHASCOPE_WEB_AUTH=admin:$(random_secret 12)
 EOF
     fi
     env_set API_BASE_URL "http://127.0.0.1:$(api_port)"
+    # encryption key for secrets stored in the database (SMTP password); created by the service on first use
+    [[ -n "$(env_get ALPHASCOPE_SECRET_KEY_PATH)" ]] || env_set ALPHASCOPE_SECRET_KEY_PATH "$(data_dir)/secret.key"
 }
 
 # 本机 PostgreSQL：独立的角色和数据库；密码只保存在 data/alphascope.env
@@ -212,10 +214,11 @@ as_service() {
 }
 
 migrate() {
-    # 迁移会给表加锁；先停 worker，避免与正在写入的采集任务互相等待（死锁）。随后统一重启。
-    if systemctl is-active -q alphascope-worker.service 2>/dev/null; then
-        systemctl stop alphascope-worker.service
-    fi
+    # 迁移会给表加锁；先停 worker 和 live，避免与正在写入的任务互相等待（死锁）。随后统一重启。
+    local svc
+    for svc in alphascope-worker.service alphascope-live.service; do
+        if systemctl is-active -q "$svc" 2>/dev/null; then systemctl stop "$svc"; fi
+    done
     say '数据库迁移'
     as_service -m alembic upgrade head
 }

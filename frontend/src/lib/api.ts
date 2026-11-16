@@ -504,12 +504,67 @@ export type Watchlist = {
   }[];
 };
 
+export type AlertSub = {
+  enabled: boolean;
+  events: string[];
+  min_notional: number;
+  min_change_pct: number;
+  coins: string[];
+  recipients: string[];
+  quiet_start: number | null;
+  quiet_end: number | null;
+};
+
+export type AlertsOverview = {
+  subscriptions: (AlertSub & {
+    id: number;
+    address: string;
+    name: string | null;
+    last_polled: string | null;
+    last_error: string | null;
+    account_value: number | null;
+    last_event_at: string | null;
+  })[];
+  event_kinds: string[];
+};
+
+export type PositionEvents = {
+  events: {
+    id: number;
+    t: string;
+    coin: string;
+    kind: string;
+    szi_before: number;
+    szi_after: number;
+    px: number | null;
+    notional_change: number | null;
+    notify_status: string;
+    address: string;
+    name: string | null;
+  }[];
+};
+
+export type Notifications = {
+  notifications: { id: number; created_at: string; sent_at: string | null; status: string; attempts: number; error: string | null; subject: string; recipients: string[]; address: string | null }[];
+  sent_today: number;
+};
+
+export type AppSettings = {
+  smtp: { host: string; port: number; security: "starttls" | "ssl" | "none"; username: string; from_name: string; recipients: string[]; public_url: string; password_set: boolean };
+  live: { interval_seconds: number; coalesce_seconds: number; max_emails_per_hour: number; liq_risk_pct: number; timezone: string };
+  live_status: { cycle_started_at?: string; interval_seconds?: number; wallets?: number; events?: number; errors?: number; cycle_seconds?: number; error?: string; notify?: Record<string, number> };
+};
+
 export const api = {
   rankings: (params: Record<string, string | number | boolean | undefined>) => get<Rankings>("/api/v1/rankings", params),
   wallet: (address: string) => get<WalletDetail>(`/api/v1/wallets/${encodeURIComponent(address)}`),
   walletPositions: (address: string) => get<WalletPositions>(`/api/v1/wallets/${encodeURIComponent(address)}/positions`),
   overview: () => get<Overview>("/api/v1/overview"),
   watchlist: () => get<Watchlist>("/api/v1/watch"),
+  alerts: () => get<AlertsOverview>("/api/v1/alerts"),
+  alertEvents: (limit = 100) => get<PositionEvents>("/api/v1/alerts/events", { limit }),
+  notifications: () => get<Notifications>("/api/v1/alerts/notifications"),
+  settings: () => get<AppSettings>("/api/v1/settings"),
   watchAliases: () => get<{ aliases: Record<string, string> }>("/api/v1/watch/aliases"),
   dataHealth: () => get<DataHealth>("/api/v1/data-health"),
   swings: () => get<SwingOverview>("/api/v1/swings"),

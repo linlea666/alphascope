@@ -58,6 +58,11 @@ class Settings(BaseSettings):
     fill_interval_minutes: int = 10
     fill_max_pages: int = 12
 
+    # Live monitor (alphascope-live): its own share of the per-IP budget, on top of hl_weight_safety.
+    live_weight_safety: float = 0.2
+    # Fernet key for secrets stored in app_setting (SMTP password); created with mode 600 on first use.
+    secret_key_path: Path = BACKEND_DIR.parent / "data" / "secret.key"
+
     enrich_batch_size: int = 200
     enrich_interval_minutes: int = 10
     portfolio_refresh_days: int = 7

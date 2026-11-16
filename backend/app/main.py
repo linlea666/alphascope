@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import holders, rankings, swings, system, timing, wallets, watch, zones
+from app.api import alerts, holders, rankings, swings, system, timing, wallets, watch, zones
 
 # Browsers only ever read (GET); writes arrive server-side through the web app's same-origin proxy.
 app = FastAPI(title="AlphaScope API", version="0.1.0")
@@ -15,6 +15,7 @@ app.include_router(timing.router)
 app.include_router(zones.router)
 app.include_router(holders.router)
 app.include_router(watch.router)
+app.include_router(alerts.router)
 
 
 @app.get("/healthz")

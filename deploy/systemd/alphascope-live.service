@@ -1,0 +1,30 @@
+# 由 start.sh 根据安装目录生成到 /etc/systemd/system/，不要直接修改那份文件
+[Unit]
+Description=AlphaScope live（实时持仓监控、邮件提醒、模拟跟单）
+Documentation=https://github.com/linlea666/alphascope
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+Group=@USER@
+WorkingDirectory=@PROJECT_DIR@/backend
+EnvironmentFile=@PROJECT_DIR@/data/alphascope.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=@PROJECT_DIR@/.venv/bin/python -m app.live
+Restart=always
+RestartSec=10
+# 正在进行的任务会被打断，下次启动时自动标记为 abandoned
+TimeoutStopSec=30
+MemoryMax=500M
+CPUWeight=100
+Nice=0
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=@PROJECT_DIR@/data
+
+[Install]
+WantedBy=multi-user.target
