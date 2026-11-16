@@ -1,0 +1,28 @@
+# 由 start.sh 根据安装目录生成到 /etc/systemd/system/，不要直接修改那份文件
+[Unit]
+Description=AlphaScope 网页（Next.js）
+Documentation=https://github.com/linlea666/alphascope
+After=network-online.target alphascope-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+Group=@USER@
+# .runtime/web 是指向当前构建的链接；更新时先构建新版本再切换
+WorkingDirectory=@PROJECT_DIR@/.runtime/web
+EnvironmentFile=@PROJECT_DIR@/data/alphascope.env
+Environment=NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0
+ExecStart=/bin/sh -c 'PORT=$ALPHASCOPE_WEB_PORT exec @PROJECT_DIR@/.runtime/node/bin/node server.js'
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+MemoryMax=500M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=@PROJECT_DIR@/.runtime/builds
+
+[Install]
+WantedBy=multi-user.target

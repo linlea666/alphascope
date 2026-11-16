@@ -30,6 +30,19 @@ class Settings(BaseSettings):
     # every fetch is still archived raw.
     leaderboard_snapshot_hours: int = 6
 
+    # Candles are recorded from now on (the API keeps only the latest 5000 per interval).
+    market_coins: str = "BTC,ETH,SOL,HYPE"
+    market_intervals: str = "1d,4h,1h,15m,1m"
+    market_interval_minutes: int = 60
+
+    # Swing research: fills of candidates are archived from this date (start of the current cycle).
+    swing_coin: str = "BTC"
+    swing_fill_start: str = "2026-07-01"
+    swing_max_candidates: int = 600
+    fill_batch_size: int = 15
+    fill_interval_minutes: int = 10
+    fill_max_pages: int = 12
+
     enrich_batch_size: int = 200
     enrich_interval_minutes: int = 10
     portfolio_refresh_days: int = 7

@@ -9,7 +9,8 @@
     "dataHealth": "数据健康",
     "tagline": "交易员情报",
     "theme": "切换深浅色",
-    "language": "语言"
+    "language": "语言",
+    "swings": "大周期"
   },
   "common": {
     "dataAsOf": "数据时间",
@@ -38,7 +39,12 @@
     "yes": "是",
     "no": "否"
   },
-  "windows": { "day": "1D", "week": "7D", "month": "30D", "alltime": "全部" },
+  "windows": {
+    "day": "1D",
+    "week": "7D",
+    "month": "30D",
+    "alltime": "全部"
+  },
   "cols": {
     "rank": "#",
     "trader": "交易员",
@@ -216,5 +222,59 @@
     "partial": "部分成功",
     "running": "进行中",
     "abandoned": "已中断"
+  },
+  "swings": {
+    "title": "大周期研究",
+    "subtitle": "谁在 BTC 的大涨和大跌里都站对了方向？这里先用低成本数据找出两边都赚钱的钱包，再用逐笔成交核实他们是不是真的靠 BTC/ETH 方向赚的钱。",
+    "stage": "当前进度：第一阶段（收益曲线初筛 + 成交归档）。按币种归因、进出场时机和行情回放是第二阶段。",
+    "chartTitle": "{coin} 日线与大波段",
+    "chartHint": "波段由 ZigZag 算法客观划分（大波段阈值 {major}，日线高低点），不人工挑选日期。带 * 的最后一段尚未确认：价格反向走出阈值后才定型。波段只用来事后评估交易行为，不是交易信号。",
+    "legsTitle": "大波段与全体钱包表现",
+    "legsHint": "「覆盖」= 收益曲线在波段两端 ±{days} 天内都有数据点的钱包数。收益已剔除充值提现，但包含所有币种。",
+    "leg": "波段",
+    "direction": "方向",
+    "up": "涨",
+    "down": "跌",
+    "period": "区间",
+    "change": "幅度",
+    "covered": "覆盖钱包",
+    "profitableShare": "赚钱占比",
+    "medianTwr": "收益中位数",
+    "provisional": "未确认",
+    "screenTitle": "初筛结果",
+    "screened": "已计算",
+    "candidates": "候选",
+    "cycleBoth": "本轮两段都赚",
+    "archive": "成交归档",
+    "archiveText": "已同步 {synced} / {queued} 个钱包，共 {fills} 条成交；{truncated} 个钱包的早期成交已超出 API 窗口（被截断）",
+    "candTitle": "候选钱包",
+    "candHint": "候选条件：净值 ≥ {av}，无噪声标记且非子账户汇总；本轮涨段和跌段收益都 > {cycle}，或在 ≥ 3 个波段中两个方向都赚钱且运气概率 < {luck}。",
+    "scope": "范围",
+    "scopeCandidates": "候选",
+    "scopeCycle": "本轮两段都赚",
+    "scopeAll": "全部已计算",
+    "sortEvidence": "综合证据",
+    "sortCycle": "本轮最弱一段",
+    "sortLuck": "运气概率",
+    "sortMajor": "BTC/ETH 占比",
+    "legsWon": "赚钱波段",
+    "luck": "运气概率",
+    "luckHint": "假设每个波段赚钱的概率等于同行在该波段的赚钱比例，随机达到这个战绩的概率。越小越不像运气。",
+    "upLeg": "本轮涨段",
+    "downLeg": "本轮跌段",
+    "majorShare": "BTC/ETH 已实现占比",
+    "majorShareHint": "本轮以来已实现盈亏中来自 BTC/ETH 的比例（按 |盈亏| 归一化，−100%~100%）。接近 0 说明钱不是在 BTC/ETH 上赚的；只统计平仓盈亏，属于近似值。",
+    "fills": "成交覆盖",
+    "fillsQueued": "排队中",
+    "fillsSince": "{n} 条 · 自 {date}",
+    "truncated": "已截断",
+    "empty": "暂无数据。波段初筛每 6 小时运行一次。",
+    "method": "方法与局限",
+    "methodItems": [
+      "第一阶段只看收益曲线：能说明“两边都赚钱”，不能说明“靠 BTC 方向赚钱”。实测排名最靠前的钱包里，很多人的盈利来自山寨币或股票/商品永续（HIP-3）。",
+      "成交归档是在抢时间：API 只保留每个钱包最近约 1–2 万条成交，高频交易员的 7–9 月成交已经无法取回。",
+      "第二阶段会用成交重建 BTC/ETH 净敞口路径，分别评估“方向判断”（敞口方向与波段一致的时间占比、提前量）和“收益兑现”（捕获比例、顶部/底部附近的退出质量），并和买入持有、均线趋势规则、随机方向基准比较。",
+      "只有在 ≥ 3 个独立波段中都成立，才会授予“宏观趋势捕捉”标签；单次表现只进入“异常研究对象”。"
+    ]
   }
 }

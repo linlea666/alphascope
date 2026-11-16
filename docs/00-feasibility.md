@@ -54,7 +54,7 @@
 |---|---|---|---|---|
 | `portfolio` | 20 | day/week/month/allTime 及永续版本的 `accountValueHistory` + `pnlHistory`。allTime 从首次入金开始 | 资金流调整收益曲线、粗粒度 TWR/MDD、初始资金估计、潜力识别 | allTime 只有约 100 个点；month 约 45–80 个点 |
 | `clearinghouseState` | 2 | 当前持仓、杠杆、强平价、保证金 | 实时风险暴露、持仓快照 | 只有当前时点，历史需自己积累 |
-| `userFillsByTime` | 20 + 每 20 条 +1 | 每页 2,000 条；字段含 `dir`、`startPosition`、`closedPnl`、`fee`、`oid`、`tid`、`crossed`、`twapId` | 交易生命周期重建、胜率、盈亏比、持仓时间 | 文档写"只能取最近 10,000 条"；实测一个活跃钱包拿到 14,000 条，最早只到约 4 个月前。高频账户只能回溯几天 |
+| `userFillsByTime` | 20 + 每 20 条 +1 | 每页 2,000 条；字段含 `dir`、`startPosition`、`closedPnl`、`fee`、`oid`、`tid`、`crossed`、`twapId` | 交易生命周期重建、胜率、盈亏比、持仓时间 | 文档写"只能取最近 10,000 条"；实测上限并不固定（见过 14,000 和 21,280 条），活跃钱包最早只能回溯约 2–4 个月，高频账户只有几天到几周 |
 | `userNonFundingLedgerUpdates` | 20 + 每 20 条 +1 | 充值、提现、内部转账、子账户划转、质押 | 精确资金流、起始资金验证 | 需要分页 |
 | `userFunding` | 20 + 每 20 条 +1 | 每笔资金费 | 成本归因 | — |
 | `historicalOrders` | 20 + 每 20 条 +1 | 最近 2,000 个订单（含 TIF、触发单、TP/SL） | 执行方式识别（挂单/吃单、止损单使用习惯） | 只有最近 2,000 条 |

@@ -9,3 +9,5 @@ frontend/.next/
 frontend/out/
 *.tsbuildinfo
 .DS_Store
+/.runtime/
+/.venv/

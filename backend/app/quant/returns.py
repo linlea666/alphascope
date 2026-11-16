@@ -151,3 +151,35 @@ def compute_series_metrics(points: list[Point], lookback: timedelta | None, now:
         reliability=reliability,
         notes=notes,
     )
+
+
+def window_return(points: list[Point], start: datetime, end: datetime, tolerance: timedelta) -> dict | None:
+    """Flow-adjusted TWR between the points nearest to `start` and `end` (each within `tolerance`).
+
+    Used for swing legs, whose boundaries rarely coincide with portfolio sample times. Returns None
+    when either boundary has no point close enough or fewer than 2 periods lie in between.
+    """
+    near = [p for p in points if start - tolerance <= p.ts <= end + tolerance]
+    if len(near) < 3:
+        return None
+    a = min(near, key=lambda p: abs(p.ts - start))
+    b = min(near, key=lambda p: abs(p.ts - end))
+    if abs(a.ts - start) > tolerance or abs(b.ts - end) > tolerance or a.ts >= b.ts:
+        return None
+    seg = sorted({p.ts: p for p in near if a.ts <= p.ts <= b.ts}.values(), key=lambda p: p.ts)
+    index = 1.0
+    flows = 0.0
+    valid = 0
+    for x, y in zip(seg, seg[1:]):
+        d_pnl = y.pnl - x.pnl
+        flow = (y.account_value - x.account_value) - d_pnl
+        flows += flow
+        base = x.account_value + 0.5 * flow
+        if base < MIN_CAPITAL_USD:
+            continue
+        index *= 1.0 + max(d_pnl / base, -1.0)
+        valid += 1
+    if valid < 2:
+        return None
+    return {"twr": index - 1.0, "pnl": seg[-1].pnl - seg[0].pnl, "net_flows": flows,
+            "anchor_start": a.ts, "anchor_end": b.ts, "n_points": len(seg)}

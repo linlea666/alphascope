@@ -8,6 +8,7 @@ plus +1 per 20 items for userFills*/ledger/funding style responses and +1 per 60
 import asyncio
 import logging
 import random
+import threading
 import time
 from dataclasses import dataclass, field
 
@@ -47,7 +48,11 @@ def extra_weight(request_type: str, response: object) -> int:
 
 
 class WeightBucket:
-    """Token bucket refilled continuously at `per_minute` weight/minute."""
+    """Token bucket refilled continuously at `per_minute` weight/minute.
+
+    Thread-safe and event-loop agnostic: the worker runs several jobs in parallel threads, each with
+    its own asyncio loop, and they must all draw from one per-process budget (see shared_bucket).
+    """
 
     def __init__(self, per_minute: float, clock=time.monotonic):
         self.capacity = per_minute
@@ -55,7 +60,7 @@ class WeightBucket:
         self.tokens = per_minute
         self.clock = clock
         self.updated = clock()
-        self._lock = asyncio.Lock()
+        self._lock = threading.Lock()
 
     def _refill(self) -> None:
         now = self.clock()
@@ -63,20 +68,41 @@ class WeightBucket:
         self.updated = now
 
     def wait_time(self, weight: float) -> float:
-        self._refill()
-        return 0.0 if self.tokens >= weight else (weight - self.tokens) / self.rate
+        with self._lock:
+            self._refill()
+            return 0.0 if self.tokens >= weight else (weight - self.tokens) / self.rate
+
+    def try_take(self, weight: float) -> float:
+        """Take `weight` if available and return 0, otherwise return the seconds to wait."""
+        weight = min(weight, self.capacity)
+        with self._lock:
+            self._refill()
+            if self.tokens >= weight:
+                self.tokens -= weight
+                return 0.0
+            return (weight - self.tokens) / self.rate
 
     async def acquire(self, weight: float) -> None:
-        weight = min(weight, self.capacity)
-        async with self._lock:
-            while (delay := self.wait_time(weight)) > 0:
-                await asyncio.sleep(delay)
-            self.tokens -= weight
+        while (delay := self.try_take(weight)) > 0:
+            await asyncio.sleep(delay)
 
     def charge(self, weight: float) -> None:
         """Post-hoc charge (response-size surcharge); may drive the bucket negative."""
-        self._refill()
-        self.tokens -= weight
+        with self._lock:
+            self._refill()
+            self.tokens -= weight
+
+
+_shared: dict[float, WeightBucket] = {}
+_shared_lock = threading.Lock()
+
+
+def shared_bucket(per_minute: float) -> WeightBucket:
+    """One bucket per process (per budget), shared by every job that calls Hyperliquid."""
+    with _shared_lock:
+        if per_minute not in _shared:
+            _shared[per_minute] = WeightBucket(per_minute)
+        return _shared[per_minute]
 
 
 @dataclass
@@ -101,9 +127,9 @@ class InfoResponse:
 
 class HyperliquidInfoClient:
     def __init__(self, url: str, weight_per_minute: float, timeout: float = 60.0, max_retries: int = 4,
-                 transport: httpx.AsyncBaseTransport | None = None):
+                 transport: httpx.AsyncBaseTransport | None = None, bucket: WeightBucket | None = None):
         self.url = url
-        self.bucket = WeightBucket(weight_per_minute)
+        self.bucket = bucket or shared_bucket(weight_per_minute)
         self.max_retries = max_retries
         self.usage = UsageStats()
         self._client = httpx.AsyncClient(timeout=timeout, transport=transport,

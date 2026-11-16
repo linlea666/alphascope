@@ -11,9 +11,12 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 from app.config import get_settings
 from app.db import session_factory
+from app.ingest.fill_sync import sync_fills
 from app.ingest.leaderboard_ingest import ingest_leaderboard
+from app.ingest.market_ingest import record_candles
 from app.ingest.portfolio_ingest import enrich_batch
 from app.ingest.runs import mark_abandoned_runs
+from app.research.swings import run_swings
 from app.sources.raw_store import LocalRawStore
 
 log = logging.getLogger("alphascope.worker")
@@ -38,6 +41,20 @@ def main() -> None:
         log.info("enrich: %s selected=%s ok=%s failed=%s weight=%s", r["status"], r["selected"], r["ok"],
                  r["failed"], r["api"]["weight"])
 
+    def market_job() -> None:
+        r = asyncio.run(record_candles(sf, settings))
+        log.info("market: %s weight=%s", r["status"], r["api"]["weight"])
+
+    def swings_job() -> None:
+        r = run_swings(sf, settings)
+        log.info("swings: legs=%s screened=%s candidates=%s", r.get("legs"), r.get("wallets_screened"),
+                 r.get("candidates"))
+
+    def fills_job() -> None:
+        r = asyncio.run(sync_fills(sf, settings, store))
+        log.info("fills: %s selected=%s inserted=%s weight=%s", r["status"], r["selected"], r["inserted"],
+                 r["api"]["weight"])
+
     sched = BlockingScheduler(timezone="UTC", job_defaults={"coalesce": True, "max_instances": 1,
                                                              "misfire_grace_time": 300})
     now = datetime.now(UTC)
@@ -45,6 +62,12 @@ def main() -> None:
                   next_run_time=now, id="leaderboard")
     sched.add_job(enrich_job, "interval", minutes=settings.enrich_interval_minutes,
                   next_run_time=now + timedelta(minutes=2), id="enrich")
+    sched.add_job(market_job, "interval", minutes=settings.market_interval_minutes,
+                  next_run_time=now + timedelta(minutes=1), id="market")
+    # Swing screening needs fresh candles and portfolio points; it is cheap (no API calls).
+    sched.add_job(swings_job, "interval", hours=6, next_run_time=now + timedelta(minutes=5), id="swings")
+    sched.add_job(fills_job, "interval", minutes=settings.fill_interval_minutes,
+                  next_run_time=now + timedelta(minutes=3), id="fills")
     log.info("worker started: leaderboard every %dm, enrich %d wallets every %dm",
              settings.leaderboard_interval_minutes, settings.enrich_batch_size, settings.enrich_interval_minutes)
     try:

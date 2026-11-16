@@ -8,6 +8,7 @@ export async function Nav() {
   const items = [
     { href: "/", label: t("overview") },
     { href: "/rankings", label: t("rankings") },
+    { href: "/swings", label: t("swings") },
     { href: "/data-health", label: t("dataHealth") },
   ] as const;
   return (

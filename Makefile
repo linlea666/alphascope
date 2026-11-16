@@ -1,7 +1,7 @@
 PY := backend/.venv/bin/python
 LIMIT ?= 200
 
-.PHONY: setup migrate ingest-leaderboard enrich tiers api worker web-dev web-build test lint check
+.PHONY: setup migrate ingest-leaderboard enrich tiers market swings fills api worker web-dev web-build test lint shellcheck check
 
 setup: ## create venv, install backend + frontend deps, migrate
 	test -d backend/.venv || python3.11 -m venv backend/.venv
@@ -21,6 +21,15 @@ enrich: ## enrich LIMIT tier-B wallets with portfolio + positions, within the AP
 tiers:
 	cd backend && .venv/bin/python -m app.cli tiers
 
+market: ## record candles for the reference coins
+	cd backend && .venv/bin/python -m app.cli market
+
+swings: ## recompute swing legs, per-wallet leg returns and fill candidates
+	cd backend && .venv/bin/python -m app.cli swings
+
+fills: ## archive fills for queued swing candidates
+	cd backend && .venv/bin/python -m app.cli fills --limit $(LIMIT)
+
 api:
 	cd backend && .venv/bin/uvicorn app.main:app --reload --port 8000
 
@@ -39,4 +48,7 @@ test:
 lint:
 	cd frontend && npm run lint && npx tsc --noEmit
 
-check: test lint web-build
+shellcheck:
+	shellcheck -x install.sh start.sh scripts/deploy-common.sh && shellcheck -s sh deploy/alphascope-cli.sh
+
+check: test lint shellcheck web-build

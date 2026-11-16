@@ -189,9 +189,77 @@ export type DataHealth = {
   };
 };
 
+export type SwingLeg = {
+  id: number;
+  direction: "up" | "down";
+  start_ts: string;
+  start_px: number;
+  end_ts: string;
+  end_px: number;
+  change: number;
+  confirmed: boolean;
+  covered?: number;
+  profitable_share?: number | null;
+  median_twr?: number | null;
+};
+
+export type SwingOverview = {
+  freshness: Freshness;
+  coin: string;
+  version: string;
+  thresholds: Record<string, number>;
+  anchor_tolerance_days: number;
+  criteria: { min_account_value: number; min_cycle_return: number; max_luck_p: number };
+  legs: SwingLeg[];
+  minor_legs: SwingLeg[];
+  candles: [string, number, number, number, number][];
+  screen: { screened: number; candidates: number; cycle_both: number; computed_at: string | null };
+  fill_archive: { queued: number; synced: number; truncated: number; fills: number };
+};
+
+export type SwingCandidate = {
+  address: string;
+  display_name: string | null;
+  tier: string | null;
+  flags: string[];
+  account_value: number | null;
+  legs_covered: number;
+  legs_profitable: number;
+  up_profitable: number;
+  down_profitable: number;
+  up_capture: number | null;
+  down_capture: number | null;
+  luck_p: number | null;
+  current_cycle_both: boolean;
+  min_cycle_return: number | null;
+  candidate: boolean;
+  fill_status: string | null;
+  n_fills: number | null;
+  earliest_fill_at: string | null;
+  truncated: boolean | null;
+  last_synced_at: string | null;
+  realized: { major: number | null; total: number | null; major_share: number | null };
+  legs: Record<string, { twr: number | null; pnl: number | null; bench: number | null }>;
+};
+
+export type SwingCandidates = {
+  freshness: Freshness;
+  scope: string;
+  sort: string;
+  page: number;
+  page_size: number;
+  total: number;
+  legs: SwingLeg[];
+  cycle_leg_ids: number[];
+  major_coins: string[];
+  rows: SwingCandidate[];
+};
+
 export const api = {
   rankings: (params: Record<string, string | number | boolean | undefined>) => get<Rankings>("/api/v1/rankings", params),
   wallet: (address: string) => get<WalletDetail>(`/api/v1/wallets/${encodeURIComponent(address)}`),
   overview: () => get<Overview>("/api/v1/overview"),
   dataHealth: () => get<DataHealth>("/api/v1/data-health"),
+  swings: () => get<SwingOverview>("/api/v1/swings"),
+  swingCandidates: (params: Record<string, string | number | boolean | undefined>) => get<SwingCandidates>("/api/v1/swings/candidates", params),
 };

@@ -1,46 +1,89 @@
-# 部署：本地 → git 仓库 → 服务器拉取
+# 部署：本地开发 → GitHub → 服务器一键安装 / 一键更新
 
-## 服务器准备（一次性）
+部署方式参考 [linlea666/bian](https://github.com/linlea666/bian)：原生 systemd，不用 Docker；和同一台服务器上的其他项目完全隔离。
 
-- Linux VPS，建议 4 vCPU / 16 GB / 100 GB SSD（P0–P1 足够）
-- Docker Engine 与 Compose 插件（`docker compose version`）
-- 能访问 `api.hyperliquid.xyz` 与 `stats-data.hyperliquid.xyz`
+| 隔离项 | AlphaScope 的做法 |
+|---|---|
+| 目录 | `/opt/alphascope`（代码）、`/opt/alphascope/data`（配置、原始归档、备份） |
+| 系统用户 | `alphascope`（无登录 shell） |
+| 服务 | `alphascope-api`、`alphascope-worker`、`alphascope-web` 三个 systemd 服务，带内存上限和沙箱 |
+| Python | 项目内虚拟环境 `.venv`；Ubuntu 22.04 会额外安装 python3.11（不替换系统 python3） |
+| Node.js | 官方二进制装在 `.runtime/node`（SHA256 校验），不影响系统 Node |
+| 数据库 | 本机 PostgreSQL 中独立的角色和数据库 `alphascope`，随机密码只保存在 `data/alphascope.env` |
+| 端口 | 网页 3200（对外，需要登录），API 8610（只监听 127.0.0.1） |
 
-```bash
-git clone <你的仓库地址> /srv/alphascope && cd /srv/alphascope
-cp .env.example .env
-# 必改：POSTGRES_PASSWORD；可选：ALPHASCOPE_HL_WEIGHT_SAFETY（同一 IP 上还有别的程序时调低）
-./deploy/deploy.sh
-```
-
-启动后：
-- `web` 监听 `127.0.0.1:3000`，`api` 监听 `127.0.0.1:8000`（只绑定本机，由反向代理对外）
-- `api` 容器启动时自动执行 `alembic upgrade head`
-- `worker` 等 API 健康后启动：每小时检查排行榜，每 10 分钟增强一批 B 层钱包
-- 首次启动后排行榜会被自动导入（约 40 MB），B 层约 1.4 万个钱包首轮增强约需 12 小时
-
-## 日常更新
-
-本地提交并推送后，在服务器执行：
+## 一键安装（Ubuntu 22.04 / 24.04）
 
 ```bash
-./deploy/deploy.sh      # git pull --ff-only + docker compose up -d --build
+curl -fsSL https://raw.githubusercontent.com/linlea666/alphascope/main/install.sh -o /tmp/alphascope-install.sh
+sudo bash /tmp/alphascope-install.sh            # 默认装到 /opt/alphascope
 ```
 
-## HTTPS
+安装脚本会依次：
+1. 检查系统、磁盘（≥ 5 GiB）和内存（≥ 1 GiB，构建前端建议内存 + swap ≥ 2 GiB）；
+2. 克隆仓库并校验来源；
+3. 安装缺少的系统包（git、PostgreSQL、Python 3.11+）；
+4. 创建用户、目录、配置和数据库；
+5. 安装后端依赖并执行迁移；
+6. 下载 Node.js 并构建前端；
+7. 安装并启动 3 个服务，然后做健康检查。
 
-参考 `Caddyfile.example`，把域名指向服务器后 `caddy run --config Caddyfile`。
+结束时会打印网页地址和**登录密码**。可以重复运行，不会删除数据。
 
-## 备份
+> 云服务器安全组只需要放行 TCP 3200，建议只允许自己的 IP 访问。
+
+## 日常运维
 
 ```bash
-crontab -e
-30 3 * * * /srv/alphascope/deploy/backup.sh   # 每天 pg_dump，保留 14 天
+cd /opt/alphascope
+sudo ./start.sh status          # 服务状态、最近一次采集、API 预算
+sudo ./start.sh update          # 拉取最新代码并重启（快进合并；前端没变时不重新构建，几秒钟完成）
+sudo ./start.sh logs worker     # 实时日志：api / worker / web
+sudo ./start.sh doctor          # 自检：服务、数据库、Hyperliquid 网络、磁盘
+sudo ./start.sh backup          # 备份数据库到 data/backups（保留 7 份）
+sudo ./start.sh password        # 重置网页登录密码
+sudo alphascope swings          # 以服务用户身份执行后端命令（market / swings / fills / enrich ...）
 ```
 
-原始归档在 docker 卷 `rawdata` 中（每次排行榜约 37 MB 未压缩 / 约 5 MB 压缩），建议定期同步到对象存储。
+`update` 的安全措施：
+- 部署加锁，防止两个更新同时进行；
+- 只接受 `linlea666/alphascope` 作为来源；
+- 工作区有改动时拒绝更新；
+- 只做快进合并；
+- 前端在独立目录构建，完成后再切换，构建期间旧版本继续服务；
+- 更新后自动做健康检查。
 
-## 注意
+## 配置
 
-- `frontend/package-lock.json` 的下载地址是 npmmirror。如果服务器访问它慢，在构建前执行 `npm config set registry https://registry.npmjs.org/`，或者在 `frontend/Dockerfile` 里设置 registry。
-- 不要在同一 IP 上运行多个部署来“绕过”限流；预算由 `ALPHASCOPE_HL_WEIGHT_SAFETY` 控制。
+`/opt/alphascope/data/alphascope.env`（改完执行 `sudo ./start.sh restart`）：
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `ALPHASCOPE_WEB_PORT` / `ALPHASCOPE_API_PORT` | 3200 / 8610 | 端口 |
+| `ALPHASCOPE_WEB_AUTH` | `admin:<随机>` | 网页登录；留空表示不需要登录（不建议） |
+| `ALPHASCOPE_HL_WEIGHT_SAFETY` | 0.5 | 使用 Hyperliquid 每 IP 每分钟 1200 权重中的比例 |
+| `ALPHASCOPE_DATABASE_URL` | 自动生成 | 改成外部数据库地址时，安装脚本不再创建本机数据库 |
+| `ALPHASCOPE_SWING_FILL_START` | 2026-07-01 | 候选钱包成交归档的起点 |
+
+构建前端默认使用 `https://registry.npmjs.org/`；如果服务器访问慢，可以在运行 `install.sh` / `start.sh update` 前设置 `NPM_REGISTRY=https://registry.npmmirror.com/`。pip 镜像使用标准环境变量 `PIP_INDEX_URL`。
+
+## 把本地已采集的数据迁移到服务器
+
+本地开发机已经积累的快照和抢救下来的成交，迁移后可以继续使用：
+
+```bash
+# 本地
+pg_dump -Fc alphascope > alphascope.dump
+rsync -a data/raw/ root@服务器:/opt/alphascope/data/raw/
+scp alphascope.dump root@服务器:/tmp/
+
+# 服务器
+chown -R alphascope:alphascope /opt/alphascope/data/raw
+sudo /opt/alphascope/start.sh restore /tmp/alphascope.dump   # 会先自动备份服务器当前数据库
+```
+
+迁移完成后，记得停掉本地的 worker（`pkill -f app.worker`），避免两边同时采集、数据分叉。
+
+## 可选：Docker Compose
+
+仓库里保留了 `docker-compose.yml` 和 Dockerfile，适合不想装系统依赖的环境。这条路径的配置文件校验过，但**还没有实际构建过镜像**；推荐使用上面的一键安装。

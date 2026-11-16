@@ -232,3 +232,127 @@ class PositionSnapshot(Base):
     leverage_value: Mapped[int | None] = mapped_column(Integer)
     liquidation_px: Mapped[Decimal | None] = _num()
     margin_used: Mapped[Decimal | None] = _num()
+
+
+# --- Market data & swing research (migration 0002) ---
+
+
+class MarketCandle(Base):
+    """Candles we record ourselves: the API only keeps the latest 5000 per interval."""
+
+    __tablename__ = "market_candle"
+
+    coin: Mapped[str] = mapped_column(String(32), primary_key=True)
+    interval: Mapped[str] = mapped_column(String(8), primary_key=True)
+    t: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    o: Mapped[Decimal] = mapped_column(Numeric)
+    h: Mapped[Decimal] = mapped_column(Numeric)
+    l: Mapped[Decimal] = mapped_column(Numeric)  # noqa: E741
+    c: Mapped[Decimal] = mapped_column(Numeric)
+    v: Mapped[Decimal] = mapped_column(Numeric)
+    n: Mapped[int | None] = mapped_column(Integer)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class SwingLeg(Base):
+    """One leg between two zigzag pivots. Definitions are versioned; the last leg stays provisional
+    (confirmed=false) until price reverses by the threshold. Retrospective by construction: used to
+    evaluate past behaviour, never as a trading signal."""
+
+    __tablename__ = "swing_leg"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    coin: Mapped[str] = mapped_column(String(32))
+    version: Mapped[str] = mapped_column(String(16))
+    level: Mapped[str] = mapped_column(String(8))  # major | minor
+    direction: Mapped[str] = mapped_column(String(4))  # up | down
+    start_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    start_px: Mapped[Decimal] = mapped_column(Numeric)
+    end_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    end_px: Mapped[Decimal] = mapped_column(Numeric)
+    change: Mapped[Decimal] = mapped_column(Numeric)
+    confirmed: Mapped[bool] = mapped_column(Boolean)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (UniqueConstraint("coin", "version", "level", "start_ts"),)
+
+
+class WalletLegReturn(Base):
+    """Flow-adjusted return of a wallet over one swing leg, from portfolio allTime points (all assets)."""
+
+    __tablename__ = "wallet_leg_return"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    leg_id: Mapped[int] = mapped_column(ForeignKey("swing_leg.id", ondelete="CASCADE"), primary_key=True)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    anchor_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    anchor_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    n_points: Mapped[int] = mapped_column(Integer)
+    twr: Mapped[Decimal | None] = _num()
+    pnl: Mapped[Decimal | None] = _num()
+    net_flows: Mapped[Decimal | None] = _num()
+    bench_return: Mapped[Decimal | None] = _num()  # coin return over the same anchored window
+
+    __table_args__ = (Index("ix_wallet_leg_return_leg", "leg_id"),)
+
+
+class WalletSwingProfile(Base):
+    __tablename__ = "wallet_swing_profile"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    version: Mapped[str] = mapped_column(String(16), primary_key=True)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    legs_covered: Mapped[int] = mapped_column(Integer)
+    legs_profitable: Mapped[int] = mapped_column(Integer)
+    up_profitable: Mapped[int] = mapped_column(Integer)
+    down_profitable: Mapped[int] = mapped_column(Integer)
+    up_capture: Mapped[Decimal | None] = _num()
+    down_capture: Mapped[Decimal | None] = _num()
+    luck_p: Mapped[Decimal | None] = _num()  # P(>= this many profitable legs | peer base rates)
+    current_cycle_both: Mapped[bool] = mapped_column(Boolean)  # profitable in the latest up AND latest down leg
+    min_cycle_return: Mapped[Decimal | None] = _num()
+    candidate: Mapped[bool] = mapped_column(Boolean, index=True)
+
+
+class Fill(Base):
+    __tablename__ = "fill"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    tid: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    side: Mapped[str] = mapped_column(String(1), primary_key=True)  # B buy | A sell
+    time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    coin: Mapped[str] = mapped_column(String(48))
+    px: Mapped[Decimal] = mapped_column(Numeric)
+    sz: Mapped[Decimal] = mapped_column(Numeric)
+    dir: Mapped[str] = mapped_column(String(32))
+    start_position: Mapped[Decimal | None] = _num()
+    closed_pnl: Mapped[Decimal | None] = _num()
+    fee: Mapped[Decimal | None] = _num()
+    fee_token: Mapped[str | None] = mapped_column(String(16))
+    oid: Mapped[int | None] = mapped_column(BigInteger)
+    crossed: Mapped[bool | None] = mapped_column(Boolean)
+    twap_id: Mapped[int | None] = mapped_column(BigInteger)
+    hash: Mapped[str | None] = mapped_column(String(66))
+    liquidation: Mapped[dict | None] = mapped_column(JSONB)
+    raw_object_id: Mapped[int | None] = mapped_column(ForeignKey("raw_object.id"))
+
+    __table_args__ = (Index("ix_fill_wallet_coin_time", "wallet_id", "coin", "time"),)
+
+
+class FillSync(Base):
+    """Queue + coverage record for fill archiving (the API only keeps ~the latest 10k fills per wallet)."""
+
+    __tablename__ = "fill_sync"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    reason: Mapped[str] = mapped_column(String(32))
+    priority: Mapped[float] = mapped_column(Numeric)
+    requested_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(16), default="queued")  # queued | synced | failed
+    earliest_fill_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    latest_fill_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    n_fills: Mapped[int] = mapped_column(Integer, default=0)
+    truncated: Mapped[bool | None] = mapped_column(Boolean)  # earliest available fill later than requested
+    queued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    error: Mapped[str | None] = mapped_column(Text)

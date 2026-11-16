@@ -9,7 +9,8 @@
     "dataHealth": "Data health",
     "tagline": "Trader intelligence",
     "theme": "Toggle theme",
-    "language": "Language"
+    "language": "Language",
+    "swings": "Macro swings"
   },
   "common": {
     "dataAsOf": "Data as of",
@@ -38,7 +39,12 @@
     "yes": "Yes",
     "no": "No"
   },
-  "windows": { "day": "1D", "week": "7D", "month": "30D", "alltime": "All" },
+  "windows": {
+    "day": "1D",
+    "week": "7D",
+    "month": "30D",
+    "alltime": "All"
+  },
   "cols": {
     "rank": "#",
     "trader": "Trader",
@@ -216,5 +222,59 @@
     "partial": "Partial",
     "running": "Running",
     "abandoned": "Abandoned"
+  },
+  "swings": {
+    "title": "Macro swings",
+    "subtitle": "Who was on the right side of both the big BTC rally and the big drop? Cheap data finds wallets that made money on both sides; fills then verify whether the money really came from BTC/ETH direction.",
+    "stage": "Current stage: 1 (equity-curve screening + fill archiving). Per-coin attribution, entry/exit timing and replay come in stage 2.",
+    "chartTitle": "{coin} daily and major swings",
+    "chartHint": "Swings come from an objective zigzag (major threshold {major}, daily highs/lows), no hand-picked dates. The last leg marked * is provisional until price reverses by the threshold. Swings are a yardstick for past behaviour, not a trading signal.",
+    "legsTitle": "Major swings and how all wallets did",
+    "legsHint": "Covered = wallets whose equity curve has points within ±{days} days of both leg ends. Returns exclude deposits/withdrawals but include every asset.",
+    "leg": "Leg",
+    "direction": "Side",
+    "up": "Up",
+    "down": "Down",
+    "period": "Period",
+    "change": "Move",
+    "covered": "Wallets covered",
+    "profitableShare": "Profitable",
+    "medianTwr": "Median return",
+    "provisional": "provisional",
+    "screenTitle": "Screen",
+    "screened": "Computed",
+    "candidates": "Candidates",
+    "cycleBoth": "Won both legs this cycle",
+    "archive": "Fill archive",
+    "archiveText": "{synced} of {queued} wallets synced, {fills} fills; {truncated} wallets' early fills are already outside the API window (truncated)",
+    "candTitle": "Candidate wallets",
+    "candHint": "Candidates: equity ≥ {av}, no noise flags, not a sub-account aggregate; return > {cycle} on both the latest up and down leg, or profitable on both sides across ≥ 3 legs with luck probability < {luck}.",
+    "scope": "Scope",
+    "scopeCandidates": "Candidates",
+    "scopeCycle": "Won both legs",
+    "scopeAll": "All computed",
+    "sortEvidence": "Evidence",
+    "sortCycle": "Weaker cycle leg",
+    "sortLuck": "Luck probability",
+    "sortMajor": "BTC/ETH share",
+    "legsWon": "Legs won",
+    "luck": "Luck p",
+    "luckHint": "Chance of this record if each leg were a coin flip at the peers' profitable rate for that leg. Lower = less likely luck.",
+    "upLeg": "Cycle up leg",
+    "downLeg": "Cycle down leg",
+    "majorShare": "BTC/ETH realized share",
+    "majorShareHint": "Share of realized PnL since the cycle start that came from BTC/ETH (normalised by |PnL|, −100%..100%). Near 0 means the money was not made on BTC/ETH. Closed PnL only; approximate.",
+    "fills": "Fill coverage",
+    "fillsQueued": "queued",
+    "fillsSince": "{n} fills · since {date}",
+    "truncated": "truncated",
+    "empty": "No data yet. The swing screen runs every 6 hours.",
+    "method": "Method and limits",
+    "methodItems": [
+      "Stage 1 only reads equity curves: it shows who made money on both sides, not that they did it on BTC direction. Many top-ranked wallets turned out to trade altcoins or HIP-3 stock/commodity perps.",
+      "Fill archiving is a race: the API keeps only ~10–20k recent fills per wallet, and high-frequency traders' Jul–Sep fills are already gone.",
+      "Stage 2 rebuilds BTC/ETH net exposure from fills and scores direction judgment (time aligned with the leg, lead time) separately from profit capture (capture ratio, exit quality near tops/bottoms), against buy-and-hold, moving-average trend and random-direction baselines.",
+      "The 'macro trend capture' tag needs ≥ 3 independent swings; a single great call only makes a wallet a research subject."
+    ]
   }
 }

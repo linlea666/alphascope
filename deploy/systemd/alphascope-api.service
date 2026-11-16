@@ -1,0 +1,28 @@
+# 由 start.sh 根据安装目录生成到 /etc/systemd/system/，不要直接修改那份文件
+[Unit]
+Description=AlphaScope API（只读查询接口）
+Documentation=https://github.com/linlea666/alphascope
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+Group=@USER@
+WorkingDirectory=@PROJECT_DIR@/backend
+EnvironmentFile=@PROJECT_DIR@/data/alphascope.env
+Environment=PYTHONUNBUFFERED=1
+# 只监听本机；对外只开放网页端口
+ExecStart=@PROJECT_DIR@/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port ${ALPHASCOPE_API_PORT} --workers 2 --no-access-log
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+MemoryMax=600M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=@PROJECT_DIR@/data
+
+[Install]
+WantedBy=multi-user.target
