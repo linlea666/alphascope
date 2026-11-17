@@ -4,7 +4,7 @@ import { LinesChart } from "@/components/LinesChart";
 import { Term } from "@/components/Term";
 import { Badge, Panel, td, th } from "@/components/ui";
 import { Ring } from "@/components/viz";
-import { api, type Backtest, type Behavior, type Copyability, type ScorePart } from "@/lib/api";
+import { api, MAX_LEVERAGE, type Backtest, type Behavior, type Copyability, type ScorePart } from "@/lib/api";
 import { fmtNum, fmtPct, fmtTime, fmtUsd, signClass } from "@/lib/format";
 
 type Search = Record<string, string | undefined>;
@@ -141,7 +141,7 @@ export async function BacktestCard({ address, search }: { address: string; searc
   let r: Backtest | null = null;
   if (search.bt === "1") {
     try {
-      r = await api.backtest(address, { days, ratio, delay, capital, leverage_mode: lev });
+      r = await api.backtest(address, { days, ratio, delay, capital, leverage_mode: lev, max_leverage: lev === "leader" ? MAX_LEVERAGE : undefined });
     } catch {
       r = { ok: false, reason: "error" };
     }

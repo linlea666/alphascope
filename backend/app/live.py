@@ -26,6 +26,7 @@ from app.okx.client import OkxClient
 from app.okx.live import fetch_funding, poll_okx, sim_coins
 from app.sim.engine import step_simulations
 from app.sources.hl_client import HyperliquidInfoClient, WeightBucket
+from app.traders import trader_label
 
 log = logging.getLogger("alphascope.live")
 OWNER = "default"
@@ -171,7 +172,7 @@ def notify_pending(sf: sessionmaker[Session], now: datetime | None = None, sende
             positions = [dict(p) for p in s.execute(text("""
                 SELECT coin, szi, entry_px, position_value, unrealized_pnl, leverage FROM live_position
                 WHERE wallet_id = :w ORDER BY abs(position_value) DESC NULLS LAST"""), {"w": wid}).mappings().all()]
-            name = w.name or f"{w.address[:6]}…{w.address[-4:]}"
+            name = trader_label(w.name, w.address)
             subject, text_body, html_body = compose(name, w.address, keep, positions, w.account_value,
                                                     smtp.get("public_url") or "", live["timezone"])
             recipients = sub.recipients or list(smtp.get("recipients") or [])

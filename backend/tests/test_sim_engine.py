@@ -7,7 +7,7 @@ from sqlalchemy import text
 
 from app.db import get_session
 from app.main import app
-from app.sim.engine import Params, fill, plan_orders, step_simulations, target_sizes
+from app.sim.engine import MAX_LEVERAGE, Params, coin_leverage, fill, plan_orders, step_simulations, target_sizes
 
 T0 = datetime(2026, 11, 17, 12, 0, 30, tzinfo=UTC)
 MIDS = {"BTC": D(80000), "ETH": D(3000)}
@@ -28,6 +28,32 @@ def test_target_sizing_modes_and_leverage_cap():
     # not followed (pre-existing) -> 0; held coin without leader position -> close
     t = target_sizes(p, leader, D(400000), D(10000), MIDS, set(), {"ETH": D(1)})
     assert t == {"BTC": D(0), "ETH": D(0)} or t == {"ETH": D(0)}
+
+
+def test_leader_leverage_follow_and_caps():
+    follow = Params(leverage_mode="leader", max_leverage=D(MAX_LEVERAGE))
+    # following: the leader's 100x stands where the coin allows it, else the coin's maximum
+    assert coin_leverage(follow, "BTC", {"BTC": 100}, {"BTC": 125}) == 100
+    assert coin_leverage(follow, "BTC", {"BTC": 100}, {"BTC": 40}) == 40
+    # an explicit cap still applies
+    assert coin_leverage(Params(leverage_mode="leader", max_leverage=D(50)), "BTC", {"BTC": 100}, {"BTC": 125}) == 50
+    # unknown leader leverage: our cap, at most the unknown-coin default (20x), never the coin maximum
+    assert coin_leverage(follow, "BTC", {}, {"BTC": 125}) == 20
+    assert coin_leverage(Params(leverage_mode="leader", max_leverage=D(10)), "BTC", {"BTC": None}, {"BTC": 125}) == 10
+    # 100x leader, follow mode: margin for $160k notional is $1.6k, not scaled down on a $10k account
+    t = target_sizes(follow, {"BTC": D(2)}, D(4000), D(10000), MIDS, {"BTC"}, {}, {"BTC": 100}, {"BTC": 125})
+    assert t["BTC"] * MIDS["BTC"] == pytest.approx(D(400000))  # 40x of equity, same as the leader's share
+    assert t["BTC"] * MIDS["BTC"] / 100 <= D(10000)
+
+
+def test_leverage_validation_allows_125x():
+    from pydantic import ValidationError
+
+    from app.api.sims import SimParams
+    assert SimParams(max_leverage=100, leverage_mode="leader").max_leverage == 100
+    assert SimParams(max_leverage=125).max_leverage == 125
+    with pytest.raises(ValidationError):
+        SimParams(max_leverage=126)
 
 
 def test_plan_orders_thresholds():

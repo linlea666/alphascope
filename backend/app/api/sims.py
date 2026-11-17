@@ -14,6 +14,7 @@ from app.api.common import num
 from app.api.watch import _queue_fills
 from app.db import get_session
 from app.sim import analytics as an
+from app.sim.engine import MAX_LEVERAGE
 from app.traders import parse_trader_key
 
 router = APIRouter(prefix="/api/v1/sims", tags=["sims"])
@@ -25,7 +26,7 @@ class SimParams(BaseModel):
     sizing: Literal["equity_ratio", "fixed_multiple", "fixed_cap"] = "equity_ratio"
     size_factor: float = Field(1.0, gt=0, le=100)
     cap_per_coin: float | None = Field(None, gt=0)
-    max_leverage: float = Field(10, gt=0, le=50)
+    max_leverage: float = Field(10, gt=0, le=MAX_LEVERAGE)
     coins_include: list[str] = Field(default_factory=list, max_length=100)
     coins_exclude: list[str] = Field(default_factory=list, max_length=100)
     follow_adjust: bool = True

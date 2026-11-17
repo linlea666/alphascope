@@ -2,15 +2,18 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { AddressLink } from "@/components/AddressLink";
 import { AlertButton } from "@/components/AlertButton";
 import { ApiErrorState } from "@/components/ApiErrorState";
+import { RenameButton } from "@/components/RenameButton";
 import { DigestSettings, SentinelActions } from "@/components/SentinelControls";
 import { Badge, PageHeader, Panel, td, th } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { api, ApiError, type AlertsOverview, type Digest, type Notifications, type PositionEvents, type Sentinels } from "@/lib/api";
 import { fmtNum, fmtTime, fmtUsd } from "@/lib/format";
+import { getWatchContext } from "@/lib/watch";
 
 export default async function AlertsPage() {
   const t = await getTranslations("alerts");
   const locale = await getLocale();
+  const { aliases } = await getWatchContext();
   let subs: AlertsOverview;
   let events: PositionEvents;
   let log: Notifications;
@@ -124,6 +127,7 @@ export default async function AlertsPage() {
                       <span className="flex items-start gap-2">
                         <AlertButton address={s.address} subscribed compact />
                         <AddressLink address={s.address} name={s.name} />
+                        <RenameButton address={s.address} alias={aliases[s.address]} compact />
                       </span>
                     </td>
                     <td className={`${td} whitespace-normal text-xs`}>{s.events.map((k) => t(`kinds.${k}`)).join(" · ")}</td>

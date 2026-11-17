@@ -30,5 +30,17 @@ def okx_key(author_id: str) -> str:
     return f"okx:{author_id}"
 
 
+def short_key(key: str) -> str:
+    """Short form of a trader key, the same as the web app's shortAddr."""
+    return f"OKX·{key[-6:]}" if key.startswith("okx:") else f"{key[:6]}…{key[-4:]}"
+
+
+def trader_label(name: str | None, key: str) -> str:
+    """Name used in emails: the owner's alias or the public nickname (callers pass coalesce(alias, display_name)),
+    else "未命名 0xfc76…9ef9" so several unnamed traders can still be told apart."""
+    name = (name or "").strip()
+    return name if name else f"未命名 {short_key(key)}"
+
+
 def okx_profile_url(handle: str | None) -> str | None:
     return f"https://www.okx.com/zh-hans/copy-trading/account/{handle}" if handle else None

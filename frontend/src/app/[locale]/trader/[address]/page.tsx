@@ -15,6 +15,7 @@ import { REPLAY_BARS, ReplayPanel } from "@/components/ReplayPanel";
 import { Term } from "@/components/Term";
 import { TimingPanel } from "@/components/TimingPanel";
 import { AlertButton } from "@/components/AlertButton";
+import { RenameButton } from "@/components/RenameButton";
 import { WatchButton } from "@/components/WatchButton";
 import { Link } from "@/i18n/routing";
 import { getWatchContext } from "@/lib/watch";
@@ -75,6 +76,8 @@ export default async function TraderPage({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             {okx && w.avatar_url && <img src={w.avatar_url} alt="" referrerPolicy="no-referrer" className="h-8 w-8 rounded-full" />}
             <h1 className="text-xl font-semibold tracking-tight">{watchCtx.aliases[w.address] ?? w.display_name ?? t("trader.titleFallback")}</h1>
+            {watchCtx.aliases[w.address] && w.display_name && <span className="text-xs text-muted">({w.display_name})</span>}
+            <RenameButton address={w.address} alias={watchCtx.aliases[w.address]} />
             <Badge tone={okx ? "warn" : "accent"}>{okx ? "OKX" : "Hyperliquid"}</Badge>
             <WatchButton address={w.address} watched={watchCtx.watched.has(w.address)} />
             <AlertButton address={w.address} subscribed={watchCtx.alerted.has(w.address)} />

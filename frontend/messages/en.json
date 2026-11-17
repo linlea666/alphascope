@@ -701,7 +701,11 @@
     "archived": "{n} fills",
     "queued": "queued",
     "archivedOkx": "{n} positions",
-    "gradeHint": "Copyability grade"
+    "gradeHint": "Copyability grade",
+    "renameTrader": "Rename",
+    "nameTrader": "Name this trader",
+    "renameHint": "Used on every page and in alert emails; no need to watch first. Save it empty to go back to the original name.",
+    "cancel": "Cancel"
   },
   "alerts": {
     "subscribe": "Alert me",
@@ -1016,6 +1020,10 @@
       "capPerCoin": "USD per coin",
       "maxLeverage": "Max leverage",
       "maxLeverageHint": "Scales down when gross exposure exceeds equity × this",
+      "leverageCap": "Leverage cap",
+      "leverageCapHint": "Each position uses the leader’s leverage on that coin, but no more than this (the coin’s own limit also applies). Unknown leader leverage counts as 20x.",
+      "followLeverage": "Match the leader’s leverage (no cap)",
+      "followLeverageHint": "Only the coin’s own limit applies (on Hyperliquid it varies per coin, e.g. 40x for BTC; up to 125x on OKX). Margin and liquidation prices match the leader’s, so the simulated PnL lines up; untick to set your own cap.",
       "include": "Only these coins",
       "includeHint": "Empty = all perps",
       "exclude": "Exclude coins",
@@ -1046,7 +1054,7 @@
       },
       "leverageModeHints": {
         "account": "All positions share your capital; gross exposure stays within max leverage; the whole account is liquidated when margin runs out.",
-        "leader": "Each position uses the leader's leverage on that coin (capped by max leverage and the coin's limit) with its own margin and liquidation price; a liquidated position loses only its margin."
+        "leader": "Each position uses the leader’s leverage on that coin with its own margin and liquidation price (optionally capped; the coin’s limit always applies); a liquidated position loses only its margin."
       },
       "formulaTitle": "How proportional copying works",
       "formula": "Your size = copy ratio × (leader's position ÷ leader's balance) × your balance",
@@ -1509,7 +1517,9 @@
     "unwatched": "Removed from watchlist",
     "alertSaved": "Alert settings saved",
     "simSaved": "Simulation settings saved",
-    "simCreated": "Simulation created; it follows every 30 seconds"
+    "simCreated": "Simulation created; it follows every 30 seconds",
+    "renamed": "Renamed: pages and alert emails now use the new name",
+    "renameCleared": "Original name restored"
   },
   "legs": {
     "title": "Swing hall of fame",

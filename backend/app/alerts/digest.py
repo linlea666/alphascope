@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app import settings_store
 from app.alerts.mailer import send
 from app.market import divergence
+from app.traders import trader_label
 
 OWNER = "default"
 
@@ -34,8 +35,9 @@ def build(session: Session, now: datetime) -> dict:
     if new_ids:
         new_rows = [{**dict(r), "scale": significant[r["id"]][0], "q": float(significant[r["id"]][1])}
                     for r in session.execute(text("""
-                        SELECT id, address, display_name, venue FROM wallet WHERE id = ANY(:ids)"""),
-                        {"ids": new_ids}).mappings().all()]
+                        SELECT w.id, w.address, coalesce(a.alias, w.display_name) AS display_name, w.venue FROM wallet w
+                        LEFT JOIN wallet_alias a ON a.wallet_id = w.id AND a.owner = :o WHERE w.id = ANY(:ids)"""),
+                        {"ids": new_ids, "o": OWNER}).mappings().all()]
         new_rows.sort(key=lambda r: r["q"])
         for r in new_rows:
             r.pop("id")
@@ -75,7 +77,7 @@ def compose(day: date, p: dict, public_url: str) -> tuple[str, str]:
     lines = [f"AlphaScope 每日情报 · {day}", ""]
     lines.append("【收藏的人昨天做了什么】")
     for m in p["watch_moves"][:10] or []:
-        lines.append(f"· {m['name'] or m['address']} {kinds.get(m['kind'], m['kind'])} {m['coin']} "
+        lines.append(f"· {trader_label(m['name'], m['address'])} {kinds.get(m['kind'], m['kind'])} {m['coin']} "
                      f"{'多' if m['side'] == 'long' else '空'} US${_usd(m['notional_change'])}")
     if not p["watch_moves"]:
         lines.append("· 没有观测到变动")
@@ -85,17 +87,17 @@ def compose(day: date, p: dict, public_url: str) -> tuple[str, str]:
                      f"全体 {d['crowd_long_share']:.0%}，差 {d['divergence']:+.0%}")
     lines += ["", f"【新进入节奏显著名单】{p['new_significant_total']} 人"]
     for r in p["new_significant"][:5]:
-        lines.append(f"· {r['display_name'] or r['address']} · {r['scale']} q={r['q']:.3f}")
+        lines.append(f"· {trader_label(r['display_name'], r['address'])} · {r['scale']} q={r['q']:.3f}")
     if p.get("health_changes"):
         names = {"declining": "走下坡", "dormant": "沉寂", "drifting": "风格漂移", "hot": "近期火热", "stable": "稳定"}
         lines += ["", "【交易员状态变化】"]
         for h in p["health_changes"][:5]:
-            lines.append(f"· {h['name'] or h['address']}：{names.get(h['prev_status'], h['prev_status'])} → "
+            lines.append(f"· {trader_label(h['name'], h['address'])}：{names.get(h['prev_status'], h['prev_status'])} → "
                          f"{names.get(h['status'], h['status'])}")
     if p["sentinel_hits"]:
         lines += ["", "【价位哨兵命中】"]
         for h in p["sentinel_hits"][:5]:
-            lines.append(f"· {h['name']}：{h['name_w'] or h['address']} 均价 {h['avg_px'] or 0:,.1f}")
+            lines.append(f"· {h['name']}：{trader_label(h['name_w'], h['address'])} 均价 {h['avg_px'] or 0:,.1f}")
     if public_url:
         lines += ["", f"网页：{public_url.rstrip('/')}/zh"]
     lines += ["", "只来自我们观测的样本；历史关系不代表未来，不构成交易建议。"]

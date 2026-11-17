@@ -126,6 +126,7 @@ def test_live_cycle_baseline_then_event_then_email(sf, tmp_path, monkeypatch):
     assert r["held"] == 1 and not sent  # coalescing window still open
     r = notify_pending(sf, now=datetime.now(UTC) + timedelta(seconds=120), sender=lambda *a: sent.append(a))
     assert r["sent"] == 1 and sent[0][2] == ["me@example.com"] and "开空 BTC" in sent[0][3]
+    assert f"未命名 {A[:6]}…{A[-4:]}" in sent[0][3]  # no alias, no nickname: still tells traders apart
     with sf() as s:
         assert s.execute(text("SELECT notify_status FROM position_event")).scalar_one() == "sent"
         assert s.execute(text("SELECT status FROM notification")).scalar_one() == "sent"
@@ -201,3 +202,10 @@ def test_subscription_api(client):
     assert client.put(f"/api/v1/alerts/wallet/{A}", json={"events": ["moon"]}).status_code == 422
     assert client.put(f"/api/v1/alerts/wallet/{A}", json={"recipients": ["nope"]}).status_code == 422
     assert client.delete(f"/api/v1/alerts/wallet/{A}").status_code == 200
+
+
+def test_trader_label():
+    from app.traders import trader_label
+    assert trader_label("抄底哥", A) == "抄底哥"
+    assert trader_label("  ", A) == f"未命名 {A[:6]}…{A[-4:]}"
+    assert trader_label(None, "okx:123456789") == "未命名 OKX·456789"

@@ -34,6 +34,9 @@ log = logging.getLogger(__name__)
 ZERO = Decimal(0)
 EQUITY_SNAPSHOT_EVERY = timedelta(minutes=5)
 DEFAULT_COIN_MAX_LEVERAGE = 20
+# Highest leverage a simulation may be set to (OKX allows up to 125x). In "leader" mode a cap this high means "follow
+# the leader's leverage": only the coin's own maximum applies, so margins and liquidation prices match the leader's.
+MAX_LEVERAGE = 125
 
 
 def _sign(x: Decimal) -> int:
@@ -76,7 +79,9 @@ def allowed(p: Params, coin: str) -> bool:
 def coin_leverage(p: Params, coin: str, leader_lev: dict[str, int | None], max_lev: dict[str, int]) -> Decimal:
     """Leverage of an isolated copy: the leader's on that coin, capped by our max leverage and the coin's maximum."""
     cap = Decimal(max_lev.get(coin) or DEFAULT_COIN_MAX_LEVERAGE)
-    lev = Decimal(leader_lev.get(coin) or p.max_leverage)
+    # leader's leverage unknown: our cap, but no more than the unknown-coin default (a "follow" cap of 125x must not
+    # turn an unknown into the coin's maximum)
+    lev = Decimal(leader_lev.get(coin) or min(p.max_leverage, Decimal(DEFAULT_COIN_MAX_LEVERAGE)))
     return max(Decimal(1), min(lev, p.max_leverage, cap))
 
 

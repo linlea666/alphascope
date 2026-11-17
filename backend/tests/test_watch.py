@@ -60,3 +60,12 @@ def test_validation(client):
     assert client.get("/api/v1/watch/wallet/0x123").status_code == 422
     assert client.get("/api/v1/watch/wallet/0x" + "0" * 40).status_code == 404
     assert client.post("/api/v1/watch/groups", json={"name": ""}).status_code == 422
+
+
+def test_rename_without_watching(client):
+    """The ✎ on the trader page: alias only, no watchlist membership; empty restores the original name."""
+    assert client.put(f"/api/v1/watch/alias/{A}", json={"alias": " 熬鹰 "}).json() == {"ok": True}
+    assert client.get("/api/v1/watch/aliases").json()["aliases"] == {A: "熬鹰"}
+    assert client.get("/api/v1/watch").json()["items"] == []
+    client.put(f"/api/v1/watch/alias/{A}", json={"alias": ""})
+    assert client.get("/api/v1/watch/aliases").json()["aliases"] == {}

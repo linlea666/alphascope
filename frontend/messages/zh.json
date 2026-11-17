@@ -701,7 +701,11 @@
     "archived": "{n} 条",
     "queued": "排队中",
     "archivedOkx": "{n} 个仓位",
-    "gradeHint": "可跟单性评分等级"
+    "gradeHint": "可跟单性评分等级",
+    "renameTrader": "改名",
+    "nameTrader": "起个名字",
+    "renameHint": "所有页面和提醒邮件都会用这个名字；不用先收藏。清空后保存，恢复原来的名称。",
+    "cancel": "取消"
   },
   "alerts": {
     "subscribe": "订阅提醒",
@@ -1016,6 +1020,10 @@
       "capPerCoin": "每币金额（USD）",
       "maxLeverage": "最高杠杆",
       "maxLeverageHint": "总敞口超过 净值 × 此值 时等比缩小",
+      "leverageCap": "杠杆上限",
+      "leverageCapHint": "每个仓位取交易员在这个币上的杠杆，但不超过这个值（还受币种上限约束）。交易员杠杆未知时按 20 倍。",
+      "followLeverage": "和交易员杠杆保持一致（不设上限）",
+      "followLeverageHint": "只受币种上限约束（Hyperliquid 每个币不同，例如 BTC 40 倍；OKX 最高 125 倍）。保证金和强平价都和交易员一致，模拟的盈亏才对得上；取消勾选可以自己设上限。",
       "include": "只跟这些币",
       "includeHint": "留空 = 全部永续币种",
       "exclude": "排除币种",
@@ -1046,7 +1054,7 @@
       },
       "leverageModeHints": {
         "account": "所有仓位共用你的资金，总敞口不超过「最高杠杆」；账户保证金不足时整体强平。",
-        "leader": "每个仓位用交易员在该币上的杠杆（不超过最高杠杆和币种上限）单独计算保证金和强平价；某个仓位被强平只损失它的保证金，其他继续。"
+        "leader": "每个仓位用交易员在该币上的杠杆单独计算保证金和强平价（可设上限，币种上限始终有效）；某个仓位被强平只损失它的保证金，其他继续。"
       },
       "formulaTitle": "按比例跟单是怎么算的",
       "formula": "你的开仓金额 = 跟单比例 ×（交易员开仓金额 ÷ 交易员账户余额）× 你的账户余额",
@@ -1509,7 +1517,9 @@
     "unwatched": "已取消收藏",
     "alertSaved": "提醒设置已保存",
     "simSaved": "模拟参数已保存",
-    "simCreated": "模拟已创建，会每 30 秒跟随一次"
+    "simCreated": "模拟已创建，会每 30 秒跟随一次",
+    "renamed": "已改名，页面和提醒邮件都会用新名字",
+    "renameCleared": "已恢复原来的名称"
   },
   "legs": {
     "title": "波段名人堂",

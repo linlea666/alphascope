@@ -17,6 +17,7 @@ from app.quant.returns import Point, index_path
 from app.research.behavior import fingerprint
 from app.research.timing import TIMING_VERSION
 from app.sim.backtest import DELAYS, BacktestParams, backtest
+from app.sim.engine import MAX_LEVERAGE
 from app.traders import parse_trader_key
 
 router = APIRouter(prefix="/api/v1", tags=["explore"])
@@ -300,7 +301,7 @@ def wallet_backtest(address: str, session: Session = Depends(get_session), days:
                     ratio: float = Query(100, gt=0, le=1000), delay: int = Query(30, ge=0, le=86400),
                     capital: float = Query(10_000, gt=0, le=1e9),
                     leverage_mode: Literal["account", "leader"] = "account",
-                    max_leverage: float = Query(10, gt=0, le=50)):
+                    max_leverage: float = Query(10, gt=0, le=MAX_LEVERAGE)):
     """Historical copy backtest (see app/sim/backtest.py for every assumption). ratio is the copy ratio in percent."""
     w = _wallet(session, address)
     p = BacktestParams(days=days, capital=capital, ratio=ratio / 100, delay_seconds=delay,

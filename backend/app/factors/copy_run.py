@@ -13,6 +13,7 @@ from app.alerts.mailer import send
 from app.factors import copyability, health
 from app.research.timing import TIMING_VERSION
 from app.sim.backtest import DELAYS, BacktestParams, PriceBook, backtest
+from app.traders import trader_label
 
 log = logging.getLogger(__name__)
 
@@ -129,7 +130,7 @@ def notify_changes(s: Session, now: datetime, sender=send) -> str:
         for r in rows:
             link = f"{(smtp.get('public_url') or '').rstrip('/')}/zh/trader/{r['address']}" if smtp.get("public_url") else r["address"]
             keys = "、".join(x["key"] for x in r["signals"]) or "—"
-            lines.append(f"· {r['name'] or r['address']}：{labels.get(r['status'], r['status'])}（原因：{keys}）{link}")
+            lines.append(f"· {trader_label(r['name'], r['address'])}：{labels.get(r['status'], r['status'])}（原因：{keys}）{link}")
         lines += ["", "近 30 天对比此前 180 天的已平仓位；只是提示，请到交易员页查看证据。"]
         try:
             sender(smtp, password, list(smtp["recipients"]), f"[AlphaScope] {len(rows)} 位交易员状态变化", "\n".join(lines))

@@ -854,6 +854,9 @@ export type SimSummary = {
 };
 
 export type LeverageMode = "account" | "leader";
+/** Highest leverage a simulation can be set to (OKX allows 125x; the backend's MAX_LEVERAGE). In "leader" mode this
+ *  value means "follow the leader": only the coin's own maximum applies. */
+export const MAX_LEVERAGE = 125;
 export type HealthStatus = "stable" | "declining" | "drifting" | "dormant" | "hot" | "insufficient";
 
 export type SimParams = {

@@ -11,6 +11,7 @@ from app import settings_store
 from app.alerts.mailer import send
 from app.api.common import venue_clause
 from app.market.stats import COHORTS
+from app.traders import trader_label
 
 OWNER = "default"
 EMAIL_LIMIT = 20  # traders listed per email
@@ -46,7 +47,7 @@ def compose(s: dict, hits: list[dict], public_url: str) -> tuple[str, str]:
     subject = f"[AlphaScope 价位哨兵] {s['name']}：{len(hits)} 位交易员在 {s['coin']} {_fmt(s['px_min'])}–{_fmt(s['px_max'])} {side}"
     lines = [subject, ""]
     for h in hits[:EMAIL_LIMIT]:
-        name = h["name"] or h["address"]
+        name = trader_label(h["name"], h["address"])
         link = f"{public_url.rstrip('/')}/zh/trader/{h['address']}" if public_url else h["address"]
         lines.append(f"· {name}  均价 {float(h['avg_px'] or 0):,.1f}  名义 US${_fmt(h['notional'])}  "
                      f"首次 {h['first_at']:%Y-%m-%d %H:%M} UTC  {link}")
