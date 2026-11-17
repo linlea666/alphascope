@@ -6,6 +6,7 @@ import { EquityChart } from "@/components/EquityChart";
 import { Freshness } from "@/components/Freshness";
 import { OkxTraderPanels } from "@/components/OkxTraderPanels";
 import { PositionCycles } from "@/components/PositionCycles";
+import { TraderProfile } from "@/components/TraderProfile";
 import { REPLAY_BARS, ReplayPanel } from "@/components/ReplayPanel";
 import { TimingPanel } from "@/components/TimingPanel";
 import { AlertButton } from "@/components/AlertButton";
@@ -214,6 +215,8 @@ export default async function TraderPage({
         />
         </Panel>
       )}
+
+      <TraderProfile address={w.address} />
 
       <PositionCycles data={positions} />
 

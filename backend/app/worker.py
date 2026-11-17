@@ -17,6 +17,7 @@ from app.ingest.leaderboard_ingest import ingest_leaderboard
 from app.ingest.market_ingest import record_candles
 from app.ingest.portfolio_ingest import enrich_batch
 from app.ingest.runs import mark_abandoned_runs
+from app.factors.run import run_styles
 from app.market.collect import sweep_hyperliquid, sweep_okx, sync_watch
 from app.market.stats import snapshot_hour
 from app.okx.candles import sync_candles
@@ -147,6 +148,10 @@ def main() -> None:
         r = asyncio.run(go())
         log.info("market okx: due=%s ok=%s failed=%s events=%s", r["due"], r["ok"], r["failed"], r["events"])
 
+    def styles_job() -> None:
+        r = run_styles(sf)
+        log.info("styles: traders=%s tags=%s", r["traders"], r["tags"])
+
     def market_snapshot_job() -> None:
         with sf() as s:
             n = snapshot_hour(s, datetime.now(UTC))
@@ -186,6 +191,8 @@ def main() -> None:
     sched.add_job(market_okx_job, "interval", minutes=settings.market_sweep_interval_minutes,
                   next_run_time=now + timedelta(minutes=1, seconds=30), id="market_okx")
     sched.add_job(market_snapshot_job, "cron", minute=55, id="market_snapshot")
+    # Factors and style labels (~20 s): after new cycles, timing scores and radar polls have landed
+    sched.add_job(styles_job, "interval", hours=6, next_run_time=now + timedelta(minutes=50), id="styles")
     log.info("worker started: leaderboard every %dm, enrich %d wallets every %dm",
              settings.leaderboard_interval_minutes, settings.enrich_batch_size, settings.enrich_interval_minutes)
     try:

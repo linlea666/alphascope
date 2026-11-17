@@ -207,6 +207,41 @@ export type MarketLiquidations = {
   outside: { positions: number; notional: number };
 };
 
+export type StyleKey = "steady" | "trend" | "swing" | "bottom" | "top_short" | "scalper" | "low_dd" | "specialist" | "high_risk";
+export type StyleStatus = "verified" | "candidate" | "watch";
+export type EvidenceRule = { factor: string; op: string; threshold: number; value: number | null; n: number; ok: boolean | null; gate?: boolean };
+export type Evidence = EvidenceRule | { any: EvidenceRule[]; ok: boolean | null } | { meta: string; value: string | null };
+export type Oos = { cut?: string; forward_n?: number; forward_net?: number; forward_pf?: number | null; passed?: boolean; tested?: boolean; reason?: string; pre_status?: string } | null;
+export type FactorCell = { value: number | null; n: number };
+export type DiscoverStyles = {
+  computed_at: string | null;
+  oos_days: number;
+  styles: { key: StyleKey; risk_flag: boolean; note: string; oos: boolean; counts: Partial<Record<StyleStatus, number>> }[];
+};
+export type DiscoverBoard = {
+  style: StyleKey;
+  rows: {
+    address: string;
+    display_name: string | null;
+    venue: Venue;
+    status: StyleStatus;
+    score: number | null;
+    confidence: number;
+    n: number;
+    evidence: Evidence[];
+    oos: Oos;
+    computed_at: string;
+    other: StyleKey[];
+    factors: Record<string, FactorCell>;
+  }[];
+};
+export type DiscoverProfile = {
+  factors: Record<string, Partial<Record<"all" | "90d", FactorCell & { as_of: string }>>>;
+  styles: { style: StyleKey; status: StyleStatus; score: number | null; confidence: number; n: number; evidence: Evidence[]; oos: Oos; computed_at: string }[];
+};
+export type TopRow = { address: string; display_name: string | null; venue: Venue; asset: number | null; net: number | null; ret: number | null; n?: number; wins?: number; mdd?: number | null; reliability?: string | null; open_loss_ratio?: number | null; styles: StyleKey[] };
+export type DiscoverTop = { period: "7d" | "30d"; since: string; okx: TopRow[]; hyperliquid: TopRow[] };
+
 export type OkxSummary = {
   traders: number;
   positions: number;
@@ -880,6 +915,10 @@ export const api = {
   marketEvents: (params: Record<string, string | number | undefined>) => get<{ as_of: string; rows: MarketEvent[] }>("/api/v1/market/events", params),
   marketHistory: (params: Record<string, string | number | undefined>) => get<{ rows: MarketHistoryRow[] }>("/api/v1/market/history", params),
   marketLiquidations: (params: Record<string, string | number | undefined>) => get<MarketLiquidations>("/api/v1/market/liquidations", params),
+  discoverStyles: (venue: string) => get<DiscoverStyles>("/api/v1/discover/styles", { venue }),
+  discoverBoard: (params: Record<string, string | number | undefined>) => get<DiscoverBoard>("/api/v1/discover", params),
+  discoverProfile: (address: string) => get<DiscoverProfile>(`/api/v1/discover/profile/${encodeURIComponent(address)}`),
+  discoverTop: (period: string) => get<DiscoverTop>("/api/v1/discover/top", { period }),
   okxBoard: (params: Record<string, string | number | boolean | undefined>) => get<OkxBoard>("/api/v1/okx/board", params),
   holderZones: (params: Record<string, string | number | boolean | undefined>) => get<HolderZones>("/api/v1/holders/zones", params),
   holderLegs: (coin: string) => get<LegList>("/api/v1/holders/legs", { coin }),

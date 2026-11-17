@@ -1027,3 +1027,41 @@ class MarketSnapshot(Base):
     liq_known_ntl: Mapped[Decimal] = mapped_column(Numeric)
     opens: Mapped[int] = mapped_column(Integer)  # open / flip events in the hour
     closes: Mapped[int] = mapped_column(Integer)
+
+
+# --- Multi-style discovery (migration 0011, docs/13) ---
+
+
+class FactorValue(Base):
+    """One factor of one trader over one window, with the sample it rests on (see app/factors/registry.py)."""
+
+    __tablename__ = "factor_value"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    factor: Mapped[str] = mapped_column(String(40), primary_key=True)
+    time_window: Mapped[str] = mapped_column(String(8), primary_key=True)  # all | 90d | pre (before the OOS cut)
+    version: Mapped[str] = mapped_column(String(16))
+    value: Mapped[Decimal | None] = _num()
+    n: Mapped[int] = mapped_column(Integer)  # observations behind the value (closed cycles, months, legs...)
+    as_of: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_factor_value_factor", "factor", "time_window"),)
+
+
+class StyleTag(Base):
+    """A style label with its evidence; status: verified (passed out-of-sample) | candidate | watch | insufficient."""
+
+    __tablename__ = "style_tag"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    style: Mapped[str] = mapped_column(String(24), primary_key=True)
+    version: Mapped[str] = mapped_column(String(16))
+    status: Mapped[str] = mapped_column(String(12))
+    confidence: Mapped[Decimal] = mapped_column(Numeric)
+    score: Mapped[Decimal | None] = _num()  # ranking within the style (higher is better)
+    n: Mapped[int] = mapped_column(Integer)
+    evidence: Mapped[list] = mapped_column(JSONB)  # [{factor, value, op, threshold, ok, n}]
+    oos: Mapped[dict | None] = mapped_column(JSONB)  # out-of-sample check (cut, forward cycles, pnl, pf, passed)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_style_tag_style", "style", "status"),)

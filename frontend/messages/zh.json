@@ -19,7 +19,9 @@
     "settings": "设置",
     "sims": "模拟跟单",
     "okx": "OKX 榜单",
-    "market": "市场雷达"
+    "market": "市场雷达",
+    "discover": "风格发现",
+    "research": "研究"
   },
   "common": {
     "dataAsOf": "数据时间",
@@ -1123,5 +1125,173 @@
     "replay": "K 线",
     "noEvents": "这个时间段内没有符合条件的变动。",
     "empty": "没有数据。"
+  },
+  "discover": {
+    "title": "风格发现",
+    "subtitle": "按交易风格分别找人：每个标签都附规则、实际数值、样本量和样本外检验（用 {days} 天前的数据判定，再看之后的同类仓位是否仍然盈利）。标签是研究线索，不是跟单建议。",
+    "styles": {
+      "steady": "稳健复利",
+      "trend": "大趋势",
+      "swing": "波段高手",
+      "bottom": "抄底",
+      "top_short": "摸顶做空",
+      "scalper": "短线",
+      "low_dd": "低回撤",
+      "specialist": "币种专精",
+      "high_risk": "高风险投机"
+    },
+    "styleHints": {
+      "steady": "多个月份持续盈利、盈亏比好、利润不靠一两笔、已实现回撤可控、很少被强平；并且当前持仓没有大额浮亏（只平盈利单、亏损单死扛的人会被这一条挡下）。",
+      "trend": "波段与大周期仓位整体盈利，且大周期 / 波段节奏评分显著，或整段行情捕获率高。节奏评分不是时点数据，最高只到候选。",
+      "swing": "持仓 3 天到 3 周的仓位：盈亏比 ≥ 1.3、胜率下限 ≥ 40%、整体盈利。",
+      "bottom": "买入经常落在所处行情区间的低位（位置分 ≥ 0.7、买在极端低点的比例是随机基准的 1.5 倍以上），多单整体盈利。",
+      "top_short": "空单整体盈利、盈亏比 ≥ 1.3、胜率下限 ≥ 40%，卖出常在行情区间的高位。区别于长期做空碰上跌势。",
+      "scalper": "六成以上仓位持有不到 4 小时，扣费后仍盈利。注意：这类优势往往来自跟单无法复制的执行速度。",
+      "low_dd": "已实现回撤不到账户的 10%，没有强平，当前浮亏不到 5%，整体盈利。",
+      "specialist": "六成以上的交易额集中在一个币种，且在这个币种上盈利（盈亏比 ≥ 1.3、胜率下限 ≥ 45%）。",
+      "high_risk": "风险识别，不是能力：强平率 ≥ 5%、杠杆中位数 ≥ 30 倍或单笔盈利占总盈利六成以上，满足任意一条即标出。"
+    },
+    "factors": {
+      "n_closed": "已平仓周期",
+      "net_pnl": "已实现净盈亏",
+      "win_rate": "胜率",
+      "win_rate_lo": "胜率下限（95%）",
+      "profit_factor": "盈亏比",
+      "expectancy_bp": "单笔期望（名义金额 bp）",
+      "top1_share": "最大单笔占总盈利",
+      "top5_share": "前 5 笔占总盈利",
+      "hold_win_h": "盈利单持仓中位数",
+      "hold_loss_h": "亏损单持仓中位数",
+      "hold_ratio": "亏损 / 盈利持仓时长比",
+      "months": "活跃月数",
+      "positive_month_ratio": "盈利月份占比",
+      "max_dd_usd": "已实现最大回撤",
+      "dd_ratio": "已实现回撤 / 账户",
+      "short_share": "空单占比",
+      "short_net": "空单净盈亏",
+      "short_pf": "空单盈亏比",
+      "short_win_lo": "空单胜率下限",
+      "long_net": "多单净盈亏",
+      "coin_hhi": "币种集中度",
+      "top_coin_share": "主力币种占比",
+      "top_coin_n": "主力币种周期",
+      "top_coin_net": "主力币种净盈亏",
+      "top_coin_pf": "主力币种盈亏比",
+      "top_coin_win_lo": "主力币种胜率下限",
+      "scalp_share": "4 小时内仓位占比",
+      "swing_n": "波段周期数",
+      "swing_net": "波段净盈亏",
+      "swing_pf": "波段盈亏比",
+      "swing_win_lo": "波段胜率下限",
+      "big_n": "波段 + 大周期数",
+      "big_net": "波段 + 大周期净盈亏",
+      "days_since_last": "距最近平仓",
+      "cycles_30d": "近 30 天周期",
+      "liq_rate": "强平率",
+      "median_leverage": "杠杆中位数",
+      "edge_short": "短线节奏超额",
+      "edge_swing": "波段节奏超额",
+      "edge_macro": "大周期节奏超额",
+      "q_short": "短线节奏 q 值",
+      "q_swing": "波段节奏 q 值",
+      "q_macro": "大周期节奏 q 值",
+      "buy_loc": "买入位置分",
+      "sell_loc": "卖出位置分",
+      "buy_lift": "买在低点倍数",
+      "sell_lift": "卖在高点倍数",
+      "capture_avg": "整段行情捕获率",
+      "open_upl": "当前浮动盈亏",
+      "open_loss_ratio": "当前浮亏 / 账户"
+    },
+    "factorsShort": {
+      "n_closed": "周期",
+      "net_pnl": "净盈亏",
+      "win_rate_lo": "胜率下限",
+      "profit_factor": "盈亏比",
+      "positive_month_ratio": "盈利月",
+      "dd_ratio": "回撤",
+      "open_loss_ratio": "当前浮亏",
+      "liq_rate": "强平率",
+      "median_leverage": "杠杆",
+      "days_since_last": "最近"
+    },
+    "status": {
+      "verified": "已验证",
+      "candidate": "初步候选",
+      "watch": "观察中"
+    },
+    "statusFilter": {
+      "verified": "只看已验证",
+      "candidate": "候选及以上",
+      "watch": "含观察中"
+    },
+    "statusHints": {
+      "verified": "规则在样本外依然成立",
+      "candidate": "全部规则在完整历史上成立",
+      "watch": "差一条规则，或一项数据未知"
+    },
+    "preStatus": {
+      "insufficient": "样本不足",
+      "watch": "观察中",
+      "none": "不满足",
+      "candidate": "满足"
+    },
+    "venues": {
+      "all": "全部交易所",
+      "hyperliquid": "Hyperliquid",
+      "okx": "OKX"
+    },
+    "sorts": {
+      "score": "按风格得分",
+      "confidence": "按置信度",
+      "net_pnl": "按净盈亏"
+    },
+    "cols": {
+      "trader": "交易员",
+      "status": "状态与证据",
+      "other": "其他标签",
+      "factor": "因子",
+      "all": "全部历史",
+      "d90": "近 90 天"
+    },
+    "confidence": "置信度 {c}",
+    "evidence": "查看证据",
+    "anyOf": "满足任意一条：",
+    "topCoin": "主力币种",
+    "oos": {
+      "passed": "样本外通过：{cut} 之前的数据已满足规则，之后 {n} 个同类周期净盈亏 {net}、盈亏比 {pf}。",
+      "failed": "样本外未通过：{cut} 之后 {n} 个同类周期净盈亏 {net}、盈亏比 {pf}。",
+      "notTested": "没有做样本外检验：截止日之前的数据{status}。",
+      "notPit": "依赖节奏评分，无法按历史时点重算，因此不做样本外检验。"
+    },
+    "oosNote": "已验证 = 用 {days} 天前的数据判定满足，之后的同类仓位仍然盈利（至少 5 个、盈亏比 ≥ 1）。",
+    "noOosNote": "这个风格依赖节奏评分（不是时点数据），最高只到初步候选。",
+    "riskNote": "这是风险识别：被标出的人不一定不赚钱，但收益的可复制性和长期生存风险都差。",
+    "copyHard": "这类交易员的优势通常难以靠跟单复制。",
+    "computedAt": "计算于 {t}。",
+    "empty": "这个条件下没有交易员。",
+    "profileTitle": "能力画像与证据链",
+    "profileHint": "每个风格标签都可以展开查看它依据的规则、数值和样本量；下面的因子来自全部已平仓周期（OKX 为完整仓位，Hyperliquid 为由成交重建的周期）。",
+    "noStyles": "没有满足任何风格规则（或样本不足）。",
+    "gate": "否决"
+  },
+  "top": {
+    "titleWeek": "本周表现最佳",
+    "titleMonth": "本月表现最佳",
+    "periods": {
+      "7d": "近 7 天",
+      "30d": "近 30 天"
+    },
+    "hint": "短期表现，不代表能力已验证。OKX：期间平仓的已实现盈亏 ÷ 带单资产，至少 5 个平仓、期间没有强平、资产 ≥ 1,000 美元，当前浮亏超过资产 30% 的排除。Hyperliquid：官方排行榜的周 / 月收益率，账户 ≥ 1 万美元、排除噪声标记，附 30 天资金流调整回撤。",
+    "venue": {
+      "okx": "OKX 带单",
+      "hyperliquid": "Hyperliquid"
+    },
+    "trader": "交易员",
+    "ret": "收益率",
+    "pnl": "盈亏",
+    "closed": "平仓数",
+    "mdd": "30D 回撤",
+    "empty": "没有满足门槛的交易员。"
   }
 }

@@ -23,6 +23,7 @@ from app.ingest.leaderboard_ingest import LeaderboardInput, ingest_leaderboard
 from app.ingest.market_ingest import record_candles
 from app.ingest.portfolio_ingest import enrich_batch
 from app.ingest.runs import mark_abandoned_runs
+from app.factors.run import run_styles
 from app.okx.candles import sync_candles
 from app.okx.client import OkxClient
 from app.okx.legacy_import import derive_all, export_sqlite, import_bundle
@@ -57,6 +58,7 @@ def main() -> None:
     rc.add_argument("--limit", type=int, default=5)
     tm = sub.add_parser("timing", help="recompute pivots, decision timing and timing scores")
     tm.add_argument("--venue", choices=["hyperliquid", "okx"], default="hyperliquid")
+    sub.add_parser("styles", help="recompute factors and style labels")
     ox = sub.add_parser("okx-export", help="export the old OKX collector's SQLite database to a JSONL bundle")
     ox.add_argument("--sqlite", type=Path, required=True)
     ox.add_argument("--out", type=Path, required=True)
@@ -96,6 +98,8 @@ def main() -> None:
         result = run_timing(sf, venue=args.venue)
     elif args.cmd == "reconcile":
         result = asyncio.run(reconcile(sf, settings, store, args.limit))
+    elif args.cmd == "styles":
+        result = run_styles(sf)
     elif args.cmd == "okx-import":
         result = import_bundle(sf, args.bundle, derive=not args.no_derive)
     elif args.cmd == "okx-derive":

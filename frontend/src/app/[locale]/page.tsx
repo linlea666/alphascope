@@ -3,6 +3,7 @@ import { AddressLink } from "@/components/AddressLink";
 import { ApiErrorState } from "@/components/ApiErrorState";
 import { FlagBadges, ReliabilityBadge, TierBadge } from "@/components/badges";
 import { Freshness } from "@/components/Freshness";
+import { TopPerformers } from "@/components/TopPerformers";
 import { Badge, PageHeader, Panel, Stat, td, th } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { api, ApiError, type Overview, type OkxSummary } from "@/lib/api";
@@ -10,7 +11,8 @@ import { fmtNum, fmtPct, fmtTime, fmtUsd, signClass } from "@/lib/format";
 
 const TIER_ORDER = ["B", "C", "Z", "A", "S"];
 
-export default async function OverviewPage() {
+export default async function OverviewPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+  const top = (await searchParams).top === "30d" ? "30d" : "7d";
   const t = await getTranslations();
   const locale = await getLocale();
   let data: Overview;
@@ -68,6 +70,8 @@ export default async function OverviewPage() {
           </div>
         </Panel>
       )}
+
+      <TopPerformers period={top} />
 
       <Panel
         title={t("overview.screeningTitle")}
