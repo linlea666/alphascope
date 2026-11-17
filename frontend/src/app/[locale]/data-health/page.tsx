@@ -165,6 +165,63 @@ export default async function DataHealthPage() {
         </Panel>
       </div>
 
+      <Panel title={t("health.okxTitle")} hint={t("health.okxHint", { rpm: d.okx.requests_per_minute, missing: d.okx.without_handle, coins: d.okx.candle_coins })}>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="-mx-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  <th className={th}>{t("health.okxDate")}</th>
+                  <th className={th}>{t("health.okxBoard")}</th>
+                  <th className={th}>{t("health.status")}</th>
+                  <th className={`${th} text-right`}>{t("health.okxCaptured")}</th>
+                  <th className={`${th} text-right`}>{t("health.okxNew")}</th>
+                  <th className={th}>{t("health.error")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.okx.runs.map((r, i) => (
+                  <tr key={i} className="border-t border-border/60">
+                    <td className={`${td} num text-xs text-muted`}>{fmtTime(r.started_at, locale)}</td>
+                    <td className={td}>{r.time_window}{r.source === "crawl_top" ? " (top)" : ""}</td>
+                    <td className={td}>{statusBadge(r.status === "complete" ? "success" : r.status)}</td>
+                    <td className={`${td} num text-right`}>{r.expected_total === null ? "—" : `${r.unique_count} / ${r.expected_total}`}</td>
+                    <td className={`${td} num text-right`}>{r.new_traders}</td>
+                    <td className={`${td} max-w-xs truncate text-xs text-down`} title={r.error ?? undefined}>{r.error ?? ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="-mx-4 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  <th className={th}>{t("okx.pool")}</th>
+                  <th className={th}>{t("okx.historyStatus")}</th>
+                  <th className={`${th} text-right`}>{t("health.okxTraders")}</th>
+                  <th className={`${th} text-right`}>{t("health.okxPositions")}</th>
+                  <th className={`${th} text-right`}>{t("health.okxSynced")}</th>
+                  <th className={`${th} text-right`}>{t("health.okxBackoff")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.okx.pool.map((r) => (
+                  <tr key={`${r.pool_status}-${r.history_status}`} className="border-t border-border/60">
+                    <td className={td}>{t.has(`okx.pool_.${r.pool_status}`) ? t(`okx.pool_.${r.pool_status}`) : r.pool_status}</td>
+                    <td className={`${td} text-xs`}>{t.has(`okx.history.${r.history_status}`) ? t(`okx.history.${r.history_status}`) : r.history_status}</td>
+                    <td className={`${td} num text-right`}>{fmtNum(r.n, locale)}</td>
+                    <td className={`${td} num text-right`}>{fmtNum(r.positions, locale)}</td>
+                    <td className={`${td} num text-right`}>{fmtNum(r.synced_24h, locale)}</td>
+                    <td className={`${td} num text-right ${r.backing_off ? "text-warn" : "text-muted"}`}>{r.backing_off}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </Panel>
+
       <Panel title={t("health.runs")}>
         <div className="-mx-4 overflow-x-auto">
           <table className="w-full text-sm">

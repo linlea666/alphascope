@@ -4,7 +4,9 @@ import { ApiErrorState } from "@/components/ApiErrorState";
 import { FlagBadges } from "@/components/badges";
 import { Freshness } from "@/components/Freshness";
 import { Badge, PageHeader, Panel, td, th } from "@/components/ui";
+import { VenueSwitch } from "@/components/VenueSwitch";
 import { Link } from "@/i18n/routing";
+import { getVenue } from "@/lib/venue";
 import { api, ApiError, type HolderZones, type LegCaptureRanking, type LegList } from "@/lib/api";
 import { fmtNum, fmtPct, fmtTime, fmtUsd, signClass } from "@/lib/format";
 
@@ -20,7 +22,9 @@ export default async function HoldersPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="space-y-4">
-      <PageHeader title={t("title")} subtitle={t("subtitle")} />
+      <PageHeader title={t("title")} subtitle={t("subtitle")}>
+        <VenueSwitch value={await getVenue()} />
+      </PageHeader>
       <div className="flex overflow-hidden rounded border border-border text-sm" style={{ width: "fit-content" }}>
         <Link href={{ pathname: "/holders", query: { tab: "zones" } }} className={tabClass(tab === "zones")}>
           {t("tabZones")}
@@ -40,12 +44,13 @@ async function ZonesTab({ sp, locale }: { sp: Search; locale: string }) {
   const custom = !!sp.direction;
   const preset = custom ? undefined : PRESETS.includes(sp.preset as (typeof PRESETS)[number]) ? sp.preset : "btc_long_hold";
   const near = sp.near === "1";
+  const venue = await getVenue();
   let d: HolderZones;
   try {
     d = await api.holderZones(
       custom
-        ? { coin: sp.coin || "BTC", direction: sp.direction, entry_min: sp.entry_min, entry_max: sp.entry_max, exit_min: sp.exit_min, exit_max: sp.exit_max, start: sp.start, end: sp.end, min_share: sp.min_share, include_near: near || undefined }
-        : { preset, include_near: near || undefined },
+        ? { coin: sp.coin || "BTC", direction: sp.direction, entry_min: sp.entry_min, entry_max: sp.entry_max, exit_min: sp.exit_min, exit_max: sp.exit_max, start: sp.start, end: sp.end, min_share: sp.min_share, include_near: near || undefined, venue }
+        : { preset, include_near: near || undefined, venue },
     );
   } catch (e) {
     return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
@@ -176,6 +181,7 @@ async function CaptureTab({ sp, locale }: { sp: Search; locale: string }) {
   try {
     legs = await api.holderLegs(coin);
     d = await api.holderCapture({
+      venue: await getVenue(),
       coin,
       leg_start: sp.leg || legs.legs.find((l) => l.confirmed)?.leg_start || legs.legs[0]?.leg_start,
       min_aligned: sp.min_aligned ?? 0.5,

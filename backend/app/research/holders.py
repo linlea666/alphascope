@@ -73,14 +73,26 @@ def refine_pivot(series, day_start: datetime, kind: str) -> datetime:
     return datetime.fromtimestamp(int(series.t0 + idx[i] * series.step) * 60, tz=UTC)
 
 
+def net_path(decisions: list[tuple[datetime, float, float]]) -> list[tuple[datetime, float, float]]:
+    """Re-chain decisions by summing their size changes: OKX positions on one coin can overlap (hedge mode or
+    several isolated positions), so one decision's pos_after is not the account's position."""
+    out, pos = [], 0.0
+    for t, before, after in decisions:
+        out.append((t, pos, pos + after - before))
+        pos += after - before
+    return out
+
+
 def compute_wallet_captures(session: Session, wallet_id: int, as_of: datetime, coverage_start: datetime | None,
-                            market) -> int:
+                            market, net: bool = False) -> int:
     rows = session.execute(text("""
         SELECT coin, ended_at, pos_before, pos_after FROM trade_decision WHERE wallet_id = :w
         ORDER BY coin, ended_at"""), {"w": wallet_id}).all()
     by_coin: dict[str, list[tuple[datetime, float, float]]] = {}
     for coin, t, before, after in rows:
         by_coin.setdefault(coin, []).append((t, float(before), float(after)))
+    if net:
+        by_coin = {c: net_path(d) for c, d in by_coin.items()}
     session.execute(text("DELETE FROM leg_capture WHERE wallet_id = :w"), {"w": wallet_id})
     out = []
     now = datetime.now(UTC)

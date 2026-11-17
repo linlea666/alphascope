@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api.common import data_as_of, num
+from app.api.common import VenueFilter, data_as_of, num, venue_clause
 from app.db import get_session
 from app.research.timing import EXTREME, LADDER, MAKER_HEAVY, MIN_DECISIONS, N_PERM, TIMING_VERSION, VALID_WINDOWS, WINDOWS
 from app.traders import parse_trader_key
@@ -46,11 +46,13 @@ def timing_meta():
 
 
 @router.get("/timing/coins")
-def timing_coins(session: Session = Depends(get_session), scale: Scale = "scalp", window: Window = "30d"):
+def timing_coins(session: Session = Depends(get_session), scale: Scale = "scalp", window: Window = "30d",
+                 venue: VenueFilter = "all"):
     """Coins that have per-coin scores for this scale and window (for the board's coin picker)."""
-    rows = session.execute(text("""
-        SELECT substr(coin_group, 3) AS coin, count(*) AS wallets FROM timing_score
-        WHERE coin_group LIKE 'c:%' AND scale = :s AND time_window = :w AND status = 'scored' AND version = :v
+    rows = session.execute(text(f"""
+        SELECT substr(t.coin_group, 3) AS coin, count(*) AS wallets FROM timing_score t JOIN wallet w ON w.id = t.wallet_id
+        WHERE t.coin_group LIKE 'c:%' AND t.scale = :s AND t.time_window = :w AND t.status = 'scored'
+          AND t.version = :v{venue_clause(venue)}
         GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT 60"""), {"s": scale, "w": window, "v": TIMING_VERSION}).mappings().all()
     return {"coins": [dict(r) for r in rows]}
 
@@ -68,6 +70,7 @@ def timing_board(
     include_insufficient: bool = False,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    venue: VenueFilter = "all",
 ):
     if sort not in SORTS:
         raise HTTPException(422, f"sort must be one of {sorted(SORTS)}")
@@ -84,12 +87,12 @@ def timing_board(
         where.append("t.status = 'scored'")
     if significant_only:
         where.append("t.q_value < 0.1")
-    base = f"FROM timing_score t JOIN wallet w ON w.id = t.wallet_id WHERE {' AND '.join(where)}"
+    base = f"FROM timing_score t JOIN wallet w ON w.id = t.wallet_id WHERE {' AND '.join(where)}{venue_clause(venue)}"
     params = {"scale": scale, "window": window, "group": group_key, "v": TIMING_VERSION}
     total = session.execute(text(f"SELECT count(*) {base}"), params).scalar_one()
     rows = session.execute(text(f"""
-        SELECT w.address, w.display_name, w.account_value, w.tier, w.quality_flags || w.enrichment_flags AS flags,
-               t.status, t.as_of, t.n_decisions, t.n_scored, t.location, t.null_mean, t.edge, t.edge_shrunk,
+        SELECT w.address, w.display_name, w.venue, w.account_value, w.tier,
+               w.quality_flags || w.enrichment_flags AS flags, t.status, t.as_of, t.n_decisions, t.n_scored, t.location, t.null_mean, t.edge, t.edge_shrunk,
                t.p_value, t.q_value, t.pivot_hits, t.pivots, t.pivots_hit, t.precision, t.recall, t.alignment,
                t.cycles, t.net_pnl, t.n_buy, t.n_sell, t.buy_location, t.sell_location, t.buy_extreme,
                t.sell_extreme, t.null_extreme, t.maker_share

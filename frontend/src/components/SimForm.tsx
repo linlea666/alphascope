@@ -29,7 +29,8 @@ const input = "mt-1 w-full rounded border border-border bg-panel-2 px-2 py-1";
 export function SimForm({ simId, initial, leader = "" }: { simId?: number; initial?: SimParams; leader?: string }) {
   const t = useTranslations("sims.form");
   const router = useRouter();
-  const [p, setP] = useState<SimParams>(initial ?? DEFAULTS);
+  // OKX's taker fee is 5 bp (Hyperliquid 4.5 bp); a prefilled OKX leader starts from OKX costs
+  const [p, setP] = useState<SimParams>(initial ?? (leader.startsWith("okx:") ? { ...DEFAULTS, fee_bps: 5 } : DEFAULTS));
   const [name, setName] = useState("");
   const [addr, setAddr] = useState(leader);
   const [capital, setCapital] = useState(10000);
@@ -77,7 +78,19 @@ export function SimForm({ simId, initial, leader = "" }: { simId?: number; initi
     <form onSubmit={submit} className="space-y-4 text-sm">
       {!simId && (
         <div className="grid gap-3 sm:grid-cols-3">
-          {field(t("leader"), <input required value={addr} onChange={(e) => setAddr(e.target.value)} placeholder="0x…" className={`${input} font-mono text-xs`} />, t("leaderHint"))}
+          {field(t("leader"), <input
+              required
+              value={addr}
+              onChange={(e) => {
+                const v = e.target.value.trim();
+                // switch the default taker fee with the venue, unless the owner already changed it
+                if (p.fee_bps === 4.5 && v.startsWith("okx:")) setP({ ...p, fee_bps: 5 });
+                else if (p.fee_bps === 5 && v.startsWith("0x")) setP({ ...p, fee_bps: 4.5 });
+                setAddr(e.target.value);
+              }}
+              placeholder="0x… / okx:…"
+              className={`${input} font-mono text-xs`}
+            />, t("leaderHint"))}
           {field(t("name"), <input value={name} maxLength={64} onChange={(e) => setName(e.target.value)} className={input} />)}
           {field(t("capital"), <input type="number" min={1} step="any" required value={capital} onChange={(e) => setCapital(Number(e.target.value))} className={input} />)}
         </div>

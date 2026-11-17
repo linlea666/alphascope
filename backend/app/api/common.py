@@ -1,5 +1,6 @@
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -17,6 +18,15 @@ def data_as_of(session: Session) -> dict:
                (SELECT max(fetched_at) FROM leaderboard_snapshot)
         FROM ingest_run""")).one()
     return {"leaderboard_checked_at": row[0], "enrichment_at": row[1], "leaderboard_snapshot_at": row[2]}
+
+
+VenueFilter = Literal["all", "hyperliquid", "okx"]
+# OKX history status counts as "synced" for open-cycle handling: a still-open OKX cycle is a real open position
+SYNC_STATUS_SQL = """coalesce(f.status, CASE WHEN o.wallet_id IS NOT NULL THEN 'synced' END)"""
+
+
+def venue_clause(venue: str, alias: str = "w") -> str:
+    return "" if venue == "all" else f" AND {alias}.venue = '{'okx' if venue == 'okx' else 'hyperliquid'}'"
 
 
 def baseline_import_at(session: Session) -> datetime | None:

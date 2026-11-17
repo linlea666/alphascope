@@ -157,12 +157,16 @@ def _record(s: Session, sim_id: int, now: datetime, coin: str, kind: str, side: 
 
 
 def step_simulations(sf: sessionmaker[Session], mids: dict[str, Decimal], funding: dict[str, Decimal] | None = None,
-                     max_lev: dict[str, int] | None = None, now: datetime | None = None) -> dict:
+                     max_lev: dict[str, int] | None = None, now: datetime | None = None,
+                     venue: str = "hyperliquid") -> dict:
+    """Advance every simulation whose leader trades on `venue`, at that venue's prices."""
     now = now or datetime.now(UTC)
     max_lev = max_lev or {}
     stats = {"sims": 0, "trades": 0, "stopped": 0}
     with sf() as s:
-        sims = s.execute(text("SELECT * FROM copy_sim WHERE status IN ('running', 'paused') ORDER BY id")).all()
+        sims = s.execute(text("""
+            SELECT c.* FROM copy_sim c JOIN wallet w ON w.id = c.leader_wallet_id
+            WHERE c.status IN ('running', 'paused') AND w.venue = :v ORDER BY c.id"""), {"v": venue}).all()
     for sim in sims:
         with sf() as s:
             stats["trades"] += _step_one(s, sim, mids, funding, max_lev, now, stats)

@@ -252,3 +252,58 @@ def test_history_backfill_increment_and_backoff(sf):
         st = s.execute(text("SELECT history_status, failure_count, retry_after > :t FROM okx_trader"),
                        {"t": NOW + timedelta(hours=3)}).one()
         assert tuple(st) == ("source_complete", 1, True)
+
+
+# --- O4: live positions and venue-isolated simulations ---
+
+from app.okx.live import mids_from_tickers, parse_current  # noqa: E402
+from app.sim.engine import step_simulations  # noqa: E402
+
+SPECS = {"BTC-USDT-SWAP": ("linear", D("0.01")), "BTC-USD-SWAP": ("inverse", D("100")),
+         "ETH-USDT-SWAP": ("linear", D("0.1"))}
+
+
+def test_parse_current_nets_hedges_and_converts_contracts():
+    raw = [
+        {"instId": "BTC-USDT-SWAP", "posSide": "long", "pos": "300", "avgPx": "80000", "markPx": "81000",
+         "lever": "10", "liqPx": "70000", "upl": "300", "mgnMode": "cross"},
+        {"instId": "BTC-USDT-SWAP", "posSide": "short", "pos": "100", "avgPx": "82000", "markPx": "81000",
+         "lever": "5", "upl": "100", "mgnMode": "isolated"},
+        {"instId": "BTC-USD-SWAP", "posSide": "net", "pos": "-810", "avgPx": "81000", "markPx": "81000", "upl": "0"},
+        {"instId": "ETH-USDT-SWAP", "posSide": "long", "pos": "10", "avgPx": "3000", "markPx": "3000"},
+        {"instId": "ETH-USDT-SWAP", "posSide": "short", "pos": "10", "avgPx": "3010", "markPx": "3000"},
+    ]
+    pos, ntl = parse_current(raw, SPECS)
+    # BTC: +3 - 1 (linear) - 1 (810 x $100 / 81000, inverse) = +1 BTC; ETH fully hedged -> not a position
+    assert set(pos) == {"BTC"} and pos["BTC"].szi == D(1)
+    assert pos["BTC"].entry_px == D(80000) and pos["BTC"].leverage == 10 and pos["BTC"].leverage_type == "cross"
+    assert pos["BTC"].position_value == D(81000) and ntl == D(81000)
+    mids = mids_from_tickers([{"instId": "BTC-USDT-SWAP", "bidPx": "100", "askPx": "102", "last": "99"},
+                              {"instId": "BTC-USD-SWAP", "bidPx": "1", "askPx": "1"},
+                              {"instId": "ETH-USDT-SWAP", "bidPx": "", "askPx": "", "last": "3000"}])
+    assert mids == {"BTC": D(101), "ETH": D(3000)}
+
+
+def test_simulations_step_only_with_their_leaders_venue(sf):
+    with sf() as s:
+        ids = {}
+        for addr, venue in (("0x" + "a" * 40, "hyperliquid"), ("okx:1000001", "okx")):
+            ids[venue] = s.execute(text("""
+                INSERT INTO wallet (address, venue, first_seen_at, first_seen_source, last_seen_at, present_in_latest)
+                VALUES (:a, :v, now(), 't', now(), false) RETURNING id"""), {"a": addr, "v": venue}).scalar_one()
+            s.execute(text("INSERT INTO live_account (wallet_id, account_value, fetched_at) VALUES (:w, 10000, now())"),
+                      {"w": ids[venue]})
+            s.execute(text("INSERT INTO live_position (wallet_id, coin, szi, liq_risk, updated_at) "
+                           "VALUES (:w, 'BTC', 1, false, now())"), {"w": ids[venue]})
+            s.execute(text("""
+                INSERT INTO copy_sim (owner, name, leader_wallet_id, status, capital, sizing, size_factor, max_leverage,
+                  follow_adjust, copy_existing, delay_seconds, fee_bps, slippage_bps, min_trade_usd, rebalance_pct,
+                  cash, peak_equity, state)
+                VALUES ('default', :n, :w, 'running', 1000, 'equity_ratio', 1, 10, true, true, 0, 5, 0, 10, 5, 1000,
+                        1000, '{}')"""), {"n": venue, "w": ids[venue]})
+        s.commit()
+    assert step_simulations(sf, {"BTC": D(80000)}, venue="okx")["sims"] == 1
+    with sf() as s:
+        held = dict(s.execute(text("""SELECT c.name, count(p.coin) FROM copy_sim c
+                                      LEFT JOIN sim_position p ON p.sim_id = c.id GROUP BY c.name""")).all())
+        assert held == {"okx": 1, "hyperliquid": 0}

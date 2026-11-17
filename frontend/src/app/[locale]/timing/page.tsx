@@ -4,7 +4,9 @@ import { ApiErrorState } from "@/components/ApiErrorState";
 import { FlagBadges } from "@/components/badges";
 import { Freshness } from "@/components/Freshness";
 import { Badge, PageHeader, Panel, td, th } from "@/components/ui";
+import { VenueSwitch } from "@/components/VenueSwitch";
 import { Link } from "@/i18n/routing";
+import { getVenue } from "@/lib/venue";
 import { api, ApiError, type ScaleKey, type TimingBoard } from "@/lib/api";
 import { fmtNum, fmtPct, fmtUsd, signClass } from "@/lib/format";
 
@@ -37,19 +39,20 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
   const tc = await getTranslations("common");
   const tcol = await getTranslations("cols");
   const locale = await getLocale();
+  const venue = await getVenue();
 
   let d: TimingBoard;
   let coins: { coin: string; wallets: number }[] = [];
   let coin = sp.coin;
   try {
     if (group === "coin") {
-      coins = (await api.timingCoins(scale, window)).coins;
+      coins = (await api.timingCoins(scale, window, venue)).coins;
       coin = coin && coins.some((c) => c.coin === coin) ? coin : coins[0]?.coin;
     }
     d =
       group === "coin" && !coin
         ? { freshness: (await api.timing({ scale, window, page_size: 1 })).freshness, scale, window, group, coin: null, sort, valid: VALID[scale].includes(window), maker_heavy: 0.8, extreme: 0.8, min_decisions: 0, page: 1, page_size: PAGE_SIZE, total: 0, rows: [] }
-        : await api.timing({ scale, window, group, coin: group === "coin" ? coin : undefined, sort, significant_only: sig || undefined, include_insufficient: small || undefined, exclude_makers: noMakers || undefined, page, page_size: PAGE_SIZE });
+        : await api.timing({ scale, window, group, coin: group === "coin" ? coin : undefined, sort, significant_only: sig || undefined, include_insufficient: small || undefined, exclude_makers: noMakers || undefined, page, page_size: PAGE_SIZE, venue });
   } catch (e) {
     return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
   }
@@ -70,6 +73,7 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
   return (
     <div className="space-y-4">
       <PageHeader title={t("title")} subtitle={t("subtitle", { n: 500 })}>
+        <VenueSwitch value={venue} />
         <Freshness value={d.freshness} />
       </PageHeader>
       <p className="-mt-2 text-xs text-warn">{t("retro")}</p>

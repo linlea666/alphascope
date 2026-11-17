@@ -126,6 +126,40 @@ export type OkxDetail = {
   pnl_curve: [string, number, number][];
 };
 
+export type OkxBoard = {
+  window: "7d" | "30d" | "90d" | "365d";
+  view: "board" | "new" | "dropped";
+  timezone: string;
+  run: { id: number; business_date: string; completed_at: string; expected_total: number; unique_count: number; new_traders: number; source: string; data_version: string | null } | null;
+  runs: { business_date: string; complete: number; failed: number }[];
+  rows: {
+    rank: number | null;
+    address: string;
+    display_name: string | null;
+    avatar_url: string | null;
+    pnl: number | null;
+    pnl_ratio: number | null;
+    win_rate: number | null;
+    max_drawdown: number | null;
+    asset: number | null;
+    is_new: boolean;
+    last_seen_at: string | null;
+    history_status: string | null;
+    pool_status: string | null;
+    n_positions: number | null;
+    oldest_at: string | null;
+    seen_days: number | null;
+    streak: number | null;
+    first_seen_at: string | null;
+    best_rank: number | null;
+    currently_seen: boolean | null;
+    realized_30d: number | null;
+    realized_90d: number | null;
+    liquidations_90d: number;
+    best_edge: number | null;
+  }[];
+};
+
 export type WalletDetail = {
   freshness: Freshness;
   okx: OkxDetail | null;
@@ -217,6 +251,14 @@ export type Run = {
 
 export type DataHealth = {
   freshness: Freshness;
+  okx: {
+    runs: { business_date: string; time_window: string; status: string; source: string; expected_total: number | null; unique_count: number; new_traders: number; started_at: string; completed_at: string | null; error: string | null }[];
+    pool: { pool_status: string; history_status: string; n: number; positions: number | null; synced_24h: number; backing_off: number }[];
+    without_handle: number;
+    candle_coins: number;
+    instruments_at: string | null;
+    requests_per_minute: number;
+  };
   market_data: { source: string; coin: string; m1: number; first_t: string; last_t: string }[];
   symbols: { coin: string; symbol: string | null; status: string; median_ratio: number | null; basis_p95_bps: number | null; n_samples: number; checked_at: string; notes: string | null }[];
   latest_success: { kind: string; status: string; started_at: string; finished_at: string | null }[];
@@ -599,7 +641,7 @@ export type Notifications = {
 
 export type AppSettings = {
   smtp: { host: string; port: number; security: "starttls" | "ssl" | "none"; username: string; from_name: string; recipients: string[]; public_url: string; password_set: boolean };
-  live: { interval_seconds: number; coalesce_seconds: number; max_emails_per_hour: number; liq_risk_pct: number; timezone: string };
+  live: { interval_seconds: number; okx_interval_seconds?: number; coalesce_seconds: number; max_emails_per_hour: number; liq_risk_pct: number; timezone: string };
   live_status: { cycle_started_at?: string; interval_seconds?: number; wallets?: number; events?: number; errors?: number; cycle_seconds?: number; error?: string; notify?: Record<string, number> };
 };
 
@@ -739,7 +781,8 @@ export const api = {
   timing: (params: Record<string, string | number | boolean | undefined>) => get<TimingBoard>("/api/v1/timing", params),
   walletTiming: (address: string) => get<WalletTiming>(`/api/v1/wallets/${encodeURIComponent(address)}/timing`),
   zones: (params: Record<string, string | number | boolean | undefined>) => get<ZoneResult>("/api/v1/zones", params),
-  timingCoins: (scale: string, window: string) => get<{ coins: { coin: string; wallets: number }[] }>("/api/v1/timing/coins", { scale, window }),
+  timingCoins: (scale: string, window: string, venue?: string) => get<{ coins: { coin: string; wallets: number }[] }>("/api/v1/timing/coins", { scale, window, venue }),
+  okxBoard: (params: Record<string, string | number | boolean | undefined>) => get<OkxBoard>("/api/v1/okx/board", params),
   holderZones: (params: Record<string, string | number | boolean | undefined>) => get<HolderZones>("/api/v1/holders/zones", params),
   holderLegs: (coin: string) => get<LegList>("/api/v1/holders/legs", { coin }),
   holderCapture: (params: Record<string, string | number | boolean | undefined>) => get<LegCaptureRanking>("/api/v1/holders/capture", params),

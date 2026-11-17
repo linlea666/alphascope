@@ -17,6 +17,7 @@ from app.ingest.leaderboard_ingest import ingest_leaderboard
 from app.ingest.market_ingest import record_candles
 from app.ingest.portfolio_ingest import enrich_batch
 from app.ingest.runs import mark_abandoned_runs
+from app.okx.candles import sync_candles
 from app.okx.client import OkxClient
 from app.okx.leaderboard import ensure_daily
 from app.okx.sync import refresh_assets, refresh_instruments, resolve_profiles, sync_history
@@ -76,6 +77,10 @@ def main() -> None:
         r = run_timing(sf)
         log.info("timing: wallets=%s scored=%s significant=%s", r["wallets"], r["scored"], r["significant_q10"])
 
+    def okx_timing_job() -> None:
+        r = run_timing(sf, venue="okx")
+        log.info("okx timing: traders=%s scored=%s significant=%s", r["wallets"], r["scored"], r["significant_q10"])
+
     def okx_client() -> OkxClient:
         return OkxClient(settings.okx_base_url, settings.okx_requests_per_minute, settings.okx_timeout_seconds,
                          settings.okx_max_retries)
@@ -105,6 +110,13 @@ def main() -> None:
                 return out
         log.info("okx upkeep: %s", asyncio.run(go()))
 
+    def okx_candles_job() -> None:
+        async def go():
+            async with okx_client() as c:
+                return await sync_candles(sf, c, max_requests=300)
+        r = asyncio.run(go())
+        log.info("okx candles: coins=%s bars=%s complete=%s", r["coins"], r["bars"], r["complete"])
+
     sched = BlockingScheduler(timezone="UTC", job_defaults={"coalesce": True, "max_instances": 1,
                                                              "misfire_grace_time": 300})
     now = datetime.now(UTC)
@@ -124,10 +136,13 @@ def main() -> None:
     sched.add_job(positions_job, "interval", minutes=10, next_run_time=now + timedelta(minutes=4), id="positions")
     # Timing scores depend on new fills, candles and pivots; recomputing every few hours is enough.
     sched.add_job(timing_job, "interval", hours=3, next_run_time=now + timedelta(minutes=15), id="timing")
+    # OKX: ~2k traders with 1-2 years of positions (~20 min); their history changes hourly at most
+    sched.add_job(okx_timing_job, "interval", hours=24, next_run_time=now + timedelta(minutes=40), id="okx_timing")
     # OKX: the daily board check is cheap until the local crawl time; history and upkeep share the OKX budget.
     sched.add_job(okx_daily_job, "interval", minutes=30, next_run_time=now + timedelta(minutes=1), id="okx_daily")
     sched.add_job(okx_history_job, "interval", minutes=5, next_run_time=now + timedelta(minutes=2), id="okx_history")
     sched.add_job(okx_upkeep_job, "interval", hours=1, next_run_time=now + timedelta(minutes=6), id="okx_upkeep")
+    sched.add_job(okx_candles_job, "interval", minutes=15, next_run_time=now + timedelta(minutes=8), id="okx_candles")
     log.info("worker started: leaderboard every %dm, enrich %d wallets every %dm",
              settings.leaderboard_interval_minutes, settings.enrich_batch_size, settings.enrich_interval_minutes)
     try:

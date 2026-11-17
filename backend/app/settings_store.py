@@ -15,7 +15,7 @@ DEFAULTS: dict[str, dict] = {
     "smtp": {"host": "smtp.gmail.com", "port": 587, "security": "starttls", "username": "", "from_name": "AlphaScope",
              "recipients": [], "public_url": ""},
     "live": {"interval_seconds": 30, "coalesce_seconds": 60, "max_emails_per_hour": 30, "liq_risk_pct": 5.0,
-             "timezone": "Asia/Shanghai"},
+             "timezone": "Asia/Shanghai", "okx_interval_seconds": 60},
 }
 
 

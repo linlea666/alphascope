@@ -11,7 +11,8 @@ Every trading decision is scored at the timeframe scale of the position cycle it
 - pivot precision / recall: decisions within tolerance of the scale's zigzag tops (sells) / bottoms (buys).
 - alignment: share of position time whose direction matched the scale's current swing leg.
 
-Candles: Binance USDT-M where imported (validated mapping), Hyperliquid's own candles otherwise.
+Candles: Binance USDT-M where imported (validated mapping), then Hyperliquid's own, then OKX's.
+OKX traders (whole positions, open average price includes later adds) are not scored at the scalp scale.
 """
 
 import logging
@@ -82,12 +83,13 @@ class Series:
 def load_series(session: Session, coin: str, interval: str, step: int, half: int) -> Series | None:
     rows = session.execute(text("""
         SELECT source, t, h, l, c FROM market_candle
-        WHERE coin = :coin AND interval = :iv AND source IN ('binance_um', 'hyperliquid') ORDER BY t"""),
+        WHERE coin = :coin AND interval = :iv AND source IN ('binance_um', 'hyperliquid', 'okx')
+        ORDER BY t, CASE source WHEN 'binance_um' THEN 0 WHEN 'hyperliquid' THEN 1 ELSE 2 END"""),
         {"coin": coin, "iv": interval}).all()
     bars: dict[int, tuple[float, float, float]] = {}
-    for source, t, h, lo, c in rows:  # Binance wins where both exist (validated, gap-free archive)
+    for _source, t, h, lo, c in rows:  # first source per bar wins: Binance (validated archive), HL, OKX
         m = _minutes(t)
-        if source == "binance_um" or m not in bars:
+        if m not in bars:
             bars[m] = (float(h), float(lo), float(c))
     if len(bars) < 2 * half + 1:
         return None
@@ -122,8 +124,9 @@ def vol_ratio(session: Session, coin: str) -> float:
 
     def vol(c: str) -> float | None:
         closes = [float(r[0]) for r in session.execute(text("""
-            SELECT c FROM market_candle WHERE coin = :c AND interval = '1d' AND source IN ('binance_um', 'hyperliquid')
-              AND t >= now() - interval '90 days' ORDER BY t"""), {"c": c}).all()]
+            SELECT DISTINCT ON (t) c FROM market_candle WHERE coin = :c AND interval = '1d'
+              AND source IN ('binance_um', 'hyperliquid', 'okx') AND t >= now() - interval '90 days'
+            ORDER BY t, CASE source WHEN 'binance_um' THEN 0 WHEN 'hyperliquid' THEN 1 ELSE 2 END"""), {"c": c}).all()]
         if len(closes) < 30:
             return None
         r = np.diff(np.log(np.array(closes)))
@@ -152,9 +155,10 @@ def pivots_from_legs(legs: list[Leg]) -> list[Pivot]:
 
 
 def build_market(session: Session, coins: list[str]) -> dict[tuple[str, str], tuple[Series, list[Leg], list[Pivot]]]:
-    """Series, legs and pivots per (coin, scale); persisted pivots are replaced for this version."""
+    """Series, legs and pivots per (coin, scale); persisted pivots of these coins are replaced for this version."""
     out = {}
-    session.execute(text("DELETE FROM timing_pivot WHERE version = :v"), {"v": TIMING_VERSION})
+    session.execute(text("DELETE FROM timing_pivot WHERE version = :v AND coin = ANY(:coins)"),
+                    {"v": TIMING_VERSION, "coins": list(coins)})
     for coin in coins:
         ratio = None
         for scale, (interval, step, half, base_thr) in LADDER.items():
@@ -258,7 +262,11 @@ def permutation_test(items: list[Scored], market, span: tuple[int, int], rng: np
     return float(null.mean()), p, extreme
 
 
-def score_wallet(session: Session, wallet_id: int, as_of: datetime, market, rng: np.random.Generator) -> list[dict]:
+COARSE_SCALES = {"okx": {"scalp"}}  # venues reporting whole positions: too coarse for the 15m window
+
+
+def score_wallet(session: Session, wallet_id: int, as_of: datetime, market, rng: np.random.Generator,
+                 skip_scales: set[str] = frozenset()) -> list[dict]:
     rows = session.execute(text("""
         SELECT d.id, d.coin, d.side, d.started_at, d.vwap, d.notional, c.scale
         FROM trade_decision d JOIN position_cycle c ON c.id = d.cycle_id
@@ -267,6 +275,9 @@ def score_wallet(session: Session, wallet_id: int, as_of: datetime, market, rng:
     for did, coin, side, started, vwap, notional, scale in rows:
         minute = _minutes(started)
         buy = side == "buy"
+        if scale in skip_scales:
+            scored.append(Scored(did, coin, scale, minute, buy, float(notional), None, "coarse", None))
+            continue
         entry = market.get((coin, scale))
         if entry is None:
             scored.append(Scored(did, coin, scale, minute, buy, float(notional), None, "no_data", None))
@@ -395,23 +406,34 @@ def score_wallet(session: Session, wallet_id: int, as_of: datetime, market, rng:
     return results
 
 
-def run_timing(sf: sessionmaker[Session], seed: int = 7) -> dict:
-    """Recompute pivots, decision timing and timing scores for every reconstructed wallet."""
+def run_timing(sf: sessionmaker[Session], seed: int = 7, venue: str = "hyperliquid") -> dict:
+    """Recompute pivots, decision timing and timing scores for every reconstructed trader of one venue.
+
+    Venues run separately (Hyperliquid every few hours, OKX daily: its history changes slowly and it is the larger
+    population), so each venue is its own Benjamini-Hochberg family.
+    """
     rng = np.random.default_rng(seed)
     with sf() as s:
-        coins = s.execute(text("SELECT DISTINCT coin FROM trade_decision")).scalars().all()
+        coins = s.execute(text("""
+            SELECT DISTINCT d.coin FROM trade_decision d JOIN wallet w ON w.id = d.wallet_id
+            WHERE w.venue = :venue"""), {"venue": venue}).scalars().all()
         market = build_market(s, coins)
-        wallets = s.execute(text("""
+        wallets = s.execute(text("""SELECT * FROM (
             SELECT f.wallet_id, CASE WHEN f.status = 'synced' THEN now() ELSE f.latest_fill_at END AS as_of,
-                   CASE WHEN coalesce(f.truncated, false) THEN f.earliest_fill_at ELSE f.requested_start END AS coverage
-            FROM fill_sync f WHERE f.reconstructed_at IS NOT NULL""")).all()
+                   CASE WHEN coalesce(f.truncated, false) THEN f.earliest_fill_at ELSE f.requested_start END AS coverage,
+                   'hyperliquid' AS venue
+            FROM fill_sync f WHERE f.reconstructed_at IS NOT NULL
+            UNION ALL  -- OKX: positions are known up to the last history sync, from the oldest one we hold
+            SELECT t.wallet_id, coalesce(t.history_synced_at, t.newest_at), t.oldest_at, 'okx'
+            FROM okx_trader t WHERE t.derived_at IS NOT NULL AND t.n_positions > 0) x
+            WHERE venue = :venue"""), {"venue": venue}).all()
         s.commit()
     all_rows: list[dict] = []
     captures = 0
-    for wid, as_of, coverage in wallets:
+    for wid, as_of, coverage, venue in wallets:
         with sf() as s:
-            rows = score_wallet(s, wid, as_of, market, rng)
-            captures += compute_wallet_captures(s, wid, as_of, coverage, market)
+            rows = score_wallet(s, wid, as_of, market, rng, COARSE_SCALES.get(venue, set()))
+            captures += compute_wallet_captures(s, wid, as_of, coverage, market, net=venue == "okx")
             s.commit()
         all_rows.extend(rows)
     # Benjamini-Hochberg per (scale, window, group) across wallets
@@ -423,7 +445,9 @@ def run_timing(sf: sessionmaker[Session], seed: int = 7) -> dict:
         for r, q in zip(rows, benjamini_hochberg([r["p"] for r in rows])):
             r["q"] = q
     with sf() as s:
-        s.execute(text("DELETE FROM timing_score WHERE version = :v"), {"v": TIMING_VERSION})
+        s.execute(text("""DELETE FROM timing_score t USING wallet w
+                           WHERE w.id = t.wallet_id AND t.version = :v AND w.venue = :venue"""),
+                  {"v": TIMING_VERSION, "venue": venue})
         if all_rows:
             s.execute(text("""
                 INSERT INTO timing_score (wallet_id, scale, time_window, coin_group, version, as_of, status, n_decisions,
@@ -436,7 +460,8 @@ def run_timing(sf: sessionmaker[Session], seed: int = 7) -> dict:
                 [{**r, "q": r.get("q")} for r in all_rows])
         s.commit()
     scored = [r for r in all_rows if r["status"] == "scored"]
-    return {"coins_with_series": len({c for c, _ in market}), "series": len(market), "wallets": len(wallets),
+    return {"venue": venue, "coins_with_series": len({c for c, _ in market}), "series": len(market),
+            "wallets": len(wallets),
             "leg_captures": captures,
             "scores": len(all_rows), "scored": len(scored),
             "significant_q10": sum(1 for r in scored if r.get("q") is not None and r["q"] < 0.1)}

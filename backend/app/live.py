@@ -21,8 +21,10 @@ from app import settings_store
 from app.alerts.diff import Pos, diff, parse_clearinghouse
 from app.alerts.mailer import Ev, Sub, compose, in_quiet_hours, passes, ready, send
 from app.config import Settings, get_settings
-from app.sim.engine import step_simulations
 from app.db import session_factory
+from app.okx.client import OkxClient
+from app.okx.live import fetch_funding, poll_okx, sim_coins
+from app.sim.engine import step_simulations
 from app.sources.hl_client import HyperliquidInfoClient, WeightBucket
 
 log = logging.getLogger("alphascope.live")
@@ -68,6 +70,34 @@ def store_snapshot(session: Session, wallet_id: int, positions: dict[str, Pos], 
               "risk": risk.get(c, False), "t": now} for c, p in positions.items()])
 
 
+def record_error(sf: sessionmaker[Session], wallet_id: int, now: datetime, exc: Exception) -> None:
+    with sf() as s:
+        s.execute(text("""
+            INSERT INTO live_account (wallet_id, fetched_at, error) VALUES (:w, :t, :e)
+            ON CONFLICT (wallet_id) DO UPDATE SET error = EXCLUDED.error"""),
+            {"w": wallet_id, "t": now, "e": repr(exc)[:300]})
+        s.commit()
+
+
+def apply_snapshot(sf: sessionmaker[Session], wallet_id: int, after: dict[str, Pos], account_value, ntl,
+                   mids: dict[str, Decimal], liq_risk_pct: float, now: datetime) -> int:
+    """Diff a fresh position snapshot against the stored one, record events (not for the silent first baseline)
+    and store the snapshot. Returns the number of events."""
+    with sf() as s:
+        seen, before, was_risk = load_state(s, wallet_id)
+        events, risk = diff(before, after, mids, liq_risk_pct, was_risk)
+        if seen and events:
+            s.execute(text("""
+                INSERT INTO position_event (wallet_id, coin, kind, t, szi_before, szi_after, px, notional_change,
+                                            details, notify_status)
+                VALUES (:w, :coin, :kind, :t, :b, :a, :px, :ntl, CAST(:d AS jsonb), 'pending')"""),
+                [{"w": wallet_id, "coin": e.coin, "kind": e.kind, "t": now, "b": e.szi_before, "a": e.szi_after,
+                  "px": e.px, "ntl": e.notional_change, "d": json.dumps(e.details)} for e in events])
+        store_snapshot(s, wallet_id, after, risk, account_value, ntl, now)
+        s.commit()
+    return len(events) if seen else 0
+
+
 async def poll_once(sf: sessionmaker[Session], client: HyperliquidInfoClient, liq_risk_pct: float) -> dict:
     now = datetime.now(UTC)
     with sf() as s:
@@ -82,27 +112,10 @@ async def poll_once(sf: sessionmaker[Session], client: HyperliquidInfoClient, li
             r = await client.info({"type": "clearinghouseState", "user": address})
         except Exception as exc:  # noqa: BLE001 — one wallet must not stop the cycle
             errors += 1
-            with sf() as s:
-                s.execute(text("""
-                    INSERT INTO live_account (wallet_id, fetched_at, error) VALUES (:w, :t, :e)
-                    ON CONFLICT (wallet_id) DO UPDATE SET error = EXCLUDED.error"""),
-                    {"w": wid, "t": now, "e": repr(exc)[:300]})
-                s.commit()
+            record_error(sf, wid, now, exc)
             continue
         after, av, ntl = parse_clearinghouse(r.data)
-        with sf() as s:
-            seen, before, was_risk = load_state(s, wid)
-            events, risk = diff(before, after, mids, liq_risk_pct, was_risk)
-            if seen and events:
-                s.execute(text("""
-                    INSERT INTO position_event (wallet_id, coin, kind, t, szi_before, szi_after, px, notional_change,
-                                                details, notify_status)
-                    VALUES (:w, :coin, :kind, :t, :b, :a, :px, :ntl, CAST(:d AS jsonb), 'pending')"""),
-                    [{"w": wid, "coin": e.coin, "kind": e.kind, "t": now, "b": e.szi_before, "a": e.szi_after,
-                      "px": e.px, "ntl": e.notional_change, "d": json.dumps(e.details)} for e in events])
-                n_events += len(events)
-            store_snapshot(s, wid, after, risk, av, ntl, now)
-            s.commit()
+        n_events += apply_snapshot(sf, wid, after, av, ntl, mids, liq_risk_pct, now)
     return {"wallets": len(wallets), "events": n_events, "errors": errors, "mids": mids}
 
 
@@ -213,10 +226,15 @@ async def run(settings: Settings) -> None:
     # Own bucket: the live monitor never waits behind the batch worker's long-running jobs.
     budget = settings.hl_weight_per_minute * settings.live_weight_safety
     async with HyperliquidInfoClient(settings.hl_info_url, budget, settings.hl_timeout_seconds, settings.hl_max_retries,
-                                     bucket=WeightBucket(budget)) as client:
+                                     bucket=WeightBucket(budget)) as client, \
+            OkxClient(settings.okx_base_url, settings.okx_live_requests_per_minute, settings.okx_timeout_seconds,
+                      settings.okx_max_retries, bucket=WeightBucket(settings.okx_live_requests_per_minute)) as okx:
         market_hour: datetime | None = None
         funding: dict[str, Decimal] | None = None
         max_lev: dict[str, int] = {}
+        okx_last = 0.0
+        okx_funding_hour: datetime | None = None
+        okx_funding: dict[str, Decimal] | None = None
         while True:
             t0 = time.monotonic()
             with sf() as s:
@@ -236,6 +254,24 @@ async def run(settings: Settings) -> None:
                         log.warning("metaAndAssetCtxs failed", exc_info=True)
                 # copy simulations react to the same snapshot
                 status["sim"] = step_simulations(sf, r.get("mids") or {}, funding, max_lev)
+                # OKX lead traders: their own (slower) cadence and request budget
+                okx_interval = max(30, int(live.get("okx_interval_seconds") or 60))
+                if time.monotonic() - okx_last >= okx_interval:
+                    okx_last = time.monotonic()
+                    try:
+                        o = await poll_okx(sf, okx, float(live.get("liq_risk_pct") or 5), apply_snapshot,
+                                           record_error, monitored_wallets)
+                        status["okx"] = {k: o[k] for k in ("wallets", "events", "errors")}
+                        if o["wallets"]:
+                            hour = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+                            if okx_funding_hour != hour:
+                                okx_funding = await fetch_funding(okx, sim_coins(sf))
+                                okx_funding_hour = hour
+                            status["okx"]["sim"] = step_simulations(sf, o["mids"], okx_funding, o["max_lev"],
+                                                                    venue="okx")
+                    except Exception as exc:  # noqa: BLE001 — OKX trouble must not stop Hyperliquid monitoring
+                        log.warning("okx live cycle failed", exc_info=True)
+                        status["okx_error"] = repr(exc)[:300]
                 status["notify"] = notify_pending(sf)
             except Exception as exc:  # noqa: BLE001 — keep the monitor alive
                 log.exception("live cycle failed")
@@ -243,7 +279,8 @@ async def run(settings: Settings) -> None:
             status["cycle_seconds"] = round(time.monotonic() - t0, 2)
             status["api_weight_total"] = client.usage.weight
             write_status(sf, status)
-            log.info("live: %s", {k: status.get(k) for k in ("wallets", "events", "errors", "cycle_seconds", "notify")})
+            log.info("live: %s", {k: status.get(k) for k in ("wallets", "events", "errors", "okx", "cycle_seconds",
+                                                             "notify")})
             await asyncio.sleep(max(1.0, interval - (time.monotonic() - t0)))
 
 

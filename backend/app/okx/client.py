@@ -128,6 +128,16 @@ class OkxClient:
             raise OkxError("tickers: data is not a list")
         return data
 
+    async def candles(self, inst_id: str, bar: str, after: int | None = None, limit: int = 100) -> list[list]:
+        """Candles older than `after` (ms), newest first: [ts, o, h, l, c, vol, volCcy, volCcyQuote, confirm]."""
+        params = {"instId": inst_id, "bar": bar, "limit": limit}
+        if after:
+            params["after"] = after
+        data = await self.get("/api/v5/market/history-candles", params)
+        if not isinstance(data, list):
+            raise OkxError("history-candles: data is not a list")
+        return data
+
     async def index_price(self, ccy: str) -> float | None:
         data = await self.get("/api/v5/market/index-tickers", {"instId": f"{ccy}-USD"})
         try:

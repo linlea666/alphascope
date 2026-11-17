@@ -274,7 +274,17 @@
     "symbolsHint": "Hyperliquid fill prices compared with the Binance close of the same minute; mappings whose median ratio is more than 1% from 1 are not used.",
     "ratio": "Median ratio",
     "p95": "P95 deviation",
-    "samples": "Samples"
+    "samples": "Samples",
+    "okxTitle": "OKX collection",
+    "okxHint": "The 7-day board is crawled in full after 08:30 daily; position history runs every 5 minutes, backfills and increments by priority; budget {rpm} requests/minute. {missing} traders still need their uniqueName; {coins} coins use OKX's own candles.",
+    "okxDate": "Started",
+    "okxBoard": "Board",
+    "okxCaptured": "Captured / official",
+    "okxNew": "New",
+    "okxTraders": "Traders",
+    "okxPositions": "Positions",
+    "okxSynced": "Synced in 24h",
+    "okxBackoff": "Backing off"
   },
   "status": {
     "success": "Success",
@@ -666,7 +676,8 @@
     "cycleSec": "Round took",
     "events": "Changes this round",
     "notRunning": "The live process is not running yet (it starts automatically after deployment).",
-    "error": "Error"
+    "error": "Error",
+    "okxInterval": "OKX poll interval (s)"
   },
   "sims": {
     "title": "Copy simulation",
@@ -837,7 +848,7 @@
     },
     "form": {
       "leader": "Leader address",
-      "leaderHint": "Must be a wallet in the database (every leaderboard address is)",
+      "leaderHint": "A Hyperliquid address, or an OKX trader (okx:authorId; “Copy sim” on a trader page fills it in)",
       "name": "Name",
       "capital": "Capital (USD)",
       "sizing": "Sizing",
@@ -941,5 +952,45 @@
     "rank": "Rank",
     "officialWin": "Official win rate",
     "officialDd": "Official max DD"
+  },
+  "venue": {
+    "all": "All venues",
+    "hyperliquid": "Hyperliquid",
+    "okx": "OKX"
+  },
+  "okxBoard": {
+    "title": "OKX lead-trader boards",
+    "subtitle": "OKX's official 7-day board is crawled in full every day at 08:30 (Beijing), plus the top 100 of the 30/90/365-day boards. Beyond the official numbers we compute realized PnL, liquidations and timing scores from each trader's public position history; a high rank is not a reason to copy.",
+    "views": {
+      "board": "Today's board",
+      "new": "New today",
+      "dropped": "Dropped off (full history)"
+    },
+    "titles": {
+      "board": "Today's board",
+      "new": "New on the board today",
+      "dropped": "Off the board, with full history"
+    },
+    "runHint": "Crawled {date}: official total {total}, {n} captured, {new} new; finished {at}. {partial}",
+    "partial": "Only the top pages of this board are crawled.",
+    "noRun": "No completed crawl yet.",
+    "droppedHint": "Traders not on the current board whose position history is fully backfilled, by realized PnL over 90 days. Dropping off can be a short drawdown, or a good trader no longer chasing rank.",
+    "new": "new",
+    "daysStreak": "{days} d · streak {streak}",
+    "empty": "No data.",
+    "cols": {
+      "trader": "Trader",
+      "roi": "Official ROI",
+      "pnl": "Official PnL",
+      "win": "Official win",
+      "dd": "Official DD",
+      "asset": "Assets",
+      "onBoard": "On board",
+      "history": "Positions",
+      "r30": "Realized 30d",
+      "r90": "Realized 90d",
+      "liq": "Liq. 90d",
+      "edge": "Timing edge"
+    }
   }
 }

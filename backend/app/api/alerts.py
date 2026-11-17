@@ -75,6 +75,7 @@ class LiveIn(BaseModel):
     max_emails_per_hour: int = Field(30, ge=1, le=500)
     liq_risk_pct: float = Field(5.0, gt=0, le=50)
     timezone: str = Field("Asia/Shanghai", max_length=64)
+    okx_interval_seconds: int = Field(60, ge=30, le=3600)
 
     @field_validator("timezone")
     @classmethod

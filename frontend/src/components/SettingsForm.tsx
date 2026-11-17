@@ -112,10 +112,14 @@ export function SettingsForm({ initial }: { initial: AppSettings }) {
       <section className="rounded-lg border border-border bg-panel p-4">
         <h2 className="text-sm font-semibold">{t("live")}</h2>
         <p className="mt-1 text-xs text-muted">{t("intervalHint")}</p>
-        <div className="mt-3 grid gap-3 text-xs text-muted md:grid-cols-5">
+        <div className="mt-3 grid gap-3 text-xs text-muted md:grid-cols-6">
           <label>
             {t("interval")}
             <input className={input} type="number" min={10} value={live.interval_seconds} onChange={(e) => setLive({ ...live, interval_seconds: Number(e.target.value) })} />
+          </label>
+          <label>
+            {t("okxInterval")}
+            <input className={input} type="number" min={30} value={live.okx_interval_seconds ?? 60} onChange={(e) => setLive({ ...live, okx_interval_seconds: Number(e.target.value) })} />
           </label>
           <label>
             {t("coalesce")}

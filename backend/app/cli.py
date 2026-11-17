@@ -23,6 +23,7 @@ from app.ingest.leaderboard_ingest import LeaderboardInput, ingest_leaderboard
 from app.ingest.market_ingest import record_candles
 from app.ingest.portfolio_ingest import enrich_batch
 from app.ingest.runs import mark_abandoned_runs
+from app.okx.candles import sync_candles
 from app.okx.client import OkxClient
 from app.okx.legacy_import import derive_all, export_sqlite, import_bundle
 from app.okx.leaderboard import ensure_daily, run_window
@@ -54,7 +55,8 @@ def main() -> None:
     sub.add_parser("positions", help="rebuild position cycles and decisions for wallets with new fills")
     rc = sub.add_parser("reconcile", help="sync fills, rebuild and compare positions with clearinghouseState")
     rc.add_argument("--limit", type=int, default=5)
-    sub.add_parser("timing", help="recompute pivots, decision timing and timing scores")
+    tm = sub.add_parser("timing", help="recompute pivots, decision timing and timing scores")
+    tm.add_argument("--venue", choices=["hyperliquid", "okx"], default="hyperliquid")
     ox = sub.add_parser("okx-export", help="export the old OKX collector's SQLite database to a JSONL bundle")
     ox.add_argument("--sqlite", type=Path, required=True)
     ox.add_argument("--out", type=Path, required=True)
@@ -91,7 +93,7 @@ def main() -> None:
     elif args.cmd == "positions":
         result = rebuild_stale(sf)
     elif args.cmd == "timing":
-        result = run_timing(sf)
+        result = run_timing(sf, venue=args.venue)
     elif args.cmd == "reconcile":
         result = asyncio.run(reconcile(sf, settings, store, args.limit))
     elif args.cmd == "okx-import":
@@ -124,7 +126,7 @@ async def _okx(args, settings, sf) -> dict:
             result = await sync_history(sf, settings, c, args.limit)
         else:
             result = {"profiles": await resolve_profiles(sf, c), "assets": await refresh_assets(sf, c),
-                      "instruments": await refresh_instruments(sf, c)}
+                      "instruments": await refresh_instruments(sf, c), "candles": await sync_candles(sf, c)}
         return {**result, "requests": c.usage.as_dict()}
 
 

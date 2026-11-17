@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from app.api.common import data_as_of, num
+from app.api.common import SYNC_STATUS_SQL, VenueFilter, data_as_of, num, venue_clause
 from app.db import get_session
 
 router = APIRouter(prefix="/api/v1/holders", tags=["holders"])
@@ -25,7 +25,7 @@ MIN_SHARE = 0.5  # at least half of the peak position exited inside the exit zon
 CYCLE_SQL = """
     SELECT c.id, c.wallet_id, c.coin, c.direction, c.opened_at, c.closed_at, c.status, c.complete, c.entry_px,
            c.exit_px, c.max_size, c.max_notional, c.realized_pnl - c.fees AS net, c.holding_hours,
-           f.status AS sync_status,
+           {sync} AS sync_status,
            (SELECT coalesce(sum((e->>2)::numeric), 0) FROM jsonb_array_elements(coalesce(c.exits, '[]')) e
               WHERE (e->>1)::numeric BETWEEN :xmin AND :xmax) AS exit_in_zone,
            (SELECT sum((e->>2)::numeric * (e->>1)::numeric) / nullif(sum((e->>2)::numeric), 0)
@@ -36,9 +36,11 @@ CYCLE_SQL = """
            (SELECT coalesce(sum((e->>2)::numeric), 0) FROM jsonb_array_elements(coalesce(c.entries, '[]')) e)
              - (SELECT coalesce(sum((e->>2)::numeric), 0) FROM jsonb_array_elements(coalesce(c.exits, '[]')) e)
              AS remaining
-    FROM position_cycle c JOIN fill_sync f ON f.wallet_id = c.wallet_id
+    FROM position_cycle c JOIN wallet w ON w.id = c.wallet_id
+    LEFT JOIN fill_sync f ON f.wallet_id = c.wallet_id LEFT JOIN okx_trader o ON o.wallet_id = c.wallet_id
     WHERE c.coin = :coin AND c.direction = :direction AND c.entry_px BETWEEN :emin AND :emax
-      AND c.opened_at >= :start AND c.opened_at < :end"""
+      AND c.opened_at >= :start AND c.opened_at < :end AND (f.wallet_id IS NOT NULL OR o.wallet_id IS NOT NULL)
+      {venue}"""
 
 
 def _last_price(session: Session, coin: str) -> float | None:
@@ -70,6 +72,7 @@ def zone_holders(
     end: date = date(2026, 12, 31),
     min_share: float = Query(MIN_SHARE, ge=0, le=1),
     include_near: bool = Query(False, description="also list cycles that entered in zone but did not qualify"),
+    venue: VenueFilter = "all",
 ):
     if preset:
         if preset not in PRESETS:
@@ -81,7 +84,7 @@ def zone_holders(
     if entry_min > entry_max or exit_min > exit_max or start > end:
         raise HTTPException(422, "empty range")
     last_px = _last_price(session, coin)
-    rows = session.execute(text(CYCLE_SQL), {
+    rows = session.execute(text(CYCLE_SQL.format(sync=SYNC_STATUS_SQL, venue=venue_clause(venue))), {
         "coin": coin, "direction": direction, "emin": entry_min, "emax": entry_max, "xmin": exit_min,
         "xmax": exit_max, "start": start, "end": date.fromordinal(end.toordinal() + 1)}).mappings().all()
     sign = 1 if direction == "long" else -1
@@ -162,6 +165,7 @@ def leg_capture_ranking(
     min_notional: float = Query(10_000, ge=0),
     full_only: bool = False,
     limit: int = Query(100, ge=1, le=500),
+    venue: VenueFilter = "all",
 ):
     if leg_start is None:
         leg_start = session.execute(text("""
@@ -174,11 +178,11 @@ def leg_capture_ranking(
     if full_only:
         where.append("l.coverage = 'full'")
     rows = session.execute(text(f"""
-        SELECT w.address, w.display_name, w.account_value, l.leg_start, l.leg_end, l.direction, l.leg_change,
+        SELECT w.address, w.display_name, w.venue, w.account_value, l.leg_start, l.leg_end, l.direction, l.leg_change,
                l.confirmed, l.coverage, l.time_aligned, l.time_against, l.max_notional, l.avg_aligned_notional,
                l.pnl_mark, l.capture_ratio
         FROM leg_capture l JOIN wallet w ON w.id = l.wallet_id
-        WHERE {" AND ".join(where)}
+        WHERE {" AND ".join(where)}{venue_clause(venue)}
         ORDER BY l.capture_ratio DESC NULLS LAST, l.pnl_mark DESC LIMIT :limit"""),
         {"coin": coin, "ls": leg_start, "ma": min_aligned, "mn": min_notional, "limit": limit}).mappings().all()
     numeric = ("account_value", "leg_change", "time_aligned", "time_against", "max_notional", "avg_aligned_notional",

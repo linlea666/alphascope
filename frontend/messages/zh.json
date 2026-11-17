@@ -274,7 +274,17 @@
     "symbolsHint": "用 Hyperliquid 的真实成交价和币安同一分钟的收盘价对比；比价中位数偏离 1 超过 1% 的映射不使用。",
     "ratio": "比价中位数",
     "p95": "P95 偏差",
-    "samples": "样本"
+    "samples": "样本",
+    "okxTitle": "OKX 采集",
+    "okxHint": "每日 08:30 后完整抓取 7 天榜；历史仓位每 5 分钟一批，按优先级回填和增量；请求预算每分钟 {rpm} 次。还有 {missing} 位交易员待补 uniqueName，{coins} 个币种使用 OKX 自己的 K 线。",
+    "okxDate": "开始",
+    "okxBoard": "榜单",
+    "okxCaptured": "抓到 / 官方",
+    "okxNew": "新面孔",
+    "okxTraders": "人数",
+    "okxPositions": "仓位",
+    "okxSynced": "24 小时内同步",
+    "okxBackoff": "退避中"
   },
   "status": {
     "success": "成功",
@@ -666,7 +676,8 @@
     "cycleSec": "本轮耗时",
     "events": "本轮变动",
     "notRunning": "实时进程尚未运行（部署后会自动启动）。",
-    "error": "错误"
+    "error": "错误",
+    "okxInterval": "OKX 轮询间隔（秒）"
   },
   "sims": {
     "title": "模拟跟单",
@@ -837,7 +848,7 @@
     },
     "form": {
       "leader": "交易员地址",
-      "leaderHint": "须是已入库的钱包（排行榜里的地址都在）",
+      "leaderHint": "Hyperliquid 地址，或 OKX 交易员（okx:authorId，可在交易员页点「模拟跟单」自动填入）",
       "name": "名称",
       "capital": "模拟资金（USD）",
       "sizing": "仓位计算",
@@ -941,5 +952,45 @@
     "rank": "名次",
     "officialWin": "官方胜率",
     "officialDd": "官方最大回撤"
+  },
+  "venue": {
+    "all": "全部交易所",
+    "hyperliquid": "Hyperliquid",
+    "okx": "OKX"
+  },
+  "okxBoard": {
+    "title": "OKX 带单排行榜",
+    "subtitle": "每天 08:30（北京时间）完整抓取 OKX 官方 7 天榜，并抓 30/90/365 天榜前 100 名。官方数字之外，我们用每个人公开的历史仓位算出已实现盈亏、强平次数和节奏评分，排名靠前不等于可以跟。",
+    "views": {
+      "board": "当日榜单",
+      "new": "今日新上榜",
+      "dropped": "已下榜（有完整历史）"
+    },
+    "titles": {
+      "board": "当日榜单",
+      "new": "今日新上榜",
+      "dropped": "已下榜但历史完整的交易员"
+    },
+    "runHint": "{date} 抓取：官方 {total} 人，抓到 {n} 人，其中新面孔 {new} 人；完成于 {at}。{partial}",
+    "partial": "该榜只抓前几页。",
+    "noRun": "还没有完成的抓取。",
+    "droppedHint": "不在当前榜单上、但历史仓位已回填完整的交易员，按近 90 天已实现盈亏排序。下榜可能只是短期回撤，也可能是好交易员不再追求排名。",
+    "new": "新",
+    "daysStreak": "{days} 天 · 连续 {streak}",
+    "empty": "没有数据。",
+    "cols": {
+      "trader": "交易员",
+      "roi": "官方收益率",
+      "pnl": "官方盈亏",
+      "win": "官方胜率",
+      "dd": "官方回撤",
+      "asset": "带单资产",
+      "onBoard": "上榜",
+      "history": "历史仓位",
+      "r30": "30 天已实现",
+      "r90": "90 天已实现",
+      "liq": "90 天强平",
+      "edge": "节奏超额"
+    }
   }
 }

@@ -4,7 +4,9 @@ import { AddressLink } from "@/components/AddressLink";
 import { ApiErrorState } from "@/components/ApiErrorState";
 import { Freshness } from "@/components/Freshness";
 import { Badge, PageHeader, Panel, td, th } from "@/components/ui";
+import { VenueSwitch } from "@/components/VenueSwitch";
 import { Link } from "@/i18n/routing";
+import { getVenue } from "@/lib/venue";
 import { api, ApiError, type ZoneResult, type ZoneSide } from "@/lib/api";
 import { fmtNum, fmtTime, fmtUsd, signClass } from "@/lib/format";
 
@@ -19,11 +21,13 @@ export default async function ZonesPage({ searchParams }: { searchParams: Promis
   const t = await getTranslations("zones");
   const tcol = await getTranslations("cols");
   const locale = await getLocale();
+  const venue = await getVenue();
 
   let d: ZoneResult;
   try {
-    d = await api.zones(
-      custom
+    d = await api.zones({
+      venue,
+      ...(custom
         ? {
             coin: sp.coin || "BTC",
             side: sp.side,
@@ -37,8 +41,8 @@ export default async function ZonesPage({ searchParams }: { searchParams: Promis
             also_start: sp.also_side ? sp.also_start || undefined : undefined,
             also_end: sp.also_side ? sp.also_end || undefined : undefined,
           }
-        : { preset },
-    );
+        : { preset }),
+    });
   } catch (e) {
     return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
   }
@@ -83,6 +87,7 @@ export default async function ZonesPage({ searchParams }: { searchParams: Promis
   return (
     <div className="space-y-4">
       <PageHeader title={t("title")} subtitle={t("subtitle")}>
+        <VenueSwitch value={venue} />
         <Freshness value={d.freshness} />
       </PageHeader>
 

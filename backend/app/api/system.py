@@ -111,8 +111,23 @@ def data_health(session: Session = Depends(get_session)):
     symbols = session.execute(text("""
         SELECT coin, symbol, status, median_ratio, basis_p95_bps, n_samples, checked_at, notes FROM market_symbol
         ORDER BY status, coin""")).mappings().all()
+    okx_runs = session.execute(text("""
+        SELECT business_date, time_window, status, source, expected_total, unique_count, new_traders, started_at,
+               completed_at, error FROM okx_leaderboard_run WHERE source <> 'sqlite_import'
+        ORDER BY started_at DESC LIMIT 12""")).mappings().all()
+    okx_pool = session.execute(text("""
+        SELECT pool_status, history_status, count(*) AS n, sum(n_positions) AS positions,
+               count(*) FILTER (WHERE history_synced_at > now() - interval '1 day') AS synced_24h,
+               count(*) FILTER (WHERE retry_after > now()) AS backing_off
+        FROM okx_trader GROUP BY 1, 2 ORDER BY 1, 2""")).mappings().all()
+    okx_meta = session.execute(text("""
+        SELECT (SELECT count(*) FROM wallet WHERE venue = 'okx' AND handle IS NULL) AS without_handle,
+               (SELECT count(DISTINCT coin) FROM market_candle WHERE source = 'okx' AND interval = '1h') AS candle_coins,
+               (SELECT max(updated_at) FROM okx_instrument) AS instruments_at""")).mappings().one()
     return {
         "freshness": data_as_of(session),
+        "okx": {"runs": [dict(r) for r in okx_runs], "pool": [dict(r) for r in okx_pool], **dict(okx_meta),
+                "requests_per_minute": settings.okx_requests_per_minute},
         "market_data": [dict(m) for m in market],
         "symbols": [{**dict(r), "median_ratio": num(r["median_ratio"]), "basis_p95_bps": num(r["basis_p95_bps"])}
                     for r in symbols],

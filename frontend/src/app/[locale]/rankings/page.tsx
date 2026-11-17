@@ -4,7 +4,10 @@ import { ApiErrorState } from "@/components/ApiErrorState";
 import { FlagBadges, ReliabilityBadge, TierBadge } from "@/components/badges";
 import { Freshness } from "@/components/Freshness";
 import { PageHeader, Panel, td, th } from "@/components/ui";
+import { OkxBoard } from "@/components/OkxBoard";
+import { VenueSwitch } from "@/components/VenueSwitch";
 import { Link } from "@/i18n/routing";
+import { getVenue } from "@/lib/venue";
 import { api, ApiError, type Rankings, type Window } from "@/lib/api";
 import { fmtNum, fmtPct, fmtUsd, signClass } from "@/lib/format";
 
@@ -48,9 +51,21 @@ function query(s: State, over: Partial<State> = {}) {
 }
 
 export default async function RankingsPage({ searchParams }: { searchParams: Promise<Search> }) {
-  const s = pick(await searchParams);
+  const sp = await searchParams;
+  const s = pick(sp);
   const t = await getTranslations();
   const locale = await getLocale();
+  const venue = await getVenue(false);
+  if (venue === "okx") {
+    return (
+      <div className="space-y-4">
+        <PageHeader title={t("okxBoard.title")} subtitle={t("okxBoard.subtitle")}>
+          <VenueSwitch value={venue} allowAll={false} />
+        </PageHeader>
+        <OkxBoard sp={sp} />
+      </div>
+    );
+  }
   let data: Rankings;
   try {
     data = await api.rankings({
@@ -87,7 +102,10 @@ export default async function RankingsPage({ searchParams }: { searchParams: Pro
   return (
     <div className="space-y-4">
       <PageHeader title={t("rankings.title")} subtitle={t("rankings.subtitle")}>
-        <Freshness value={data.freshness} />
+        <div className="flex flex-col items-end gap-2">
+          <VenueSwitch value={venue} allowAll={false} />
+          <Freshness value={data.freshness} />
+        </div>
       </PageHeader>
 
       <Panel>
