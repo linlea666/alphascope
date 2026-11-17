@@ -63,6 +63,10 @@ class Settings(BaseSettings):
     # Fernet key for secrets stored in app_setting (SMTP password); created with mode 600 on first use.
     secret_key_path: Path = BACKEND_DIR.parent / "data" / "secret.key"
 
+    # Market radar (docs/12): its own Hyperliquid budget. worker 600 + live 240 + radar 300 = 1140 < 1200 per IP.
+    hl_market_weight_per_minute: int = 300
+    market_sweep_interval_minutes: int = 5
+
     # OKX copy-trading source (docs/11): public priapi endpoints, a request budget separate from Hyperliquid.
     okx_base_url: str = "https://www.okx.com"
     okx_requests_per_minute: int = 120  # worker share; measured: ~180/min from the server without throttling

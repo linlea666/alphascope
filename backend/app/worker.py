@@ -17,6 +17,8 @@ from app.ingest.leaderboard_ingest import ingest_leaderboard
 from app.ingest.market_ingest import record_candles
 from app.ingest.portfolio_ingest import enrich_batch
 from app.ingest.runs import mark_abandoned_runs
+from app.market.collect import sweep_hyperliquid, sweep_okx, sync_watch
+from app.market.stats import snapshot_hour
 from app.okx.candles import sync_candles
 from app.okx.client import OkxClient
 from app.okx.leaderboard import ensure_daily
@@ -24,6 +26,7 @@ from app.okx.sync import refresh_assets, refresh_instruments, resolve_profiles, 
 from app.research.positions import rebuild_stale
 from app.research.timing import run_timing
 from app.research.swings import run_swings
+from app.sources.hl_client import HyperliquidInfoClient, WeightBucket
 from app.sources.raw_store import LocalRawStore
 
 log = logging.getLogger("alphascope.worker")
@@ -117,6 +120,39 @@ def main() -> None:
         r = asyncio.run(go())
         log.info("okx candles: coins=%s bars=%s complete=%s", r["coins"], r["bars"], r["complete"])
 
+    radar_bucket = WeightBucket(settings.hl_market_weight_per_minute)
+
+    def market_watch_job() -> None:
+        with sf() as s:
+            r = sync_watch(s, datetime.now(UTC))
+            s.commit()
+        log.info("market watch: %s", r)
+
+    def market_hl_job() -> None:
+        async def go():
+            async with HyperliquidInfoClient(settings.hl_info_url, settings.hl_market_weight_per_minute,
+                                             settings.hl_timeout_seconds, settings.hl_max_retries,
+                                             bucket=radar_bucket) as c:
+                # what the budget allows per run (2 weight per wallet, 10% kept for allMids and retries)
+                limit = int(settings.market_sweep_interval_minutes * settings.hl_market_weight_per_minute / 2 * 0.9)
+                return await sweep_hyperliquid(sf, c, limit=limit), c.usage.weight
+        r, w = asyncio.run(go())
+        log.info("market hl: due=%s ok=%s failed=%s events=%s weight=%s", r["due"], r["ok"], r["failed"],
+                 r["events"], w)
+
+    def market_okx_job() -> None:
+        async def go():
+            async with okx_client() as c:
+                return await sweep_okx(sf, c)
+        r = asyncio.run(go())
+        log.info("market okx: due=%s ok=%s failed=%s events=%s", r["due"], r["ok"], r["failed"], r["events"])
+
+    def market_snapshot_job() -> None:
+        with sf() as s:
+            n = snapshot_hour(s, datetime.now(UTC))
+            s.commit()
+        log.info("market snapshot: %s rows", n)
+
     sched = BlockingScheduler(timezone="UTC", job_defaults={"coalesce": True, "max_instances": 1,
                                                              "misfire_grace_time": 300})
     now = datetime.now(UTC)
@@ -143,6 +179,13 @@ def main() -> None:
     sched.add_job(okx_history_job, "interval", minutes=5, next_run_time=now + timedelta(minutes=2), id="okx_history")
     sched.add_job(okx_upkeep_job, "interval", hours=1, next_run_time=now + timedelta(minutes=6), id="okx_upkeep")
     sched.add_job(okx_candles_job, "interval", minutes=15, next_run_time=now + timedelta(minutes=8), id="okx_candles")
+    # Market radar: who is watched (hourly), due-trader sweeps per venue, hourly aggregate snapshot at :55
+    sched.add_job(market_watch_job, "interval", hours=1, next_run_time=now + timedelta(seconds=30), id="market_watch")
+    sched.add_job(market_hl_job, "interval", minutes=settings.market_sweep_interval_minutes,
+                  next_run_time=now + timedelta(minutes=1), id="market_hl")
+    sched.add_job(market_okx_job, "interval", minutes=settings.market_sweep_interval_minutes,
+                  next_run_time=now + timedelta(minutes=1, seconds=30), id="market_okx")
+    sched.add_job(market_snapshot_job, "cron", minute=55, id="market_snapshot")
     log.info("worker started: leaderboard every %dm, enrich %d wallets every %dm",
              settings.leaderboard_interval_minutes, settings.enrich_batch_size, settings.enrich_interval_minutes)
     try:

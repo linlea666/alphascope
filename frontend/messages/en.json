@@ -18,7 +18,8 @@
     "alerts": "Alerts",
     "settings": "Settings",
     "sims": "Copy sim",
-    "okx": "OKX"
+    "okx": "OKX",
+    "market": "Radar"
   },
   "common": {
     "dataAsOf": "Data as of",
@@ -1002,5 +1003,125 @@
       "liq": "Liq. 90d",
       "edge": "Timing edge"
     }
+  },
+  "market": {
+    "title": "Market positioning radar",
+    "subtitle": "Real positions of the Hyperliquid wallets and OKX lead traders we keep polling: who is long, who is short, what they opened lately and where their liquidation prices cluster. This is our observed sample, not the whole exchange.",
+    "venues": {
+      "all": "Both venues",
+      "hyperliquid": "Hyperliquid",
+      "okx": "OKX"
+    },
+    "cohorts": {
+      "all": "All observed",
+      "timing": "Significant timing",
+      "watchlist": "My watchlist",
+      "okx_board": "On today's OKX board"
+    },
+    "cohortHints": {
+      "all": "Every polled trader with fresh data",
+      "timing": "Traders whose timing score stays significant after multiple-testing correction (q < 0.1) at any scale",
+      "watchlist": "Traders you watch",
+      "okx_board": "OKX lead traders on today's 7-day board"
+    },
+    "coverage": "{fresh} traders with fresh data of {watched} polled (Hyperliquid {hl}, OKX {okx}) · last poll {latest} min ago. Positions older than two poll intervals are not counted.",
+    "kpi": {
+      "positioned": "Traders positioned",
+      "positions": "{n} positions",
+      "longTraders": "Net long traders",
+      "shortTraders": "Net short traders",
+      "netLongHint": "by signed notional across coins",
+      "ratio": "L/S {r}",
+      "longNtl": "Long notional",
+      "shortNtl": "Short notional",
+      "net": "Net exposure",
+      "lev20": "Notional at ≥20×",
+      "liqKnown": "{p} with liq. price",
+      "opens24": "Opens 24h",
+      "closes": "{n} closes"
+    },
+    "mapTitle": "Long / short map",
+    "mapHint": "Area = notional, colour = share of traders long (green long-heavy, red short-heavy). Click a coin for details.",
+    "longShare": "Traders long",
+    "coinsTitle": "By coin",
+    "coinsHint": "One net position per trader and coin; opens = new positions and flips in the last 1 / 4 / 24 hours (positions first seen open are not opens).",
+    "cols": {
+      "coin": "Coin",
+      "traders": "Traders",
+      "longShort": "Long / short",
+      "longNtl": "Long",
+      "shortNtl": "Short",
+      "net": "Net",
+      "lev20": "≥20×",
+      "opens": "Opens 1h/4h/24h",
+      "notional": "Notional",
+      "trader": "Trader",
+      "entry": "Entry",
+      "lev": "Lev.",
+      "liq": "Liq. price",
+      "upl": "uPnL",
+      "opened": "Opened",
+      "observed": "Observed",
+      "time": "Time",
+      "event": "Event",
+      "change": "Size change",
+      "now": "Now"
+    },
+    "allCoins": "all coins",
+    "historyTitle": "{coin} long / short over time",
+    "historyHint": "Recorded hourly at :55, from the day collection started; the past is never reconstructed from current positions.",
+    "historyEmpty": "Snapshots are still accumulating (at least two hours needed).",
+    "longTraders": "Traders long",
+    "shortTraders": "Traders short",
+    "netNtl": "Net exposure (right)",
+    "coinLine": "{traders} traders (long {longs} / short {shorts}) · price ≈ {px} · median leverage {lev}×",
+    "clearCoin": "clear",
+    "liqTitle": "{coin} potential liquidation pressure (observed sample)",
+    "liqHint": "Venue-reported liquidation prices only; cross-margin prices move with margin and price and are not exact triggers. {without} positions ({withoutNtl}) have no liquidation price and {outside} lie outside the range; neither is counted.",
+    "longLiq": "Long liquidations",
+    "shortLiq": "Short liquidations",
+    "price": "Price",
+    "liqEmpty": "No positions with a liquidation price in this range.",
+    "allLev": "All",
+    "contribTitle": "{coin} positions",
+    "contribHint": "Every position behind the numbers above, by notional. Open time: from the venue on OKX; on Hyperliquid only known to lie between two polls, and unknown for positions already open when first seen.",
+    "modes": {
+      "cross": "cross",
+      "isolated": "isolated"
+    },
+    "openedAfter": "after {t}",
+    "openedUnknown": "open when first seen",
+    "eventsTitle": "Recent opens radar",
+    "eventsHint": "Position changes between polls. Exact: open time reported by the venue; window: between the previous and this poll. Entry prices are shown only when the venue reports them, never replaced by the market price.",
+    "hours": "{h}h",
+    "kinds": {
+      "opens": "Opens & flips",
+      "changes": "All changes",
+      "closes": "Closes"
+    },
+    "sides": {
+      "all": "Both",
+      "long": "Long",
+      "short": "Short"
+    },
+    "eventKinds": {
+      "open": "Open",
+      "increase": "Add",
+      "decrease": "Trim",
+      "close": "Close",
+      "flip": "Flip",
+      "first_seen": "Seen"
+    },
+    "long": "long",
+    "short": "short",
+    "precision": {
+      "exact": "exact",
+      "window": "window",
+      "firstSeen": "first seen"
+    },
+    "windowHint": "between {a} and {b}",
+    "replay": "Chart",
+    "noEvents": "No matching changes in this period.",
+    "empty": "No data."
   }
 }

@@ -126,6 +126,87 @@ export type OkxDetail = {
   pnl_curve: [string, number, number][];
 };
 
+export type MarketCoverage = { watched: number; fresh: number; positioned: number; latest: string | null; oldest: string | null };
+export type MarketSideStats = {
+  long_ntl: number;
+  short_ntl: number;
+  lev10_long_ntl: number;
+  lev10_short_ntl: number;
+  lev20_long_ntl: number;
+  lev20_short_ntl: number;
+  liq_known_ntl: number;
+};
+export type MarketOverview = {
+  as_of: string;
+  coverage: MarketCoverage;
+  by_venue: Record<"hyperliquid" | "okx", MarketCoverage>;
+  totals: MarketSideStats & { traders: number; long_traders: number; short_traders: number; positions: number; long_positions: number; short_positions: number };
+  opens_24h: number;
+  closes_24h: number;
+};
+export type MarketCoin = MarketSideStats & {
+  coin: string;
+  traders: number;
+  long_traders: number;
+  short_traders: number;
+  mark_px: number | null;
+  median_leverage: number | null;
+  opens_1h: number;
+  opens_4h: number;
+  opens_24h: number;
+};
+export type MarketContributor = {
+  address: string;
+  display_name: string | null;
+  venue: Venue;
+  szi: number;
+  notional_usd: number;
+  mark_px: number | null;
+  entry_px: number | null;
+  leverage: number | null;
+  margin_mode: string | null;
+  liq_px: number | null;
+  upl: number | null;
+  opened_at: string | null;
+  opened_at_source: "source" | "window" | "unknown";
+  opened_after: string | null;
+  first_seen_at: string;
+  observed_at: string;
+  account_value: number | null;
+};
+export type MarketEvent = {
+  id: number;
+  address: string;
+  display_name: string | null;
+  venue: Venue;
+  coin: string;
+  kind: "open" | "increase" | "decrease" | "close" | "flip" | "first_seen";
+  side: "long" | "short";
+  szi_before: number;
+  szi_after: number;
+  notional_change: number;
+  mark_px: number | null;
+  entry_px: number | null;
+  leverage: number | null;
+  liq_px: number | null;
+  event_time: string;
+  time_precision: "exact" | "window";
+  window_start: string | null;
+  observed_at: string;
+  current_px: number | null;
+  upl: number | null;
+};
+export type MarketHistoryRow = { bucket_ts: string; observed: number; long_traders: number; short_traders: number; long_ntl: number; short_ntl: number; lev20_long_ntl: number; lev20_short_ntl: number; opens: number; closes: number };
+export type MarketLiquidations = {
+  coin: string;
+  mark_px: number | null;
+  span_pct?: number;
+  positions?: number;
+  bins: { lo: number; hi: number; long_ntl: number; short_ntl: number; long_traders: number; short_traders: number; cross_ntl: number }[];
+  without_liq: { positions: number; notional: number };
+  outside: { positions: number; notional: number };
+};
+
 export type OkxSummary = {
   traders: number;
   positions: number;
@@ -793,6 +874,12 @@ export const api = {
   zones: (params: Record<string, string | number | boolean | undefined>) => get<ZoneResult>("/api/v1/zones", params),
   timingCoins: (scale: string, window: string, venue?: string) => get<{ coins: { coin: string; wallets: number }[] }>("/api/v1/timing/coins", { scale, window, venue }),
   okxSummary: () => get<OkxSummary>("/api/v1/okx/summary"),
+  marketOverview: (venue: string, cohort: string) => get<MarketOverview>("/api/v1/market/overview", { venue, cohort }),
+  marketCoins: (venue: string, cohort: string) => get<{ as_of: string; rows: MarketCoin[] }>("/api/v1/market/coins", { venue, cohort }),
+  marketContributors: (params: Record<string, string | number | undefined>) => get<{ rows: MarketContributor[] }>("/api/v1/market/contributors", params),
+  marketEvents: (params: Record<string, string | number | undefined>) => get<{ as_of: string; rows: MarketEvent[] }>("/api/v1/market/events", params),
+  marketHistory: (params: Record<string, string | number | undefined>) => get<{ rows: MarketHistoryRow[] }>("/api/v1/market/history", params),
+  marketLiquidations: (params: Record<string, string | number | undefined>) => get<MarketLiquidations>("/api/v1/market/liquidations", params),
   okxBoard: (params: Record<string, string | number | boolean | undefined>) => get<OkxBoard>("/api/v1/okx/board", params),
   holderZones: (params: Record<string, string | number | boolean | undefined>) => get<HolderZones>("/api/v1/holders/zones", params),
   holderLegs: (coin: string) => get<LegList>("/api/v1/holders/legs", { coin }),

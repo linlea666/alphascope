@@ -18,7 +18,8 @@
     "alerts": "仓位提醒",
     "settings": "设置",
     "sims": "模拟跟单",
-    "okx": "OKX 榜单"
+    "okx": "OKX 榜单",
+    "market": "市场雷达"
   },
   "common": {
     "dataAsOf": "数据时间",
@@ -1002,5 +1003,125 @@
       "liq": "90 天强平",
       "edge": "节奏超额"
     }
+  },
+  "market": {
+    "title": "市场仓位雷达",
+    "subtitle": "我们持续观测的 Hyperliquid 钱包与 OKX 带单交易员的真实持仓：谁在做多、谁在做空、最近在开什么仓、强平价聚在哪里。这是观测样本，不是交易所全市场。",
+    "venues": {
+      "all": "两个交易所合并",
+      "hyperliquid": "Hyperliquid",
+      "okx": "OKX"
+    },
+    "cohorts": {
+      "all": "全部观测样本",
+      "timing": "节奏显著",
+      "watchlist": "我的收藏",
+      "okx_board": "OKX 当日在榜"
+    },
+    "cohortHints": {
+      "all": "所有数据新鲜的被观测交易员",
+      "timing": "任一级别节奏评分经多重检验后仍显著（q < 0.1）的交易员",
+      "watchlist": "你收藏的交易员",
+      "okx_board": "今天在 OKX 7 天榜上的带单交易员"
+    },
+    "coverage": "数据新鲜的交易员 {fresh} / 观测名单 {watched}（Hyperliquid {hl}、OKX {okx}）· 最近一次观测 {latest} 分钟前。超过两个轮询间隔没更新的仓位不计入。",
+    "kpi": {
+      "positioned": "持仓交易员",
+      "positions": "{n} 个仓位",
+      "longTraders": "净多人数",
+      "shortTraders": "净空人数",
+      "netLongHint": "按所有币种合计的带方向金额判定",
+      "ratio": "多空比 {r}",
+      "longNtl": "多头名义金额",
+      "shortNtl": "空头名义金额",
+      "net": "净敞口",
+      "lev20": "≥20 倍仓位占比",
+      "liqKnown": "有强平价的占 {p}",
+      "opens24": "24 小时开仓",
+      "closes": "平仓 {n}"
+    },
+    "mapTitle": "币种多空地图",
+    "mapHint": "面积 = 名义金额，颜色 = 做多人数占比（绿偏多、红偏空）。点击币种查看详情。",
+    "longShare": "做多人数占比",
+    "coinsTitle": "按币种",
+    "coinsHint": "每人每币按净仓位计一次；开仓数为 1 / 4 / 24 小时内的新开和反手（首次观察到的仓位不算开仓）。",
+    "cols": {
+      "coin": "币种",
+      "traders": "人数",
+      "longShort": "多 / 空人数",
+      "longNtl": "多头金额",
+      "shortNtl": "空头金额",
+      "net": "净敞口",
+      "lev20": "≥20×",
+      "opens": "开仓 1h/4h/24h",
+      "notional": "名义金额",
+      "trader": "交易员",
+      "entry": "开仓均价",
+      "lev": "杠杆",
+      "liq": "强平价",
+      "upl": "浮动盈亏",
+      "opened": "开仓时间",
+      "observed": "观测于",
+      "time": "时间",
+      "event": "事件",
+      "change": "变动金额",
+      "now": "当前价"
+    },
+    "allCoins": "全部币种",
+    "historyTitle": "{coin} 多空变化",
+    "historyHint": "每小时整点前 5 分钟记录一次；从开始采集那天起积累，不会用当前仓位反推过去。",
+    "historyEmpty": "历史快照还在积累，至少需要两个小时。",
+    "longTraders": "做多人数",
+    "shortTraders": "做空人数",
+    "netNtl": "净敞口（右轴）",
+    "coinLine": "{traders} 人持仓（多 {longs} / 空 {shorts}）· 价格约 {px} · 杠杆中位数 {lev}×",
+    "clearCoin": "取消选择",
+    "liqTitle": "{coin} 观测样本潜在清算压力",
+    "liqHint": "只用交易所给出的强平价；全仓的强平价会随保证金和价格变化，并不一定在这个价格精确触发。另有 {without} 个仓位（{withoutNtl}）没有强平价，{outside} 个超出显示范围，均未计入。",
+    "longLiq": "多头强平",
+    "shortLiq": "空头强平",
+    "price": "当前价",
+    "liqEmpty": "这个范围内没有带强平价的仓位。",
+    "allLev": "全部杠杆",
+    "contribTitle": "{coin} 持仓明细",
+    "contribHint": "构成上面数字的每一个仓位，按名义金额排序。开仓时间：OKX 来自交易所；Hyperliquid 只能确定在两次观测之间，首次观察到时已持有的标为未知。",
+    "modes": {
+      "cross": "全仓",
+      "isolated": "逐仓"
+    },
+    "openedAfter": "{t} 之后",
+    "openedUnknown": "首次观察时已持有",
+    "eventsTitle": "最近开仓雷达",
+    "eventsHint": "两次观测之间的仓位变化。精确：交易所给出的开仓时间；区间：发生在上一次与这一次观测之间。开仓均价只在交易所提供时显示，绝不用市场价代替。",
+    "hours": "{h} 小时",
+    "kinds": {
+      "opens": "开仓与反手",
+      "changes": "全部变动",
+      "closes": "平仓"
+    },
+    "sides": {
+      "all": "多空",
+      "long": "做多",
+      "short": "做空"
+    },
+    "eventKinds": {
+      "open": "开",
+      "increase": "加",
+      "decrease": "减",
+      "close": "平",
+      "flip": "反手",
+      "first_seen": "首见"
+    },
+    "long": "多",
+    "short": "空",
+    "precision": {
+      "exact": "精确",
+      "window": "区间",
+      "firstSeen": "首次观察"
+    },
+    "windowHint": "发生在 {a} 到 {b} 之间",
+    "replay": "K 线",
+    "noEvents": "这个时间段内没有符合条件的变动。",
+    "empty": "没有数据。"
   }
 }

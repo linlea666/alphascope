@@ -11,7 +11,9 @@ from decimal import Decimal
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.alerts.diff import parse_clearinghouse
 from app.config import Settings
+from app.market.observe import record_observation
 from app.models import AccountSnapshot, IngestRun, PositionSnapshot, RawObject, Wallet, WalletMetric
 from app.quant.quality import AGGREGATE_ACCOUNT
 from app.quant.returns import METRIC_VERSION, METRIC_WINDOWS, Point, compute_series_metrics
@@ -163,6 +165,8 @@ async def enrich_batch(sf: sessionmaker[Session], settings: Settings, store: Raw
                     pf_av = store_portfolio(s, wallet_id, parse_portfolio(pf.data), fetched_at, pf_raw, fetched_at)
                     ch_raw = _archive(s, store, run_id, "clearinghouseState", ch_payload, ch.body, fetched_at)
                     ch_av = store_clearinghouse(s, wallet_id, ch.data, fetched_at, ch_raw)
+                    # the same snapshot feeds the market radar (positions, change events, next poll)
+                    record_observation(s, wallet_id, "hyperliquid", parse_clearinghouse(ch.data)[0], ch_av, fetched_at)
                     own_av = Decimal(str(pf_av)) if pf_av is not None else ch_av
                     w = s.get(Wallet, wallet_id)
                     w.enrichment_flags = _aggregate_flag(list(w.enrichment_flags or []), w.account_value, own_av)

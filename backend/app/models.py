@@ -925,3 +925,105 @@ class OkxPresence(Base):
     currently_seen: Mapped[bool] = mapped_column(Boolean)
     last_rank: Mapped[int | None] = mapped_column(Integer)
     best_rank: Mapped[int | None] = mapped_column(Integer)
+
+
+# --- Market positioning radar (migration 0010, docs/12) ---
+
+
+class PositionWatch(Base):
+    """A trader whose open positions we poll; its tier sets how often, and stale_after when its data stops counting."""
+
+    __tablename__ = "position_watch"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    venue: Mapped[str] = mapped_column(String(16))
+    tier: Mapped[str] = mapped_column(String(8))  # hot | warm | cold
+    base_tier: Mapped[str] = mapped_column(String(8))  # floor from cohort membership (watched, followed, on board)
+    added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    next_due: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    stale_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    failures: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    account_value: Mapped[Decimal | None] = _num()
+    n_positions: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    gross_notional: Mapped[Decimal | None] = _num()
+
+    __table_args__ = (Index("ix_position_watch_due", "venue", "next_due"),)
+
+
+class TraderPosition(Base):
+    """Latest observed net position per trader and coin (OKX hedged legs netted; venues never merged)."""
+
+    __tablename__ = "trader_position"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    coin: Mapped[str] = mapped_column(String(48), primary_key=True)
+    venue: Mapped[str] = mapped_column(String(16))
+    szi: Mapped[Decimal] = mapped_column(Numeric)  # coin units, + long / - short
+    notional_usd: Mapped[Decimal] = mapped_column(Numeric)  # |szi| x mark at observation
+    mark_px: Mapped[Decimal | None] = _num()
+    entry_px: Mapped[Decimal | None] = _num()  # as reported by the source
+    leverage: Mapped[int | None] = mapped_column(Integer)
+    margin_mode: Mapped[str | None] = mapped_column(String(16))  # cross | isolated
+    liq_px: Mapped[Decimal | None] = _num()  # only when the source reports it
+    upl: Mapped[Decimal | None] = _num()
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # source: reported by the venue (OKX cTime) | window: opened between two of our polls | unknown: first seen open
+    opened_at_source: Mapped[str] = mapped_column(String(8))
+    opened_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))  # window start
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_trader_position_coin", "coin", "venue"),)
+
+
+class MarketEvent(Base):
+    """A position change seen between two polls (or reported with its own time by the source)."""
+
+    __tablename__ = "market_event"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"))
+    venue: Mapped[str] = mapped_column(String(16))
+    coin: Mapped[str] = mapped_column(String(48))
+    kind: Mapped[str] = mapped_column(String(12))  # open increase decrease close flip first_seen
+    side: Mapped[str] = mapped_column(String(5))  # long | short (side after; before for a close)
+    szi_before: Mapped[Decimal] = mapped_column(Numeric)
+    szi_after: Mapped[Decimal] = mapped_column(Numeric)
+    notional_change: Mapped[Decimal] = mapped_column(Numeric)  # |size change| x mark
+    mark_px: Mapped[Decimal | None] = _num()
+    entry_px: Mapped[Decimal | None] = _num()  # source-reported average entry after the change
+    leverage: Mapped[int | None] = mapped_column(Integer)
+    liq_px: Mapped[Decimal | None] = _num()
+    event_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    time_precision: Mapped[str] = mapped_column(String(8))  # exact | window
+    window_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (UniqueConstraint("wallet_id", "coin", "observed_at", "kind"),
+                      Index("ix_market_event_time", "event_time"),
+                      Index("ix_market_event_coin_time", "coin", "event_time"))
+
+
+class MarketSnapshot(Base):
+    """Hourly aggregate of fresh observed positions per venue, cohort and coin ('*' = all coins)."""
+
+    __tablename__ = "market_snapshot"
+
+    bucket_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    venue: Mapped[str] = mapped_column(String(16), primary_key=True)  # all | hyperliquid | okx
+    cohort: Mapped[str] = mapped_column(String(16), primary_key=True)
+    coin: Mapped[str] = mapped_column(String(48), primary_key=True)
+    observed: Mapped[int] = mapped_column(Integer)  # traders with fresh data in the cohort
+    long_traders: Mapped[int] = mapped_column(Integer)
+    short_traders: Mapped[int] = mapped_column(Integer)
+    long_ntl: Mapped[Decimal] = mapped_column(Numeric)
+    short_ntl: Mapped[Decimal] = mapped_column(Numeric)
+    lev10_long_ntl: Mapped[Decimal] = mapped_column(Numeric)
+    lev10_short_ntl: Mapped[Decimal] = mapped_column(Numeric)
+    lev20_long_ntl: Mapped[Decimal] = mapped_column(Numeric)
+    lev20_short_ntl: Mapped[Decimal] = mapped_column(Numeric)
+    liq_known_ntl: Mapped[Decimal] = mapped_column(Numeric)
+    opens: Mapped[int] = mapped_column(Integer)  # open / flip events in the hour
+    closes: Mapped[int] = mapped_column(Integer)
