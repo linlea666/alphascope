@@ -87,9 +87,13 @@ def changes(prev: dict[str, dict], after: dict[str, Pos], opened: dict[str, date
             event_time, precision, start = src, "exact", prev_obs
         else:
             event_time, precision, start = now, "window", prev_obs
+        # a close keeps the position's last reported entry, leverage and liquidation price: closes at or beyond that
+        # liquidation price are reported as suspected liquidations
+        last = prev.get(coin) or {}
         out.append(Change(coin, kind, "long" if _sign(a or b) > 0 else "short", b, a,
-                          abs(a - b) * mark if mark else ZERO, mark, p.entry_px if p else None,
-                          p.leverage if p else None, p.liquidation_px if p else None, event_time, precision, start))
+                          abs(a - b) * mark if mark else ZERO, mark, p.entry_px if p else last.get("entry_px"),
+                          p.leverage if p else last.get("leverage"), p.liquidation_px if p else last.get("liq_px"),
+                          event_time, precision, start))
     return out
 
 

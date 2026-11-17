@@ -175,6 +175,25 @@ export type MarketContributor = {
   first_seen_at: string;
   observed_at: string;
   account_value: number | null;
+  coin?: string;
+  margin: number | null;
+  liq_dist: number | null;
+  roe: number | null;
+};
+export type MarketPositionRow = MarketContributor & { coin: string; adds_underwater?: number; added_notional?: number | null; change?: number | null; last_kind?: string | null };
+export type MarketAtRisk = { as_of: string; max_dist: number; buckets: { within: "2" | "5" | "10"; side: "long" | "short"; positions: number; notional: number }[]; rows: MarketPositionRow[] };
+export type MarketLiquidated = {
+  as_of: string;
+  hours: number;
+  tolerance: number;
+  totals: { side: "long" | "short"; positions: number; notional: number }[];
+  rows: { address: string; display_name: string | null; venue: Venue; coin: string; side: "long" | "short"; szi_before: number; notional_change: number; mark_px: number | null; entry_px: number | null; leverage: number | null; liq_px: number | null; event_time: string; window_start: string | null; observed_at: string; margin: number | null }[];
+};
+export type MarketWhales = {
+  as_of: string;
+  hours: number;
+  rows: MarketPositionRow[];
+  closed: { address: string; display_name: string | null; venue: Venue; coin: string; side: "long" | "short"; notional_change: number; mark_px: number | null; entry_px: number | null; event_time: string }[];
 };
 export type MarketEvent = {
   id: number;
@@ -851,6 +870,8 @@ export type SimSummary = {
   leverage_mode: LeverageMode;
   liquidations: number;
   leader_health: HealthStatus | null;
+  capped_cycles: number;
+  sized_cycles: number;
 };
 
 export type LeverageMode = "account" | "leader";
@@ -1216,6 +1237,10 @@ export const api = {
   behavior: (address: string) => get<Behavior>(`/api/v1/wallets/${encodeURIComponent(address)}/behavior`),
   copyability: (address: string) => get<Copyability>(`/api/v1/wallets/${encodeURIComponent(address)}/copyability`),
   copyBoard: (params: Record<string, string | number | undefined>) => get<CopyBoard>("/api/v1/copy-board", params),
+  marketAtRisk: (params: Record<string, string | number | undefined>) => get<MarketAtRisk>("/api/v1/market/at-risk", params),
+  marketLiquidated: (params: Record<string, string | number | undefined>) => get<MarketLiquidated>("/api/v1/market/liquidated", params),
+  marketUnderwater: (params: Record<string, string | number | boolean | undefined>) => get<{ as_of: string; rows: MarketPositionRow[] }>("/api/v1/market/underwater", params),
+  marketWhales: (params: Record<string, string | number | undefined>) => get<MarketWhales>("/api/v1/market/whales", params),
   candles: (coin: string, interval: string, since: string) => get<Candles>("/api/v1/candles", { coin, interval, since }),
   swingCandidates: (params: Record<string, string | number | boolean | undefined>) => get<SwingCandidates>("/api/v1/swings/candidates", params),
 };

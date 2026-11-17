@@ -836,7 +836,9 @@
       "pnl": "Total PnL",
       "unrealized": "Unrealized PnL",
       "mdd": "Max drawdown",
-      "exposure": "Gross exposure / equity"
+      "exposure": "Gross exposure / equity",
+      "capped": "Capped by max leverage",
+      "cappedSub": "{n} of {total} rebalances exceeded the cap at their proportions"
     },
     "listTitle": "All simulations",
     "listHint": "Copy return = change in simulated equity. Leader return uses their account value, which includes deposits and withdrawals, so treat it as a reference. Retention = copy return ÷ leader return: how much delay, slippage and sizing limits gave up.",
@@ -1058,7 +1060,9 @@
       },
       "formulaTitle": "How proportional copying works",
       "formula": "Your size = copy ratio × (leader's position ÷ leader's balance) × your balance",
-      "formulaExample": "E.g. leader balance 1,000, opens 100 (10%) → your {capital} × 10% × {ratio}% = {result}"
+      "formulaExample": "E.g. leader balance 1,000, opens 100 (10%) → your {capital} × 10% × {ratio}% = {result}",
+      "followExposure": "Match the leader's exposure (no cap)",
+      "followExposureHint": "No scaling down by max leverage: your positions are the same multiple of equity as theirs, so returns match. The account is still liquidated when margin runs out."
     },
     "sortBy": "Sort",
     "sorts": {
@@ -1245,7 +1249,8 @@
       "change": "Size change",
       "now": "Now",
       "nearLiq": "Nearest liq. L/S",
-      "nearLiqHint": "Distance to the nearest long liquidation (below) and short liquidation (above), venue-reported prices only"
+      "nearLiqHint": "Distance to the nearest long liquidation (below) and short liquidation (above), venue-reported prices only",
+      "margin": "Margin"
     },
     "allCoins": "all coins",
     "historyTitle": "{coin} long / short over time",
@@ -1813,6 +1818,11 @@
       "label": "Worst floating loss",
       "text": "The largest unrealized loss a position showed between open and close: the most painful moment of holding it.",
       "example": "E.g. long, down to -300, then closed at +200: worst floating loss -300."
+    },
+    "margin": {
+      "label": "Margin",
+      "text": "Notional ÷ leverage: the capital the position ties up. Cross-margin positions share the account's equity, so this is an estimate from the leverage.",
+      "example": "E.g. $10M notional at 40x → about $250k margin."
     }
   },
   "copyBoard": {
@@ -1982,5 +1992,90 @@
     "revenge": "Size-up after loss",
     "avgDown": "Adds against the position",
     "lev": "Leverage (before → last 30 days)"
+  },
+  "boards": {
+    "tabs": {
+      "overview": "Overview",
+      "risk": "Near liquidation",
+      "liquidated": "Liquidated?",
+      "opens": "Large opens",
+      "underwater": "Underwater",
+      "whales": "Whales"
+    },
+    "empty": "No positions match.",
+    "error": "Failed to load; try again later.",
+    "any": "any",
+    "minNotional": "Min notional",
+    "side": "Side",
+    "window": "Window",
+    "hoursN": "{n} h",
+    "between": "{a} – {b}",
+    "sides": {
+      "all": "both",
+      "long": "long",
+      "short": "short"
+    },
+    "cols": {
+      "trader": "Trader",
+      "coin": "Coin",
+      "notional": "Notional",
+      "margin": "Margin",
+      "lev": "Leverage",
+      "entryMark": "Entry / mark",
+      "liq": "Liq. / distance"
+    },
+    "risk": {
+      "title": "Liquidation early warning",
+      "hint": "Sorted by distance to the venue-reported liquidation price, all coins. Cross-margin liquidation prices move with margin and other positions. Observed sample, not the whole market.",
+      "within": "Distance",
+      "long2": "Longs within 2%",
+      "short2": "Shorts within 2%",
+      "long5": "Longs within 5%",
+      "short5": "Shorts within 5%"
+    },
+    "liq": {
+      "title": "Suspected liquidations",
+      "hint": "The position disappeared with the price at (within 0.5%) or beyond the liquidation price it last reported: inferred, not the exchange's record. Recorded from this update on.",
+      "longs": "Longs liquidated?",
+      "shorts": "Shorts liquidated?",
+      "n": "{n} positions",
+      "entry": "Entry",
+      "liqPx": "Liq. price",
+      "closePx": "Price when gone",
+      "when": "When",
+      "badge": "liquidated?",
+      "empty": "No suspected liquidations in this window (only closes after this update are checked)."
+    },
+    "opens": {
+      "title": "Large opens · {n} · {ntl} total",
+      "hint": "Opens, adds and flips seen between two polls, newest first; filter by size, side and cohort (e.g. timing-significant traders).",
+      "time": "Time",
+      "kind": "Kind",
+      "amount": "Amount",
+      "entry": "Avg entry",
+      "now": "Unrealized now",
+      "approx": "between polls",
+      "kinds": {
+        "open": "open",
+        "flip": "flip",
+        "increase": "add",
+        "decrease": "trim",
+        "close": "close",
+        "first_seen": "first seen"
+      }
+    },
+    "under": {
+      "title": "Underwater",
+      "hint": "The largest open losses, and whether the trader kept adding while underwater in the last 72 hours — the positions most likely to blow up next.",
+      "addingOnly": "Only adding while underwater",
+      "adds": "Adds underwater (72 h)",
+      "addsN": "{n} · {ntl}"
+    },
+    "whales": {
+      "title": "Whale moves",
+      "hint": "The largest positions and their recent adds (▲) and trims (▼).",
+      "change": "{n} h change",
+      "closed": "Large positions closed in {n} h"
+    }
   }
 }

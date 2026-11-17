@@ -172,3 +172,34 @@ def test_api_drilldown_matches_aggregates_and_liquidations(client, sf):
     ev = client.get("/api/v1/market/events", params={"kinds": "first_seen"}).json()["rows"]
     assert len(ev) == 5  # fresh traders' first sightings (the stale one's is older than 24h)
     assert client.get("/api/v1/market/events", params={"kinds": "bogus"}).status_code == 422
+
+
+def test_position_lists_margin_risk_liquidated_underwater_whales(client, sf):
+    ids = _seed_market(sf)
+    by = lambda sort: [r["address"][:3] for r in client.get(  # noqa: E731
+        "/api/v1/market/contributors", params={"coin": "BTC", "sort": sort}).json()["rows"]]
+    # implied margin: A 100/10x = 10, B 200/25x = 8, C (OKX) 300/20x = 15
+    assert by("margin") == ["okx", "0xa", "0xb"]
+    assert by("liq") == ["0xb", "0xa", "okx"]  # B is 4% from liquidation, A 20%, C unknown last
+    risk = client.get("/api/v1/market/at-risk", params={"max_dist": 0.1}).json()
+    assert [r["address"][:3] for r in risk["rows"]] == ["0xb"] and risk["rows"][0]["liq_dist"] == pytest.approx(0.04)
+    assert risk["buckets"] == [{"within": "5", "side": "short", "positions": 1, "notional": 200.0}]
+    now = datetime.now(UTC)
+    with sf() as s:
+        # B's BTC short disappears with the price at its last liquidation price (104): a suspected liquidation
+        record_observation(s, ids["b"], "hyperliquid", {"ETH": P(30, 10, 5)}, D(800), now, mids={"BTC": D("103.8")})
+        # A adds to an ETH long while underwater (mark 9 below entry 10)
+        record_observation(s, ids["a"], "hyperliquid", {"BTC": P(1, 100, 10, 80), "ETH": P(1, 10, 5, entry=10)},
+                           D(1000), now - timedelta(minutes=2))
+        record_observation(s, ids["a"], "hyperliquid", {"BTC": P(1, 100, 10, 80),
+                                                        "ETH": Pos(D(2), D(10), 5, None, D(18), D(-2), "cross")},
+                           D(1000), now - timedelta(minutes=1))
+        s.commit()
+    liq = client.get("/api/v1/market/liquidated").json()
+    assert [(r["address"][:3], r["coin"], r["liq_px"]) for r in liq["rows"]] == [("0xb", "BTC", 104.0)]
+    assert liq["totals"] == [{"side": "short", "positions": 1, "notional": pytest.approx(207.6)}]
+    uw = client.get("/api/v1/market/underwater", params={"adding_only": True}).json()["rows"]
+    assert [(r["address"][:3], r["coin"], r["adds_underwater"]) for r in uw] == [("0xa", "ETH", 1)]
+    w = client.get("/api/v1/market/whales", params={"limit": 2}).json()
+    assert [r["notional_usd"] for r in w["rows"]] == [500.0, 300.0]
+    assert w["closed"][0]["address"][:3] == "0xb"

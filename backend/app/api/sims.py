@@ -85,7 +85,9 @@ SUMMARY_SQL = """
                SELECT equity, max(equity) OVER (ORDER BY t) AS peak FROM sim_equity q WHERE q.sim_id = c.id) x) AS max_dd,
            (SELECT count(*) FROM sim_position p WHERE p.sim_id = c.id) AS open_positions,
            (SELECT count(*) FROM sim_trade t WHERE t.sim_id = c.id AND t.kind = 'liquidation') AS liquidations,
-           (SELECT status FROM trader_health h WHERE h.wallet_id = w.id) AS leader_health
+           (SELECT status FROM trader_health h WHERE h.wallet_id = w.id) AS leader_health,
+           coalesce((c.state ->> 'capped_cycles')::int, 0) AS capped_cycles,
+           coalesce((c.state ->> 'sized_cycles')::int, 0) AS sized_cycles
     FROM copy_sim c JOIN wallet w ON w.id = c.leader_wallet_id
     LEFT JOIN wallet_alias a ON a.wallet_id = w.id AND a.owner = c.owner
     LEFT JOIN LATERAL (SELECT equity, t, gross_exposure FROM sim_equity q WHERE q.sim_id = c.id ORDER BY t DESC LIMIT 1) e

@@ -67,6 +67,13 @@ export default async function SimPage({ params }: { params: Promise<{ id: string
         <Stat label={t("stats.pnl")} value={<span className={signClass(s.pnl)}>{fmtUsd(s.pnl, locale)}</span>} sub={<span className={signClass(s.pnl)}>{fmtPct(s.return, locale)}</span>} />
         <Stat label={t("stats.unrealized")} value={<span className={signClass(unreal)}>{fmtUsd(unreal, locale)}</span>} sub={t("positionsN", { n: d.positions.length })} />
         <Stat label={t("stats.mdd")} value={<span className={signClass(s.max_dd)}>{fmtPct(s.max_dd, locale)}</span>} />
+        {s.sized_cycles > 0 && (
+          <Stat
+            label={t("stats.capped")}
+            value={<span className={s.capped_cycles / s.sized_cycles > 0.1 ? "text-warn" : ""}>{fmtPct(s.capped_cycles / s.sized_cycles, locale, 0, false)}</span>}
+            sub={t("stats.cappedSub", { n: s.capped_cycles, total: s.sized_cycles })}
+          />
+        )}
         <Stat label={t("stats.exposure")} value={s.gross_exposure !== null && s.equity > 0 ? `${fmtNum(s.gross_exposure / s.equity, locale, 2)}×` : "—"} sub={fmtUsd(s.gross_exposure, locale)} />
         <Stat
           label={t("stats.costs")}

@@ -14,9 +14,24 @@ from app.market import divergence, stats, structure
 from app.market.stats import Cohort, Venue
 
 router = APIRouter(prefix="/api/v1/market", tags=["market"])
-NUMERIC = ("near_long_liq_pct", "near_short_liq_pct", "long_ntl", "short_ntl", "lev10_long_ntl", "lev10_short_ntl", "lev20_long_ntl", "lev20_short_ntl",
+NUMERIC = ("margin", "liq_dist", "roe", "near_long_liq_pct", "near_short_liq_pct", "long_ntl", "short_ntl", "lev10_long_ntl", "lev10_short_ntl", "lev20_long_ntl", "lev20_short_ntl",
            "liq_known_ntl", "mark_px", "median_leverage", "szi", "notional_usd", "entry_px", "liq_px", "upl",
            "account_value", "notional_change", "szi_before", "szi_after", "gross_notional")
+
+
+# implied margin, distance to the reported liquidation price, and return on that margin, for a `fresh` alias f
+POSITION_EXTRAS = """f.notional_usd / nullif(f.leverage, 0) AS margin,
+               abs(f.mark_px - f.liq_px) / nullif(f.mark_px, 0) AS liq_dist,
+               f.upl / nullif(f.notional_usd / nullif(f.leverage, 0), 0) AS roe"""
+POSITION_SORTS = {
+    "notional": "f.notional_usd DESC",
+    "margin": "f.notional_usd / nullif(f.leverage, 0) DESC NULLS LAST",
+    "upl": "f.upl ASC NULLS LAST",  # biggest loss first
+    "liq": "abs(f.mark_px - f.liq_px) / nullif(f.mark_px, 0) ASC NULLS LAST",
+    "leverage": "f.leverage DESC NULLS LAST",
+    "opened": "coalesce(f.opened_at, f.first_seen_at) DESC",
+}
+LIQ_TOLERANCE = 0.005  # a close within 0.5% of (or beyond) the last reported liquidation price
 
 
 def _clean(d: dict) -> dict:
@@ -55,9 +70,13 @@ def contributors(session: Session = Depends(get_session), coin: str = Query(...,
                  side: Literal["long", "short", "all"] = "all", venue: Venue = "all", cohort: Cohort = "all",
                  min_lev: int = Query(0, ge=0, le=200), limit: int = Query(200, ge=1, le=1000),
                  entry_min: float | None = None, entry_max: float | None = None,
-                 liq_min: float | None = None, liq_max: float | None = None):
+                 liq_min: float | None = None, liq_max: float | None = None,
+                 sort: Literal["notional", "margin", "upl", "liq", "leverage", "opened"] = "notional"):
     """The traders and positions behind a coin's numbers (same freshness and cohort rules as the aggregates);
-    entry / liquidation price ranges drill into a zone of the positioning structure."""
+    entry / liquidation price ranges drill into a zone of the positioning structure.
+
+    margin = notional / leverage: the initial margin implied by the reported leverage. For cross-margin positions the
+    account's whole equity backs them, so it is an estimate of what the trader committed, not an isolated amount."""
     now = datetime.now(UTC)
     side_sql = {"long": "AND f.szi > 0", "short": "AND f.szi < 0", "all": ""}[side]
     for col, lo, hi in (("entry_px", entry_min, entry_max), ("liq_px", liq_min, liq_max)):
@@ -69,11 +88,12 @@ def contributors(session: Session = Depends(get_session), coin: str = Query(...,
         WITH {stats.fresh_cte(venue, cohort, min_lev)}
         SELECT w.address, w.display_name, f.venue, f.szi, f.notional_usd, f.mark_px, f.entry_px, f.leverage,
                f.margin_mode, f.liq_px, f.upl, f.opened_at, f.opened_at_source, f.opened_after, f.first_seen_at,
-               f.observed_at, pw.account_value
+               f.observed_at, pw.account_value, {POSITION_EXTRAS}
         FROM fresh f JOIN wallet w ON w.id = f.wallet_id JOIN position_watch pw ON pw.wallet_id = f.wallet_id
         WHERE f.coin = :coin {side_sql}
-        ORDER BY f.notional_usd DESC LIMIT :n"""), {"now": now, "coin": coin, "n": limit}).mappings().all()
-    return {"as_of": now, "coin": coin, "rows": [_clean(dict(r)) for r in rows]}
+        ORDER BY {POSITION_SORTS[sort]}, f.notional_usd DESC LIMIT :n"""),
+        {"now": now, "coin": coin, "n": limit}).mappings().all()
+    return {"as_of": now, "coin": coin, "sort": sort, "rows": [_clean(dict(r)) for r in rows]}
 
 
 @router.get("/events")
@@ -198,3 +218,117 @@ def smart_vs_crowd(session: Session = Depends(get_session), venue: Venue = "all"
     return {"as_of": datetime.now(UTC), "venue": venue, "min_smart": divergence.MIN_SMART,
             "coins": divergence.current(session, venue)[:30], "coin": coin,
             "history": divergence.history(session, venue, coin, days)}
+
+
+POSITION_COLS = """w.address, w.display_name, f.venue, f.coin, f.szi, f.notional_usd, f.mark_px, f.entry_px, f.leverage,
+               f.margin_mode, f.liq_px, f.upl, f.opened_at, f.opened_at_source, f.observed_at"""
+
+
+@router.get("/at-risk")
+def at_risk(session: Session = Depends(get_session), venue: Venue = "all", cohort: Cohort = "all",
+            coin: str | None = Query(None, max_length=48), side: Literal["long", "short", "all"] = "all",
+            max_dist: float = Query(0.1, gt=0, le=1), min_notional: float = Query(0, ge=0),
+            limit: int = Query(200, ge=1, le=1000)):
+    """Positions closest to their venue-reported liquidation price, across coins (liquidation early warning)."""
+    now = datetime.now(UTC)
+    cond = (" AND f.coin = :coin" if coin else "") + {"long": " AND f.szi > 0", "short": " AND f.szi < 0", "all": ""}[side]
+    base = f"""WITH {stats.fresh_cte(venue, cohort)}
+        SELECT {POSITION_COLS}, {POSITION_EXTRAS}
+        FROM fresh f JOIN wallet w ON w.id = f.wallet_id
+        WHERE f.liq_px > 0 AND f.mark_px > 0 AND f.notional_usd >= :mn
+          AND ((f.szi > 0 AND f.liq_px < f.mark_px) OR (f.szi < 0 AND f.liq_px > f.mark_px))
+          AND abs(f.mark_px - f.liq_px) / f.mark_px <= :d{cond}"""
+    params = {"now": now, "mn": min_notional, "d": max_dist, "coin": coin}
+    rows = session.execute(text(base + " ORDER BY liq_dist ASC LIMIT :n"), {**params, "n": limit}).mappings().all()
+    buckets = session.execute(text(f"""
+        SELECT CASE WHEN liq_dist <= 0.02 THEN '2' WHEN liq_dist <= 0.05 THEN '5' ELSE '10' END AS b,
+               sign(szi) AS side, count(*) AS n, sum(notional_usd) AS ntl FROM ({base}) x GROUP BY 1, 2"""),
+        params).mappings().all()
+    return {"as_of": now, "max_dist": max_dist,
+            "buckets": [{"within": r["b"], "side": "long" if r["side"] > 0 else "short", "positions": r["n"],
+                         "notional": num(r["ntl"])} for r in buckets],
+            "rows": [_clean(dict(r)) for r in rows]}
+
+
+@router.get("/liquidated")
+def suspected_liquidations(session: Session = Depends(get_session), hours: int = Query(24, ge=1, le=168),
+                           venue: Venue = "all", cohort: Cohort = "all", coin: str | None = Query(None, max_length=48),
+                           min_notional: float = Query(0, ge=0), limit: int = Query(200, ge=1, le=1000)):
+    """Positions that disappeared at (within 0.5%) or beyond the liquidation price they last reported: inferred, not
+    the exchange's liquidation record. Only closes observed after liquidation prices started to be kept on closes."""
+    now = datetime.now(UTC)
+    cond = stats.scope(venue, cohort, col="e.wallet_id", venue_col="e.venue")
+    rows = session.execute(text(f"""
+        SELECT w.address, w.display_name, e.venue, e.coin, e.side, e.szi_before, e.notional_change, e.mark_px,
+               e.entry_px, e.leverage, e.liq_px, e.event_time, e.window_start, e.observed_at,
+               e.notional_change / nullif(e.leverage, 0) AS margin
+        FROM market_event e JOIN wallet w ON w.id = e.wallet_id
+        WHERE e.kind = 'close' AND e.event_time > :since AND e.liq_px > 0 AND e.mark_px > 0
+          AND e.notional_change >= :mn AND {cond} {"AND e.coin = :coin" if coin else ""}
+          AND ((e.side = 'long' AND e.mark_px <= e.liq_px * (1 + :tol))
+               OR (e.side = 'short' AND e.mark_px >= e.liq_px * (1 - :tol)))
+        ORDER BY e.notional_change DESC LIMIT :n"""),
+        {"since": now - timedelta(hours=hours), "mn": min_notional, "coin": coin, "tol": LIQ_TOLERANCE,
+         "n": limit}).mappings().all()
+    out = [_clean(dict(r)) for r in rows]
+    totals: dict[str, dict] = {}
+    for r in out:
+        t = totals.setdefault(r["side"], {"side": r["side"], "positions": 0, "notional": 0.0})
+        t["positions"] += 1
+        t["notional"] += r["notional_change"] or 0
+    return {"as_of": now, "hours": hours, "tolerance": LIQ_TOLERANCE, "totals": list(totals.values()), "rows": out}
+
+
+@router.get("/underwater")
+def underwater(session: Session = Depends(get_session), venue: Venue = "all", cohort: Cohort = "all",
+               coin: str | None = Query(None, max_length=48), adding_only: bool = False,
+               min_notional: float = Query(0, ge=0), limit: int = Query(200, ge=1, le=1000)):
+    """Largest open losses, and whether the trader kept adding while underwater in the last 72 hours."""
+    now = datetime.now(UTC)
+    rows = session.execute(text(f"""
+        WITH {stats.fresh_cte(venue, cohort)},
+        adds AS (
+          SELECT e.wallet_id, e.coin, count(*) AS n, sum(e.notional_change) AS ntl FROM market_event e
+          WHERE e.kind = 'increase' AND e.event_time > :since AND e.mark_px > 0 AND e.entry_px > 0
+            AND ((e.side = 'long' AND e.mark_px < e.entry_px) OR (e.side = 'short' AND e.mark_px > e.entry_px))
+          GROUP BY 1, 2)
+        SELECT {POSITION_COLS}, {POSITION_EXTRAS}, coalesce(a.n, 0) AS adds_underwater, a.ntl AS added_notional
+        FROM fresh f JOIN wallet w ON w.id = f.wallet_id
+        LEFT JOIN adds a ON a.wallet_id = f.wallet_id AND a.coin = f.coin
+        WHERE f.upl < 0 AND f.notional_usd >= :mn {"AND f.coin = :coin" if coin else ""}
+          {"AND a.n > 0" if adding_only else ""}
+        ORDER BY f.upl ASC LIMIT :n"""),
+        {"now": now, "since": now - timedelta(hours=72), "mn": min_notional, "coin": coin, "n": limit}).mappings().all()
+    return {"as_of": now, "rows": [{**_clean(dict(r)), "added_notional": num(r["added_notional"])} for r in rows]}
+
+
+@router.get("/whales")
+def whales(session: Session = Depends(get_session), venue: Venue = "all", cohort: Cohort = "all",
+           coin: str | None = Query(None, max_length=48), limit: int = Query(30, ge=1, le=200),
+           hours: int = Query(24, ge=1, le=168)):
+    """The largest open positions and how each changed over the last `hours` (opens and adds positive, trims and
+    closes negative), plus the largest positions closed in that time."""
+    now = datetime.now(UTC)
+    since = now - timedelta(hours=hours)
+    flow = """sum(CASE WHEN e.kind IN ('open', 'increase', 'first_seen') THEN e.notional_change
+                       WHEN e.kind IN ('decrease', 'close') THEN -e.notional_change ELSE 0 END)"""
+    rows = session.execute(text(f"""
+        WITH {stats.fresh_cte(venue, cohort)}
+        SELECT {POSITION_COLS}, {POSITION_EXTRAS},
+               (SELECT {flow} FROM market_event e WHERE e.wallet_id = f.wallet_id AND e.coin = f.coin
+                  AND e.event_time > :since AND e.kind <> 'first_seen') AS change,
+               (SELECT e.kind FROM market_event e WHERE e.wallet_id = f.wallet_id AND e.coin = f.coin
+                  AND e.event_time > :since ORDER BY e.event_time DESC LIMIT 1) AS last_kind
+        FROM fresh f JOIN wallet w ON w.id = f.wallet_id
+        WHERE true {"AND f.coin = :coin" if coin else ""}
+        ORDER BY f.notional_usd DESC LIMIT :n"""), {"now": now, "since": since, "coin": coin, "n": limit}).mappings().all()
+    cond = stats.scope(venue, cohort, col="e.wallet_id", venue_col="e.venue")
+    closed = session.execute(text(f"""
+        SELECT w.address, w.display_name, e.venue, e.coin, e.side, e.notional_change, e.mark_px, e.entry_px,
+               e.event_time
+        FROM market_event e JOIN wallet w ON w.id = e.wallet_id
+        WHERE e.kind = 'close' AND e.event_time > :since AND {cond} {"AND e.coin = :coin" if coin else ""}
+        ORDER BY e.notional_change DESC LIMIT 10"""), {"since": since, "coin": coin}).mappings().all()
+    return {"as_of": now, "hours": hours,
+            "rows": [{**_clean(dict(r)), "change": num(r["change"])} for r in rows],
+            "closed": [_clean(dict(r)) for r in closed]}

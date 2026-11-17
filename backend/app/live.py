@@ -216,6 +216,19 @@ async def fetch_market_meta(client: HyperliquidInfoClient) -> tuple[dict[str, De
     return funding, max_lev
 
 
+def store_coin_limits(sf: sessionmaker[Session], venue: str, max_lev: dict[str, int]) -> None:
+    """Keep the exchange's per-coin maximum leverage for backtests and the market pages."""
+    if not max_lev:
+        return
+    now = datetime.now(UTC)
+    with sf() as s:
+        s.execute(text("""
+            INSERT INTO coin_limit (venue, coin, max_leverage, updated_at) VALUES (:v, :c, :m, :t)
+            ON CONFLICT (venue, coin) DO UPDATE SET max_leverage = EXCLUDED.max_leverage, updated_at = EXCLUDED.updated_at"""),
+            [{"v": venue, "c": c, "m": m, "t": now} for c, m in max_lev.items()])
+        s.commit()
+
+
 def write_status(sf: sessionmaker[Session], status: dict) -> None:
     with sf() as s:
         settings_store.put(s, "live_status", status)
@@ -250,6 +263,7 @@ async def run(settings: Settings) -> None:
                 if market_hour != hour:
                     try:
                         funding, max_lev = await fetch_market_meta(client)
+                        store_coin_limits(sf, "hyperliquid", max_lev)
                         market_hour = hour
                     except Exception:  # noqa: BLE001 — keep the previous values, retry next cycle
                         log.warning("metaAndAssetCtxs failed", exc_info=True)

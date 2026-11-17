@@ -1174,3 +1174,14 @@ class TraderHealth(Base):
     changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class CoinLimit(Base):
+    """Exchange-reported maximum leverage per coin (Hyperliquid metaAndAssetCtxs, refreshed hourly by the live loop)."""
+
+    __tablename__ = "coin_limit"
+
+    venue: Mapped[str] = mapped_column(String(16), primary_key=True)
+    coin: Mapped[str] = mapped_column(String(48), primary_key=True)
+    max_leverage: Mapped[int] = mapped_column(Integer)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

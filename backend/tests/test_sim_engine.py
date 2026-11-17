@@ -334,3 +334,19 @@ def test_leader_liquidation_is_mirrored(sf):
         last = s.execute(text("SELECT kind, reason FROM sim_trade WHERE sim_id = :s ORDER BY id DESC LIMIT 1"),
                          {"s": sid}).one()
     assert last.reason == "leader_liquidated" and last.kind == "trade"  # account mode: a close, labelled
+
+
+def test_capped_cycles_are_counted(sf):
+    wid, sid = seed(sf, {})  # account mode, 10x cap
+    step_simulations(sf, MIDS, now=T0)
+    with sf() as s:
+        set_leader(s, wid, {"BTC": "100"})  # $8M on a $400k leader = 20x -> capped at 10x
+        s.commit()
+    step_simulations(sf, MIDS, now=T0 + timedelta(seconds=30))
+    with sf() as s:
+        st = s.execute(text("SELECT state FROM copy_sim WHERE id = :s"), {"s": sid}).scalar_one()
+        s.execute(text("UPDATE copy_sim SET max_leverage = 125 WHERE id = :s"), {"s": sid})  # follow: no cap
+        s.commit()
+    assert st["sized_cycles"] == 1 and st["capped_cycles"] == 1
+    step_simulations(sf, MIDS, now=T0 + timedelta(seconds=60))
+    assert pos(sf, sid)["BTC"] * MIDS["BTC"] == pytest.approx(D(200000), rel=D("0.01"))  # the leader's 20x

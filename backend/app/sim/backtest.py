@@ -147,10 +147,14 @@ def load_inputs(session: Session, wallet_id: int, since: datetime, until: dateti
             SELECT coin, open_time, lever FROM okx_position WHERE wallet_id = :w AND open_time < :b AND lever IS NOT NULL
             ORDER BY open_time"""), {"w": wallet_id, "b": until}).all():
             levs.setdefault(coin, []).append((t, int(float(lever))))
-    # coin maximum leverage (maintenance margin), as the OKX live loop reads it; other coins use the engine default
-    max_lev = {c: int(float(v)) for c, v in session.execute(text("""
+    # coin maximum leverage (maintenance margin) on the trader's own venue: Hyperliquid's from coin_limit (stored by
+    # the live loop), OKX's from its instruments; the other venue's figure fills gaps, then the engine default
+    okx_lev = {c: int(float(v)) for c, v in session.execute(text("""
         SELECT coin, max(max_lever) FROM okx_instrument WHERE inst_id LIKE '%-USDT-SWAP' AND max_lever IS NOT NULL
         GROUP BY coin""")).all()}
+    hl_lev = {c: int(v) for c, v in session.execute(text(
+        "SELECT coin, max_leverage FROM coin_limit WHERE venue = 'hyperliquid'")).all()}
+    max_lev = {**okx_lev, **hl_lev} if venue == "hyperliquid" else {**hl_lev, **okx_lev}
     return {"venue": venue, "asset": float(asset) if asset else None, "decisions": decisions, "equity": equity,
             "levs": levs, "max_lev": max_lev,
             "equity_source": "history" if equity else "current_assets" if asset else None}

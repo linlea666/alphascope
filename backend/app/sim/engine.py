@@ -95,7 +95,7 @@ def isolated_liq_px(entry: Decimal, size: Decimal, lev: Decimal, coin_max_lev: i
 def target_sizes(p: Params, leader: dict[str, Decimal], leader_equity: Decimal | None, equity: Decimal,
                  mids: dict[str, Decimal], followed: set[str], current: dict[str, Decimal],
                  leader_lev: dict[str, int | None] | None = None,
-                 max_lev: dict[str, int] | None = None) -> dict[str, Decimal]:
+                 max_lev: dict[str, int] | None = None, info: dict | None = None) -> dict[str, Decimal]:
     """Target position (coin units) for every coin that is followed or currently held.
 
     equity_ratio is proportional copying: our notional = size_factor x (leader notional / leader equity) x our equity,
@@ -129,6 +129,9 @@ def target_sizes(p: Params, leader: dict[str, Decimal], leader_equity: Decimal |
         gross = sum(abs(v) for v in notional.values())
         limit = p.max_leverage * equity if equity > 0 else ZERO
         scale = (limit / gross) if gross > limit and gross > 0 else Decimal(1)
+    if info is not None:  # how much the leverage limit shrank the copy this time (1 = not at all)
+        info["scale"] = scale
+        info["sized"] = any(v != 0 for v in notional.values())
     return {c: (v * scale / mids[c]) for c, v in notional.items()}
 
 
@@ -348,7 +351,11 @@ def _step_one(s: Session, sim, mids, funding, max_lev, now: datetime, stats: dic
         current = {c: z for c, (z, _) in positions.items()}
         unreal = sum(z * (mids.get(c, e) - e) for c, (z, e) in positions.items())
         equity = cash + unreal
-        targets = target_sizes(p, leader, leader_equity, equity, mids, followed, current, leader_lev, max_lev)
+        info: dict = {}
+        targets = target_sizes(p, leader, leader_equity, equity, mids, followed, current, leader_lev, max_lev, info)
+        if info.get("sized"):  # cycles where the leverage limit shrank the copy below the leader's proportions
+            state["sized_cycles"] = int(state.get("sized_cycles") or 0) + 1
+            state["capped_cycles"] = int(state.get("capped_cycles") or 0) + (info["scale"] < 1)
         orders = plan_orders(p, targets, current, mids)
         pending = dict(state.get("pending") or {})
         if sim.delay_seconds:

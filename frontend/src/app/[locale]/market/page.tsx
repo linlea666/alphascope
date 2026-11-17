@@ -1,8 +1,11 @@
 import { getLocale, getTranslations } from "next-intl/server";
+import type { ReactNode } from "react";
 import { AddressLink } from "@/components/AddressLink";
 import { ApiErrorState } from "@/components/ApiErrorState";
 import { LiqLadder, MarketHistoryChart, MarketTreemap, PriceLadder } from "@/components/MarketCharts";
 import { DivergencePanel } from "@/components/DivergencePanel";
+import { MarketBoard, VIEWS, ViewTabs, type View } from "@/components/MarketBoards";
+import { Term } from "@/components/Term";
 import { Badge, PageHeader, Panel, Stat, td, th } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { api, ApiError, type MarketCoin, type MarketContributor, type MarketEvent, type MarketHistoryRow, type MarketOverview, type MarketStructure, type PriceZone } from "@/lib/api";
@@ -26,6 +29,34 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
   const side = sp.side === "long" || sp.side === "short" ? sp.side : "all";
   const base: Record<string, string> = { venue, cohort, hours: String(hours), kind, side };
   if (sp.coin) base.coin = sp.coin;
+  const view: View = !sp.coin && VIEWS.includes(sp.view as View) ? (sp.view as View) : "overview";
+
+  if (view !== "overview") {
+    // position lists: keep the venue / cohort choice and the list's own filters in the URL
+    const keep = Object.fromEntries(Object.entries({ ...sp, venue, cohort, view }).filter((e): e is [string, string] => e[1] !== undefined));
+    const qv = (o: Record<string, string | undefined>) => Object.fromEntries(Object.entries({ ...keep, ...o }).filter(([, v]) => v !== undefined)) as Record<string, string>;
+    const pillV = (active: boolean) => `rounded border px-3 py-1 ${active ? "border-accent bg-accent text-white" : "border-border text-muted hover:text-text"}`;
+    return (
+      <div className="space-y-4">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} />
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          {VENUES.map((v) => (
+            <Link key={v} href={{ pathname: "/market", query: qv({ venue: v }) }} className={pillV(v === venue)}>
+              {t(`venues.${v}`)}
+            </Link>
+          ))}
+          <span className="mx-1 h-5 w-px bg-border" />
+          {COHORTS.map((c) => (
+            <Link key={c} href={{ pathname: "/market", query: qv({ cohort: c }) }} className={pillV(c === cohort)} title={t(`cohortHints.${c}`)}>
+              {t(`cohorts.${c}`)}
+            </Link>
+          ))}
+        </div>
+        <ViewTabs view={view} q={(o) => qv({ ...o, mn: undefined, dist: undefined, bside: undefined, lh: undefined, oh: undefined, wh: undefined, adding: undefined })} />
+        <MarketBoard view={view} venue={venue} cohort={cohort} sp={sp} q={qv} />
+      </div>
+    );
+  }
 
   let ov: MarketOverview;
   let coins: MarketCoin[];
@@ -47,7 +78,7 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
     [{ rows: history }, st, { rows: contributors }] = await Promise.all([
       api.marketHistory({ coin: sp.coin, venue, cohort, days: 7 }).catch(() => ({ rows: [] })),
       api.marketStructure({ coin: sp.coin, venue, cohort, min_lev: sp.minlev ? Number(sp.minlev) : 0 }).catch(() => null),
-      api.marketContributors({ coin: sp.coin, venue, cohort, side: sp.cside === "long" || sp.cside === "short" ? sp.cside : "all", limit: 200, entry_min: sp.elo, entry_max: sp.ehi, liq_min: sp.llo, liq_max: sp.lhi, min_lev: sp.llo ? sp.minlev : undefined }).catch(() => ({ rows: [] })),
+      api.marketContributors({ coin: sp.coin, venue, cohort, side: sp.cside === "long" || sp.cside === "short" ? sp.cside : "all", limit: 200, sort: sp.csort, entry_min: sp.elo, entry_max: sp.ehi, liq_min: sp.llo, liq_max: sp.lhi, min_lev: sp.llo ? sp.minlev : undefined }).catch(() => ({ rows: [] })),
     ]);
   } else {
     history = (await api.marketHistory({ coin: "*", venue, cohort, days: 7 }).catch(() => ({ rows: [] }))).rows;
@@ -78,6 +109,7 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
           </Link>
         ))}
       </div>
+      {!sp.coin && <ViewTabs view="overview" q={q} />}
       <p className="text-xs text-muted">
         {t("coverage", {
           fresh: fmtNum(ov.coverage.fresh, locale),
@@ -215,6 +247,15 @@ async function CoinDetail({ coin, row, history, st, contributors, sp, q, locale 
   const t = await getTranslations("market");
   const pill = (active: boolean) => `rounded border px-2 py-0.5 ${active ? "border-accent text-accent" : "border-border text-muted hover:text-text"}`;
   const cside = sp.cside === "long" || sp.cside === "short" ? sp.cside : "all";
+  const csort = sp.csort ?? "notional";
+  const sortTh = (key: string, label: ReactNode, right = true) => (
+    <th className={`${th} ${right ? "text-right" : ""}`}>
+      <Link href={{ pathname: "/market", query: q({ csort: key === "notional" ? undefined : key }) }} scroll={false} className={`hover:text-text ${csort === key ? "text-accent" : ""}`}>
+        {label}
+        {csort === key ? " ↓" : ""}
+      </Link>
+    </th>
+  );
   const fmtPx = (v: number | null) => (v === null ? "—" : fmtNum(v, locale, v >= 100 ? 2 : 6));
   return (
     <div className="space-y-4">
@@ -266,12 +307,13 @@ async function CoinDetail({ coin, row, history, st, contributors, sp, q, locale 
               <thead className="sticky top-0 bg-panel-2">
                 <tr>
                   <th className={th}>{t("cols.trader")}</th>
-                  <th className={`${th} text-right`}>{t("cols.notional")}</th>
+                  {sortTh("notional", t("cols.notional"))}
+                  {sortTh("margin", <Term k="margin" align="right">{t("cols.margin")}</Term>)}
                   <th className={`${th} text-right`}>{t("cols.entry")}</th>
-                  <th className={`${th} text-right`}>{t("cols.lev")}</th>
-                  <th className={`${th} text-right`}>{t("cols.liq")}</th>
-                  <th className={`${th} text-right`}>{t("cols.upl")}</th>
-                  <th className={th}>{t("cols.opened")}</th>
+                  {sortTh("leverage", t("cols.lev"))}
+                  {sortTh("liq", t("cols.liq"))}
+                  {sortTh("upl", t("cols.upl"))}
+                  {sortTh("opened", t("cols.opened"), false)}
                   <th className={th}>{t("cols.observed")}</th>
                 </tr>
               </thead>
@@ -285,13 +327,20 @@ async function CoinDetail({ coin, row, history, st, contributors, sp, q, locale 
                       </span>
                     </td>
                     <td className={`${td} num text-right`}>{fmtUsd(r.notional_usd, locale)}</td>
+                    <td className={`${td} num text-right`}>{fmtUsd(r.margin, locale)}</td>
                     <td className={`${td} num text-right`}>{fmtPx(r.entry_px)}</td>
                     <td className={`${td} num text-right`}>
                       {r.leverage ? `${r.leverage}×` : "—"}
                       {r.margin_mode && <div className="text-[11px] text-muted">{t(`modes.${r.margin_mode === "isolated" ? "isolated" : "cross"}`)}</div>}
                     </td>
-                    <td className={`${td} num text-right text-muted`}>{fmtPx(r.liq_px)}</td>
-                    <td className={`${td} num text-right ${signClass(r.upl)}`}>{fmtUsd(r.upl, locale)}</td>
+                    <td className={`${td} num text-right text-muted`}>
+                      {fmtPx(r.liq_px)}
+                      {r.liq_dist !== null && r.liq_dist !== undefined && <div className={`text-[11px] ${r.liq_dist <= 0.02 ? "font-semibold text-down" : r.liq_dist <= 0.05 ? "text-warn" : ""}`}>{fmtPct(r.liq_dist, locale, 1, false)}</div>}
+                    </td>
+                    <td className={`${td} num text-right ${signClass(r.upl)}`}>
+                      {fmtUsd(r.upl, locale)}
+                      {r.roe !== null && r.roe !== undefined && <div className="text-[11px]">{fmtPct(r.roe, locale, 0)}</div>}
+                    </td>
                     <td className={`${td} num text-xs text-muted`}>
                       {r.opened_at ? fmtTime(r.opened_at, locale) : r.opened_at_source === "window" && r.opened_after ? t("openedAfter", { t: fmtTime(r.opened_after, locale) }) : t("openedUnknown")}
                     </td>

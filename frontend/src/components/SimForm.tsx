@@ -132,19 +132,17 @@ export function SimForm({ simId, initial, leader = "" }: { simId?: number; initi
                 t("ratioHint"),
               )
             : field(t("factor"), <input type="number" min={0.0001} max={100} step="any" required value={p.size_factor} onChange={num("size_factor")} className={input} />, t("factorHint"))}
-        {p.leverage_mode === "leader"
-          ? field(
-              t("leverageCap"),
-              <span className="mt-1 block space-y-1">
-                <label className="flex items-center gap-1.5">
-                  <input type="checkbox" checked={followLeader} onChange={(e) => setP({ ...p, max_leverage: e.target.checked ? MAX_LEVERAGE : DEFAULTS.max_leverage })} />
-                  <span>{t("followLeverage")}</span>
-                </label>
-                {!followLeader && <input type="number" min={0.1} max={MAX_LEVERAGE} step="any" required value={p.max_leverage} onChange={num("max_leverage")} className={`${input} mt-0`} />}
-              </span>,
-              followLeader ? t("followLeverageHint") : t("leverageCapHint"),
-            )
-          : field(t("maxLeverage"), <input type="number" min={0.1} max={MAX_LEVERAGE} step="any" required value={p.max_leverage} onChange={num("max_leverage")} className={input} />, t("maxLeverageHint"))}
+        {field(
+          p.leverage_mode === "leader" ? t("leverageCap") : t("maxLeverage"),
+          <span className="mt-1 block space-y-1">
+            <label className="flex items-center gap-1.5">
+              <input type="checkbox" checked={followLeader} onChange={(e) => setP({ ...p, max_leverage: e.target.checked ? MAX_LEVERAGE : DEFAULTS.max_leverage })} />
+              <span>{p.leverage_mode === "leader" ? t("followLeverage") : t("followExposure")}</span>
+            </label>
+            {!followLeader && <input type="number" min={0.1} max={MAX_LEVERAGE} step="any" required value={p.max_leverage} onChange={num("max_leverage")} className={`${input} mt-0`} />}
+          </span>,
+          p.leverage_mode === "leader" ? (followLeader ? t("followLeverageHint") : t("leverageCapHint")) : followLeader ? t("followExposureHint") : t("maxLeverageHint"),
+        )}
       </div>
       {p.sizing === "equity_ratio" && <FormulaCard capital={simId ? 10000 : capital} ratio={p.size_factor} />}
       <div className="grid gap-3 sm:grid-cols-2">
@@ -154,8 +152,9 @@ export function SimForm({ simId, initial, leader = "" }: { simId?: number; initi
             value={p.leverage_mode}
             onChange={(e) => {
               const mode = e.target.value as LeverageMode;
-              // switching to leader mode with the untouched default cap: follow the leader's leverage
-              const lev = mode === "leader" && p.max_leverage === DEFAULTS.max_leverage ? MAX_LEVERAGE : mode === "account" && p.max_leverage >= MAX_LEVERAGE ? DEFAULTS.max_leverage : p.max_leverage;
+              // switching to leader mode with the untouched default cap: follow the leader's leverage (both modes keep an
+              // explicit "follow" choice)
+              const lev = mode === "leader" && p.max_leverage === DEFAULTS.max_leverage ? MAX_LEVERAGE : p.max_leverage;
               setP({ ...p, leverage_mode: mode, max_leverage: lev });
             }}
             className={input}
