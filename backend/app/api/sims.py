@@ -14,7 +14,7 @@ from app.api.common import num
 from app.api.watch import _queue_fills
 from app.db import get_session
 from app.sim import analytics as an
-from app.sources.leaderboard import ADDRESS_RE
+from app.traders import parse_trader_key
 
 router = APIRouter(prefix="/api/v1/sims", tags=["sims"])
 OWNER = "default"
@@ -118,8 +118,8 @@ def list_sims(session: Session = Depends(get_session)):
 
 @router.post("")
 def create_sim(body: SimCreate, session: Session = Depends(get_session)):
-    leader = body.leader.lower()
-    if not ADDRESS_RE.match(leader):
+    leader = parse_trader_key(body.leader) or ''
+    if not leader:
         raise HTTPException(422, "invalid leader address")
     wid = session.execute(text("SELECT id FROM wallet WHERE address = :a"), {"a": leader}).scalar()
     if wid is None:

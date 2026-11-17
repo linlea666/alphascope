@@ -4,6 +4,7 @@ import { FlagBadges, ReliabilityBadge, TierBadge } from "@/components/badges";
 import { CopyButton } from "@/components/CopyButton";
 import { EquityChart } from "@/components/EquityChart";
 import { Freshness } from "@/components/Freshness";
+import { OkxTraderPanels } from "@/components/OkxTraderPanels";
 import { PositionCycles } from "@/components/PositionCycles";
 import { REPLAY_BARS, ReplayPanel } from "@/components/ReplayPanel";
 import { TimingPanel } from "@/components/TimingPanel";
@@ -24,7 +25,8 @@ export default async function TraderPage({
   params: Promise<{ address: string }>;
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
-  const { address } = await params;
+  // Next passes reserved characters still encoded ("okx%3A123" for an OKX key)
+  const address = decodeURIComponent((await params).address);
   const search = await searchParams;
   const t = await getTranslations();
   const locale = await getLocale();
@@ -50,6 +52,7 @@ export default async function TraderPage({
     api.replay(address, { coin: search.rc, interval: search.ri || "1h", end: search.re, bars: REPLAY_BARS }).catch(() => null),
   ]);
   const w = d.wallet;
+  const okx = w.venue === "okx" ? d.okx : null;
   const watchCtx = await getWatchContext();
   const enriched = d.metrics.length > 0;
 
@@ -63,34 +66,48 @@ export default async function TraderPage({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {okx && w.avatar_url && <img src={w.avatar_url} alt="" referrerPolicy="no-referrer" className="h-8 w-8 rounded-full" />}
             <h1 className="text-xl font-semibold tracking-tight">{watchCtx.aliases[w.address] ?? w.display_name ?? t("trader.titleFallback")}</h1>
+            <Badge tone={okx ? "warn" : "accent"}>{okx ? "OKX" : "Hyperliquid"}</Badge>
             <WatchButton address={w.address} watched={watchCtx.watched.has(w.address)} />
             <AlertButton address={w.address} subscribed={watchCtx.alerted.has(w.address)} />
             <Link href={{ pathname: "/sims", query: { new: 1, leader: w.address } }} className="rounded border border-border px-2 py-0.5 text-xs text-muted hover:text-accent">
               ⧉ {t("trader.copySim")}
             </Link>
-            <TierBadge tier={w.tier} />
-            <FlagBadges flags={[...w.flags, ...w.enrichment_flags]} />
+            {!okx && <TierBadge tier={w.tier} />}
+            {!okx && <FlagBadges flags={[...w.flags, ...w.enrichment_flags]} />}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <span className="num break-all text-sm text-muted select-all">{w.address}</span>
+            <span className="num break-all text-sm text-muted select-all">{okx ? `${w.handle ?? "—"} · ${w.address}` : w.address}</span>
             <CopyButton text={w.address} label={t("common.copy")} done={t("common.copied")} failed={t("common.copyFailed")} />
-            <a href={`https://hypurrscan.io/address/${w.address}`} target="_blank" rel="noreferrer" className="text-xs text-accent hover:underline">
-              {t("common.viewOnExplorer")} ↗
-            </a>
+            {okx ? (
+              okx.profile_url && (
+                <a href={okx.profile_url} target="_blank" rel="noreferrer" className="text-xs text-accent hover:underline">
+                  {t("okx.viewProfile")} ↗
+                </a>
+              )
+            ) : (
+              <a href={`https://hypurrscan.io/address/${w.address}`} target="_blank" rel="noreferrer" className="text-xs text-accent hover:underline">
+                {t("common.viewOnExplorer")} ↗
+              </a>
+            )}
           </div>
           {!w.present_in_latest && w.removed_at && (
             <p className="mt-2 text-sm text-warn">{t("trader.removed", { date: fmtTime(w.removed_at, locale) })}</p>
           )}
         </div>
         <div className="text-right">
-          <div className="text-xs text-muted">{t("cols.accountValue")} ({t("common.official")})</div>
-          <div className="num text-2xl font-semibold">{fmtUsd(w.account_value, locale, false)}</div>
+          <div className="text-xs text-muted">{okx ? t("okx.asset") : t("cols.accountValue")} ({t("common.official")})</div>
+          <div className="num text-2xl font-semibold">
+            {fmtUsd(okx ? (okx.trader?.asset ?? okx.ranks[0]?.asset ?? null) : w.account_value, locale, false)}
+          </div>
         </div>
       </div>
-      <Freshness value={d.freshness} />
+      {okx ? <OkxTraderPanels okx={okx} /> : <Freshness value={d.freshness} />}
 
-      <div className="grid gap-5 lg:grid-cols-3">
+      {!okx && (
+        <div className="grid gap-5 lg:grid-cols-3">
         <Panel title={t("trader.officialTitle")} hint={t("trader.officialHint")}>
           <table className="w-full text-sm">
             <thead>
@@ -178,9 +195,11 @@ export default async function TraderPage({
             </div>
           )}
         </Panel>
-      </div>
+        </div>
+      )}
 
-      <Panel title={t("trader.equityTitle")} hint={t("trader.equityHint")}>
+      {!okx && (
+        <Panel title={t("trader.equityTitle")} hint={t("trader.equityHint")}>
         <EquityChart
           month={d.equity.month}
           allTime={d.equity.allTime}
@@ -193,13 +212,17 @@ export default async function TraderPage({
             empty: enriched ? t("common.noData") : t("trader.notEnrichedHint"),
           }}
         />
-      </Panel>
+        </Panel>
+      )}
 
       <PositionCycles data={positions} />
 
       <TimingPanel data={timing} />
 
       <ReplayPanel address={w.address} data={replay} search={search} />
+
+      {!okx && (
+        <>
 
       <Panel title={t("trader.computedTitle")} hint={t("trader.computedHint")}>
         {enriched ? <MetricsTable metrics={d.metrics} note={note} /> : <p className="text-sm text-muted">{t("trader.notEnrichedHint")}</p>}
@@ -235,6 +258,8 @@ export default async function TraderPage({
           </table>
         </div>
       </Panel>
+        </>
+      )}
     </div>
   );
 }

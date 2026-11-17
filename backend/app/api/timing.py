@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.common import data_as_of, num
 from app.db import get_session
 from app.research.timing import EXTREME, LADDER, MAKER_HEAVY, MIN_DECISIONS, N_PERM, TIMING_VERSION, VALID_WINDOWS, WINDOWS
-from app.sources.leaderboard import ADDRESS_RE
+from app.traders import parse_trader_key
 
 router = APIRouter(prefix="/api/v1", tags=["timing"])
 
@@ -107,8 +107,8 @@ def timing_board(
 
 @router.get("/wallets/{address}/timing")
 def wallet_timing(address: str, session: Session = Depends(get_session), days: int = Query(120, ge=7, le=365)):
-    address = address.lower()
-    if not ADDRESS_RE.match(address):
+    address = parse_trader_key(address) or ''
+    if not address:
         raise HTTPException(422, "invalid address")
     wid = session.execute(text("SELECT id FROM wallet WHERE address = :a"), {"a": address}).scalar()
     if wid is None:

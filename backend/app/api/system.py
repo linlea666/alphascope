@@ -38,7 +38,7 @@ def overview(session: Session = Depends(get_session)):
                count(*) FILTER (WHERE first_seen_at > :b AND first_seen_at > now() - interval '7 days') AS new_7d,
                count(*) FILTER (WHERE portfolio_fetched_at IS NOT NULL) AS enriched,
                count(*) FILTER (WHERE tier = 'B' AND present_in_latest) AS tier_b
-        FROM wallet"""), {"b": baseline}).mappings().one()
+        FROM wallet WHERE venue = 'hyperliquid'"""), {"b": baseline}).mappings().one()
     tiers = dict(session.execute(text(
         "SELECT tier, count(*) FROM wallet WHERE present_in_latest GROUP BY tier")).all())
     flags = dict(session.execute(text("""
@@ -56,7 +56,7 @@ def overview(session: Session = Depends(get_session)):
                        "ex": [*DEFAULT_RANKING_EXCLUSIONS, AGGREGATE_ACCOUNT]}).mappings().all()
     newest = session.execute(text("""
         SELECT address, display_name, first_seen_at, account_value, month_pnl, tier FROM wallet
-        WHERE first_seen_at > :b ORDER BY first_seen_at DESC LIMIT 10"""), {"b": baseline}).mappings().all()
+        WHERE venue = 'hyperliquid' AND first_seen_at > :b ORDER BY first_seen_at DESC LIMIT 10"""), {"b": baseline}).mappings().all()
     return {
         "freshness": data_as_of(session),
         "baseline_import_at": baseline,

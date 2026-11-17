@@ -1,11 +1,12 @@
 """P0 tables. Only tables that P0 actually fills live here; the full model is in docs/03-data-model.md."""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Date,
     DateTime,
     ForeignKey,
     Index,
@@ -15,6 +16,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -66,8 +68,13 @@ class Wallet(Base):
     __tablename__ = "wallet"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    address: Mapped[str] = mapped_column(String(42), unique=True)
+    # Canonical trader key: a Hyperliquid address (0x...) or "okx:<authorId>" (see app/traders.py).
+    address: Mapped[str] = mapped_column(String(80), unique=True)
     display_name: Mapped[str | None] = mapped_column(Text)
+    venue: Mapped[str] = mapped_column(String(16), default="hyperliquid", server_default="hyperliquid", index=True)
+    venue_uid: Mapped[str | None] = mapped_column(String(64))  # OKX authorId
+    handle: Mapped[str | None] = mapped_column(String(64))  # OKX uniqueName (history / profile requests)
+    avatar_url: Mapped[str | None] = mapped_column(Text)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     first_seen_source: Mapped[str] = mapped_column(String(32))
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
@@ -98,6 +105,7 @@ class Wallet(Base):
     # Flags derived from per-address API calls (not overwritten by leaderboard ingest).
     enrichment_flags: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list, server_default="{}")
     portfolio_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+
     clearinghouse_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (
@@ -105,6 +113,7 @@ class Wallet(Base):
         Index("ix_wallet_first_seen", "first_seen_at"),
         Index("ix_wallet_month_pnl", "month_pnl"),
         Index("ix_wallet_account_value", "account_value"),
+        Index("uq_wallet_venue_uid", "venue", "venue_uid", unique=True, postgresql_where=text("venue_uid IS NOT NULL")),
     )
 
 
@@ -782,3 +791,137 @@ class SimEquity(Base):
     unrealized: Mapped[Decimal] = mapped_column(Numeric)
     gross_exposure: Mapped[Decimal] = mapped_column(Numeric)
     leader_equity: Mapped[Decimal | None] = _num()
+
+
+# --- OKX source (migration 0009, docs/11) ---
+
+
+class OkxInstrument(Base):
+    """OKX perpetual contract specs: contracts -> coin units (linear) or USD (inverse)."""
+
+    __tablename__ = "okx_instrument"
+
+    inst_id: Mapped[str] = mapped_column(String(48), primary_key=True)
+    coin: Mapped[str] = mapped_column(String(32))
+    ct_type: Mapped[str] = mapped_column(String(8))  # linear | inverse
+    ct_val: Mapped[Decimal] = mapped_column(Numeric)
+    ct_val_ccy: Mapped[str | None] = mapped_column(String(16))
+    settle_ccy: Mapped[str | None] = mapped_column(String(16))
+    max_lever: Mapped[int | None] = mapped_column(Integer)
+    state: Mapped[str | None] = mapped_column(String(16))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class OkxPosition(Base):
+    """One closed (or partly closed) position from position-history, as OKX reports it."""
+
+    __tablename__ = "okx_position"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    pos_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    inst_id: Mapped[str] = mapped_column(String(48))
+    coin: Mapped[str] = mapped_column(String(32))
+    ct_type: Mapped[str] = mapped_column(String(8))  # linear | inverse
+    direction: Mapped[str] = mapped_column(String(5))  # long | short
+    open_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    close_time: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    open_avg_px: Mapped[Decimal] = mapped_column(Numeric)
+    close_avg_px: Mapped[Decimal | None] = _num()
+    max_size: Mapped[Decimal] = mapped_column(Numeric)  # peak position, coin units
+    closed_size: Mapped[Decimal] = mapped_column(Numeric)  # total closed over the position's life, coin units
+    max_notional: Mapped[Decimal] = mapped_column(Numeric)  # USD at the open price
+    pnl: Mapped[Decimal] = mapped_column(Numeric)  # USD, price PnL before fees and funding
+    realized_pnl: Mapped[Decimal] = mapped_column(Numeric)  # USD, after fees and funding
+    fee: Mapped[Decimal] = mapped_column(Numeric)  # USD, positive = paid
+    funding: Mapped[Decimal] = mapped_column(Numeric)  # USD, positive = paid
+    pnl_ratio: Mapped[Decimal | None] = _num()
+    lever: Mapped[Decimal | None] = _num()
+    mgn_mode: Mapped[str | None] = mapped_column(String(16))
+    close_type: Mapped[str] = mapped_column(String(24))  # allClose | partClose | liquidateClose | adl | ...
+    liquidated: Mapped[bool] = mapped_column(Boolean)
+    raw: Mapped[dict] = mapped_column(JSONB)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    __table_args__ = (Index("ix_okx_position_wallet_close", "wallet_id", "close_time"),
+                      Index("ix_okx_position_coin_open", "coin", "open_time"))
+
+
+class OkxTrader(Base):
+    """Per-trader OKX state: history coverage and cursor, pool status, latest profile and assets."""
+
+    __tablename__ = "okx_trader"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    history_status: Mapped[str] = mapped_column(String(16))  # partial | target_complete | source_complete | error_backoff
+    pool_status: Mapped[str] = mapped_column(String(16))  # active | watching | dropped | inactive | error_backoff
+    priority: Mapped[int] = mapped_column(Integer, default=3)
+    oldest_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    newest_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    n_positions: Mapped[int] = mapped_column(Integer, default=0)
+    target_days: Mapped[int] = mapped_column(Integer, default=365)
+    cursor_after: Mapped[str | None] = mapped_column(String(32))  # backfill resumes below this posId
+    failure_count: Mapped[int] = mapped_column(Integer, default=0)
+    retry_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    history_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    profile_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    asset: Mapped[Decimal | None] = _num()
+    asset_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    first_pool_source: Mapped[str | None] = mapped_column(String(32))
+    last_seen_official_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    derived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    profile: Mapped[dict | None] = mapped_column(JSONB)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class OkxLeaderboardRun(Base):
+    """One crawl of an OKX leaderboard window; only complete runs are used for presence statistics."""
+
+    __tablename__ = "okx_leaderboard_run"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    business_date: Mapped[date] = mapped_column(Date)
+    time_window: Mapped[str] = mapped_column(String(8))  # 7d | 30d | 90d | 365d
+    status: Mapped[str] = mapped_column(String(12))  # running | complete | failed
+    data_version: Mapped[str | None] = mapped_column(String(32))
+    expected_pages: Mapped[int | None] = mapped_column(Integer)
+    expected_total: Mapped[int | None] = mapped_column(Integer)
+    pages_done: Mapped[int] = mapped_column(Integer, default=0)
+    unique_count: Mapped[int] = mapped_column(Integer, default=0)
+    new_traders: Mapped[int] = mapped_column(Integer, default=0)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(16), default="crawl")  # crawl | sqlite_import
+
+    __table_args__ = (Index("ix_okx_lb_run_date", "time_window", "business_date", "status"),)
+
+
+class OkxLeaderboardRow(Base):
+    __tablename__ = "okx_leaderboard_row"
+
+    run_id: Mapped[int] = mapped_column(ForeignKey("okx_leaderboard_run.id", ondelete="CASCADE"), primary_key=True)
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True, index=True)
+    rank: Mapped[int] = mapped_column(Integer)
+    asset: Mapped[Decimal | None] = _num()
+    pnl: Mapped[Decimal | None] = _num()
+    pnl_ratio: Mapped[Decimal | None] = _num()
+    win_rate: Mapped[Decimal | None] = _num()
+    max_drawdown: Mapped[Decimal | None] = _num()
+    rates: Mapped[list | None] = mapped_column(JSONB)  # daily cumulative return series [[statTime, value], ...]
+
+
+class OkxPresence(Base):
+    """How often a trader shows up on a leaderboard window (complete daily runs only)."""
+
+    __tablename__ = "okx_presence"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    time_window: Mapped[str] = mapped_column(String(8), primary_key=True)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    seen_days: Mapped[int] = mapped_column(Integer)
+    streak: Mapped[int] = mapped_column(Integer)
+    currently_seen: Mapped[bool] = mapped_column(Boolean)
+    last_rank: Mapped[int | None] = mapped_column(Integer)
+    best_rank: Mapped[int | None] = mapped_column(Integer)

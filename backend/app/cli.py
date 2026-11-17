@@ -5,6 +5,7 @@
   python -m app.cli tiers
   python -m app.cli market | swings | fills [--limit N]
   python -m app.cli binance [--max-files N] | positions | reconcile [--limit N] | timing
+  python -m app.cli okx-export --sqlite okx_rankings.sqlite3 --out bundle/ | okx-import --bundle bundle/ | okx-derive
 """
 
 import argparse
@@ -22,6 +23,7 @@ from app.ingest.leaderboard_ingest import LeaderboardInput, ingest_leaderboard
 from app.ingest.market_ingest import record_candles
 from app.ingest.portfolio_ingest import enrich_batch
 from app.ingest.runs import mark_abandoned_runs
+from app.okx.legacy_import import derive_all, export_sqlite, import_bundle
 from app.research.positions import rebuild_stale
 from app.research.reconcile import reconcile
 from app.research.timing import run_timing
@@ -50,7 +52,18 @@ def main() -> None:
     rc = sub.add_parser("reconcile", help="sync fills, rebuild and compare positions with clearinghouseState")
     rc.add_argument("--limit", type=int, default=5)
     sub.add_parser("timing", help="recompute pivots, decision timing and timing scores")
+    ox = sub.add_parser("okx-export", help="export the old OKX collector's SQLite database to a JSONL bundle")
+    ox.add_argument("--sqlite", type=Path, required=True)
+    ox.add_argument("--out", type=Path, required=True)
+    oi = sub.add_parser("okx-import", help="import an OKX export bundle (idempotent) and derive cycles")
+    oi.add_argument("--bundle", type=Path, required=True)
+    oi.add_argument("--no-derive", action="store_true")
+    od = sub.add_parser("okx-derive", help="rebuild OKX cycles and decisions from stored positions")
+    od.add_argument("--stale", action="store_true", help="only traders with new positions since the last derive")
     args = p.parse_args()
+    if args.cmd == "okx-export":  # needs no database
+        print(json.dumps(export_sqlite(args.sqlite, args.out), indent=2))
+        return
 
     settings = get_settings()
     sf = session_factory()
@@ -73,6 +86,10 @@ def main() -> None:
         result = run_timing(sf)
     elif args.cmd == "reconcile":
         result = asyncio.run(reconcile(sf, settings, store, args.limit))
+    elif args.cmd == "okx-import":
+        result = import_bundle(sf, args.bundle, derive=not args.no_derive)
+    elif args.cmd == "okx-derive":
+        result = derive_all(sf, only_stale=args.stale)
     elif args.cmd == "enrich":
         result = asyncio.run(enrich_batch(sf, settings, store, args.limit, args.address))
     else:

@@ -240,7 +240,11 @@
     "cyclesNone": "这个钱包的成交还没有归档。成交归档目前只覆盖大周期研究的候选钱包。",
     "positionsTitle": "当前持仓",
     "syncIncomplete": "成交同步尚未完成，统计截至 {date}；剩余成交会在后续批次补齐（优先抢救其他钱包的早期成交）。",
-    "copySim": "模拟跟单"
+    "copySim": "模拟跟单",
+    "coverageTextOkx": "OKX 历史仓位：{n} 条，自 {from} 起；最近同步 {synced}",
+    "truncatedOkx": "只回填最近 365 天",
+    "cyclesHintOkx": "来自 OKX 公开的历史仓位：每条是一个完整仓位（开仓时间与均价、平仓时间与均价、最大仓位、已实现盈亏）。看不到仓位中途的加减仓，开仓均价包含后来的加仓，所以 OKX 的节奏评分只计 1 小时及以上级别。胜率按扣除手续费、资金费后的已实现盈亏统计，括号内为 95% 置信区间。",
+    "syncIncompleteOkx": "历史仓位还在回填，统计截至 {date}。"
   },
   "health": {
     "title": "数据健康与系统状态",
@@ -555,7 +559,8 @@
     },
     "archiving": "归档中",
     "archived": "{n} 条",
-    "queued": "排队中"
+    "queued": "排队中",
+    "archivedOkx": "{n} 个仓位"
   },
   "alerts": {
     "subscribe": "订阅提醒",
@@ -873,5 +878,68 @@
       "saving": "提交中…",
       "saved": "已保存，下一轮生效。"
     }
+  },
+  "okx": {
+    "viewProfile": "在 OKX 查看主页",
+    "asset": "带单资产",
+    "realized": "已实现盈亏",
+    "closedN": "{n} 个已平仓仓位",
+    "winRate": "胜率",
+    "winRateSub": "扣费后盈利的仓位占比",
+    "liquidations": "强平次数",
+    "costs": "手续费 + 资金费",
+    "costsSub": "手续费 {fee} · 资金费 {fund}",
+    "coins": "交易币种",
+    "coverage": "历史覆盖",
+    "days": "{n} 天",
+    "history": {
+      "partial": "回填中",
+      "target_complete": "已回填满 365 天",
+      "source_complete": "已回填全部历史",
+      "error_backoff": "接口出错，稍后重试"
+    },
+    "curveTitle": "累计已实现盈亏",
+    "curveHint": "按每个仓位的平仓日累计 OKX 报告的已实现盈亏（已扣手续费、资金费和强平罚金）；持仓中的浮动盈亏不计入。",
+    "cumRealized": "累计已实现",
+    "dayRealized": "当日已实现",
+    "last30": "近 30 天",
+    "all": "全部",
+    "noPositions": "还没有历史仓位",
+    "presenceTitle": "上榜记录",
+    "presenceHint": "OKX 官方带单排行榜（按收益率）上出现的天数；7 天榜按每日完整抓取统计。",
+    "window": "榜单",
+    "seenDays": "上榜天数",
+    "streak": "连续天数",
+    "bestRank": "最好名次",
+    "lastSeen": "最近上榜",
+    "windows": {
+      "7d": "7 天榜",
+      "30d": "30 天榜",
+      "90d": "90 天榜",
+      "365d": "365 天榜"
+    },
+    "onBoard": "在榜",
+    "neverRanked": "没有上榜记录（从收藏或旧数据导入）",
+    "syncTitle": "数据采集",
+    "pool": "跟踪状态",
+    "pool_": {
+      "active": "活跃",
+      "watching": "重点关注",
+      "dropped": "已下榜",
+      "inactive": "不活跃",
+      "error_backoff": "出错退避"
+    },
+    "historyStatus": "历史回填",
+    "range": "仓位时间范围",
+    "synced": "最近同步",
+    "source": "发现来源",
+    "lastError": "最近错误",
+    "granularity": "OKX 只公开完整仓位，不公开逐笔成交：加减仓的时点看不到。已下榜的交易员仍会每周检查一次是否有新仓位。",
+    "ranksTitle": "每日榜单名次",
+    "ranksHint": "每天完整抓取的榜单里的名次和官方数据；胜率、最大回撤为 OKX 官方口径。",
+    "date": "日期",
+    "rank": "名次",
+    "officialWin": "官方胜率",
+    "officialDd": "官方最大回撤"
   }
 }

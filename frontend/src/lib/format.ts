@@ -45,7 +45,12 @@ export function fmtBytes(v: number, locale: string): string {
 }
 
 export function shortAddr(a: string): string {
+  if (a.startsWith("okx:")) return `OKX·${a.slice(-6)}`;
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
+}
+
+export function isOkx(a: string): boolean {
+  return a.startsWith("okx:");
 }
 
 export function signClass(v: number | null | undefined): string {

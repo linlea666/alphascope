@@ -89,7 +89,7 @@ def _ingest(session: Session, run: IngestRun, settings: Settings, store: RawStor
         values = [e.account_value] + [v for w in LEADERBOARD_WINDOWS for v in e.windows[w]]
         rows.append((e.address, e.display_name, *values, flags))
 
-    existing = session.execute(text("SELECT count(*) FROM wallet")).scalar_one()
+    existing = session.execute(text("SELECT count(*) FROM wallet WHERE venue = 'hyperliquid'")).scalar_one()
     session.execute(text(f"""
         CREATE TEMP TABLE tmp_lb (address varchar(42) PRIMARY KEY, display_name text,
           {", ".join(f"{c} numeric" for c in VALUE_COLS)}, quality_flags text[]) ON COMMIT DROP"""))

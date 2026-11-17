@@ -83,10 +83,57 @@ export type Metric = {
   notes: string[];
 };
 
+export type Venue = "hyperliquid" | "okx";
+
+export type OkxDetail = {
+  profile_url: string | null;
+  trader: {
+    history_status: "partial" | "target_complete" | "source_complete" | "error_backoff";
+    pool_status: "active" | "watching" | "dropped" | "inactive" | "error_backoff";
+    oldest_at: string | null;
+    newest_at: string | null;
+    n_positions: number;
+    target_days: number;
+    history_synced_at: string | null;
+    asset: number | null;
+    asset_at: string | null;
+    first_pool_source: string | null;
+    last_seen_official_at: string | null;
+    last_error: string | null;
+    retry_after: string | null;
+  } | null;
+  presence: {
+    time_window: "7d" | "30d" | "90d" | "365d";
+    first_seen_at: string;
+    last_seen_at: string;
+    seen_days: number;
+    streak: number;
+    currently_seen: boolean;
+    last_rank: number | null;
+    best_rank: number | null;
+  }[];
+  ranks: {
+    business_date: string;
+    time_window: string;
+    rank: number;
+    asset: number | null;
+    pnl: number | null;
+    pnl_ratio: number | null;
+    win_rate: number | null;
+    max_drawdown: number | null;
+  }[];
+  totals: { positions: number; realized: number | null; fees: number | null; funding: number | null; liquidations: number; coins: number; wins: number };
+  pnl_curve: [string, number, number][];
+};
+
 export type WalletDetail = {
   freshness: Freshness;
+  okx: OkxDetail | null;
   wallet: {
     address: string;
+    venue: Venue;
+    handle: string | null;
+    avatar_url: string | null;
     display_name: string | null;
     first_seen_at: string;
     first_seen_source: string;
@@ -491,6 +538,7 @@ export type Watchlist = {
     created_at: string;
     address: string;
     display_name: string | null;
+    venue: Venue;
     alias: string | null;
     account_value: number | null;
     week_pnl: number | null;

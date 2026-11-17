@@ -14,29 +14,30 @@ export async function PositionCycles({ data }: { data: WalletPositions | null })
       </Panel>
     );
   }
+  const okx = cov.reason === "okx"; // whole positions from OKX position-history, not fills
   const hold = (h: number | null | undefined) =>
     h === null || h === undefined ? "—" : h < 48 ? t("hours", { n: fmtNum(h, locale, 1) }) : t("days", { n: fmtNum(h / 24, locale, 1) });
 
   return (
     <Panel
       title={t("cyclesTitle")}
-      hint={t("cyclesHint")}
+      hint={t(okx ? "cyclesHintOkx" : "cyclesHint")}
       actions={
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
           <span>
-            {t("coverageText", {
+            {t(okx ? "coverageTextOkx" : "coverageText", {
               n: fmtNum(cov.n_fills, locale),
               from: fmtTime(cov.earliest_fill_at, locale, false),
               synced: fmtTime(cov.last_synced_at, locale),
             })}
           </span>
-          {cov.truncated && <Badge tone="warn">{t("truncated")}</Badge>}
+          {cov.truncated && <Badge tone="warn">{t(okx ? "truncatedOkx" : "truncated")}</Badge>}
           {!!cov.recon_breaks && <Badge tone="warn">{t("breaks", { n: cov.recon_breaks })}</Badge>}
         </div>
       }
     >
       {!data.sync_complete && (
-        <p className="mb-3 text-xs text-warn">{t("syncIncomplete", { date: fmtTime(cov.latest_fill_at, locale) })}</p>
+        <p className="mb-3 text-xs text-warn">{t(okx ? "syncIncompleteOkx" : "syncIncomplete", { date: fmtTime(cov.latest_fill_at, locale) })}</p>
       )}
       <div className="-mx-4 overflow-x-auto">
         <table className="w-full text-sm">

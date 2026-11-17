@@ -11,7 +11,8 @@ from sqlalchemy.orm import sessionmaker
 FIXTURES = Path(__file__).parent / "fixtures"
 BACKEND = Path(__file__).parent.parent
 TEST_DB_URL = os.environ.get("ALPHASCOPE_TEST_DATABASE_URL", "postgresql+psycopg://localhost/alphascope_test")
-TABLES = ("sim_equity", "sim_trade", "sim_position", "copy_sim", "notification", "position_event", "live_position", "live_account", "alert_subscription", "app_setting",
+TABLES = ("okx_presence", "okx_leaderboard_row", "okx_leaderboard_run", "okx_trader", "okx_position", "okx_instrument",
+          "sim_equity", "sim_trade", "sim_position", "copy_sim", "notification", "position_event", "live_position", "live_account", "alert_subscription", "app_setting",
           "watch_item", "watch_group", "wallet_alias", "leg_capture", "timing_score", "decision_timing", "timing_pivot", "trade_decision", "position_cycle", "market_symbol", "market_file", "fill", "fill_sync", "wallet_swing_profile", "wallet_leg_return", "swing_leg", "market_candle",
           "position_snapshot", "account_snapshot", "wallet_metric", "equity_point", "wallet_tier_history",
           "leaderboard_row", "leaderboard_snapshot", "raw_object", "wallet", "ingest_run")

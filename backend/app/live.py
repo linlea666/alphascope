@@ -30,12 +30,13 @@ OWNER = "default"
 SEND_ATTEMPTS = 3
 
 
-def monitored_wallets(session: Session) -> list[tuple[int, str]]:
-    sims = "UNION SELECT w.id, w.address FROM copy_sim c JOIN wallet w ON w.id = c.leader_wallet_id WHERE c.status = 'running'" \
+def monitored_wallets(session: Session, venue: str = "hyperliquid") -> list[tuple[int, str]]:
+    sims = """UNION SELECT w.id, w.address FROM copy_sim c JOIN wallet w ON w.id = c.leader_wallet_id
+              WHERE c.status = 'running' AND w.venue = :v""" \
         if session.execute(text("SELECT to_regclass('copy_sim')")).scalar() else ""
     return [tuple(r) for r in session.execute(text(f"""
         SELECT w.id, w.address FROM alert_subscription s JOIN wallet w ON w.id = s.wallet_id
-        WHERE s.enabled AND s.owner = :o {sims}"""), {"o": OWNER}).all()]
+        WHERE s.enabled AND s.owner = :o AND w.venue = :v {sims}"""), {"o": OWNER, "v": venue}).all()]
 
 
 def load_state(session: Session, wallet_id: int) -> tuple[bool, dict[str, Pos], dict[str, bool]]:

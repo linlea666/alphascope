@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.api.common import num
 from app.config import get_settings
 from app.db import get_session
-from app.sources.leaderboard import ADDRESS_RE
+from app.traders import parse_trader_key
 
 router = APIRouter(prefix="/api/v1/watch", tags=["watch"])
 
@@ -43,8 +43,8 @@ class AliasIn(BaseModel):
 
 
 def _wallet_id(session: Session, address: str) -> int:
-    address = address.lower()
-    if not ADDRESS_RE.match(address):
+    address = parse_trader_key(address) or ''
+    if not address:
         raise HTTPException(422, "invalid address")
     wid = session.execute(text("SELECT id FROM wallet WHERE address = :a"), {"a": address}).scalar()
     if wid is None:
@@ -63,6 +63,13 @@ def _ensure_default_group(session: Session) -> int:
 
 
 def _queue_fills(session: Session, wallet_id: int) -> None:
+    """Archive the trader's history with priority: Hyperliquid fill sync, or the OKX history queue."""
+    if session.execute(text("SELECT venue FROM wallet WHERE id = :w"), {"w": wallet_id}).scalar() == "okx":
+        session.execute(text("""
+            UPDATE okx_trader SET priority = 0, retry_after = NULL,
+              pool_status = CASE WHEN pool_status IN ('dropped', 'inactive') THEN 'watching' ELSE pool_status END
+            WHERE wallet_id = :w"""), {"w": wallet_id})
+        return
     start = datetime.fromisoformat(get_settings().swing_fill_start).replace(tzinfo=UTC)
     session.execute(text("""
         INSERT INTO fill_sync (wallet_id, reason, priority, requested_start, status, n_fills, queued_at)
@@ -81,9 +88,15 @@ def watchlist(session: Session = Depends(get_session)):
         LEFT JOIN watch_item i ON i.group_id = g.id WHERE g.owner = :o GROUP BY g.id ORDER BY g.sort, g.id"""),
         {"o": OWNER}).mappings().all()
     items = session.execute(text("""
-        SELECT i.id AS item_id, i.group_id, i.note, i.tags, i.created_at, w.address, w.display_name,
-               a.alias, w.account_value, w.week_pnl, w.month_pnl, w.tier, w.quality_flags || w.enrichment_flags AS flags,
-               f.status AS sync_status, f.n_fills,
+        SELECT i.id AS item_id, i.group_id, i.note, i.tags, i.created_at, w.address, w.display_name, w.venue,
+               a.alias, coalesce(w.account_value, ot.asset, (
+                 SELECT r.asset FROM okx_leaderboard_row r JOIN okx_leaderboard_run u ON u.id = r.run_id
+                 WHERE r.wallet_id = w.id ORDER BY u.business_date DESC LIMIT 1)) AS account_value,
+               coalesce(w.week_pnl, op.week_pnl) AS week_pnl, coalesce(w.month_pnl, op.month_pnl) AS month_pnl,
+               w.tier, w.quality_flags || w.enrichment_flags AS flags,
+               coalesce(f.status, CASE WHEN ot.history_status IN ('target_complete', 'source_complete') THEN 'synced'
+                                       WHEN ot.wallet_id IS NOT NULL THEN 'queued' END) AS sync_status,
+               coalesce(f.n_fills, ot.n_positions) AS n_fills,
                (SELECT max(edge_shrunk) FROM timing_score t WHERE t.wallet_id = w.id AND t.status = 'scored'
                   AND t.coin_group = 'all' AND t.q_value < 0.1) AS best_edge,
                (SELECT jsonb_agg(jsonb_build_object('coin', p.coin, 'szi', p.szi, 'value', p.position_value)
@@ -94,6 +107,12 @@ def watchlist(session: Session = Depends(get_session)):
         FROM watch_item i JOIN watch_group g ON g.id = i.group_id JOIN wallet w ON w.id = i.wallet_id
         LEFT JOIN wallet_alias a ON a.wallet_id = w.id AND a.owner = :o
         LEFT JOIN fill_sync f ON f.wallet_id = w.id
+        LEFT JOIN okx_trader ot ON ot.wallet_id = w.id
+        LEFT JOIN LATERAL (  -- OKX: realized PnL of positions closed in the window (no official 7D/30D per trader)
+          SELECT sum(realized_pnl) FILTER (WHERE close_time > now() - interval '7 days') AS week_pnl,
+                 sum(realized_pnl) FILTER (WHERE close_time > now() - interval '30 days') AS month_pnl
+          FROM okx_position WHERE wallet_id = w.id AND close_time > now() - interval '30 days'
+            AND close_type <> 'partClose') op ON w.venue = 'okx'
         WHERE g.owner = :o ORDER BY i.created_at DESC"""), {"o": OWNER}).mappings().all()
     return {
         "groups": [dict(g) for g in groups],

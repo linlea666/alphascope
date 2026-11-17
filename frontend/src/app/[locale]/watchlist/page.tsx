@@ -82,7 +82,7 @@ export default async function WatchlistPage({ searchParams }: { searchParams: Pr
                     </td>
                     <td className={`${td} num text-right ${signClass(i.best_edge)}`}>{i.best_edge === null ? "—" : fmtNum(i.best_edge, locale, 3)}</td>
                     <td className={`${td} text-xs text-muted`}>
-                      {i.n_fills ? t("archived", { n: fmtNum(i.n_fills, locale) }) : t("queued")}
+                      {i.n_fills ? t(i.venue === "okx" ? "archivedOkx" : "archived", { n: fmtNum(i.n_fills, locale) }) : t("queued")}
                     </td>
                     <td className={`${td} max-w-xs whitespace-normal text-xs text-muted`}>
                       {i.note}

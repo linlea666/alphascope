@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.common import baseline_import_at, data_as_of, num
 from app.db import get_session
 from app.models import LEADERBOARD_WINDOWS
-from app.sources.leaderboard import ADDRESS_RE
+from app.traders import okx_profile_url, parse_trader_key
 
 router = APIRouter(prefix="/api/v1/wallets", tags=["wallets"])
 
@@ -20,7 +20,7 @@ def new_wallets(session: Session = Depends(get_session), days: int = Query(7, ge
     rows = session.execute(text("""
         SELECT address, display_name, first_seen_at, account_value, month_pnl, month_vlm, tier, quality_flags
         FROM wallet
-        WHERE first_seen_at > :baseline AND first_seen_at > now() - make_interval(days => :days)
+        WHERE venue = 'hyperliquid' AND first_seen_at > :baseline AND first_seen_at > now() - make_interval(days => :days)
         ORDER BY first_seen_at DESC, month_vlm DESC NULLS LAST
         LIMIT :limit"""), {"baseline": baseline, "days": days, "limit": limit}).all()
     return {
@@ -35,8 +35,8 @@ def new_wallets(session: Session = Depends(get_session), days: int = Query(7, ge
 
 @router.get("/{address}")
 def wallet_detail(address: str, session: Session = Depends(get_session)):
-    address = address.lower()
-    if not ADDRESS_RE.match(address):
+    address = parse_trader_key(address) or ''
+    if not address:
         raise HTTPException(422, "invalid address")
     w = session.execute(text("SELECT * FROM wallet WHERE address = :a"), {"a": address}).mappings().first()
     if w is None:
@@ -78,6 +78,9 @@ def wallet_detail(address: str, session: Session = Depends(get_session)):
         "freshness": data_as_of(session),
         "wallet": {
             "address": w["address"],
+            "venue": w["venue"],
+            "handle": w["handle"],
+            "avatar_url": w["avatar_url"],
             "display_name": w["display_name"],
             "first_seen_at": w["first_seen_at"],
             "first_seen_source": w["first_seen_source"],
@@ -102,6 +105,49 @@ def wallet_detail(address: str, session: Session = Depends(get_session)):
         "tier_history": [dict(t) for t in tiers],
         "account": clean(account) if account else None,
         "positions": [clean(p) for p in positions],
+        "okx": _okx_detail(session, wid, w["handle"]) if w["venue"] == "okx" else None,
+    }
+
+
+def _okx_detail(session: Session, wid: int, handle: str | None) -> dict:
+    """OKX-only facts: history coverage and pool state, leaderboard presence and recent ranks, totals."""
+    t = session.execute(text("""
+        SELECT history_status, pool_status, oldest_at, newest_at, n_positions, target_days, history_synced_at,
+               asset, asset_at, first_pool_source, last_seen_official_at, last_error, retry_after
+        FROM okx_trader WHERE wallet_id = :w"""), {"w": wid}).mappings().first()
+    presence = session.execute(text("""
+        SELECT time_window, first_seen_at, last_seen_at, seen_days, streak, currently_seen, last_rank, best_rank
+        FROM okx_presence WHERE wallet_id = :w
+        ORDER BY array_position(ARRAY['7d','30d','90d','365d'], time_window::text)"""), {"w": wid}).mappings().all()
+    ranks = session.execute(text("""
+        SELECT u.business_date, u.time_window, r.rank, r.asset, r.pnl, r.pnl_ratio, r.win_rate, r.max_drawdown
+        FROM okx_leaderboard_row r JOIN okx_leaderboard_run u ON u.id = r.run_id
+        WHERE r.wallet_id = :w AND u.status = 'complete' ORDER BY u.business_date DESC, u.id DESC LIMIT 60"""),
+        {"w": wid}).mappings().all()
+    totals = session.execute(text("""
+        SELECT count(*) AS positions, sum(realized_pnl) AS realized, sum(fee) AS fees, sum(funding) AS funding,
+               count(*) FILTER (WHERE liquidated) AS liquidations, count(DISTINCT coin) AS coins,
+               count(*) FILTER (WHERE realized_pnl > 0) AS wins
+        FROM okx_position WHERE wallet_id = :w AND close_type <> 'partClose'"""), {"w": wid}).mappings().one()
+
+    daily = session.execute(text("""
+        SELECT date_trunc('day', close_time) AS day, sum(realized_pnl) AS pnl FROM okx_position
+        WHERE wallet_id = :w AND close_type <> 'partClose' GROUP BY 1 ORDER BY 1"""), {"w": wid}).all()
+    cum, curve = 0.0, []
+    for day, pnl in daily:  # [day, cumulative realized PnL, that day's realized PnL]
+        cum += float(pnl)
+        curve.append([day, cum, float(pnl)])
+
+    def plain(m) -> dict:
+        return {k: (num(v) if hasattr(v, "is_finite") else v) for k, v in dict(m).items()}
+
+    return {
+        "profile_url": okx_profile_url(handle),
+        "trader": plain(t) if t else None,
+        "presence": [plain(p) for p in presence],
+        "ranks": [plain(r) for r in ranks],
+        "totals": plain(totals),
+        "pnl_curve": curve,
     }
 
 
@@ -121,8 +167,8 @@ def wilson(wins: int, n: int, z: float = 1.96) -> tuple[float, float] | None:
 
 @router.get("/{address}/positions")
 def wallet_positions(address: str, session: Session = Depends(get_session), limit: int = Query(40, ge=1, le=200)):
-    address = address.lower()
-    if not ADDRESS_RE.match(address):
+    address = parse_trader_key(address) or ''
+    if not address:
         raise HTTPException(422, "invalid address")
     wid = session.execute(text("SELECT id FROM wallet WHERE address = :a"), {"a": address}).scalar()
     if wid is None:
@@ -130,6 +176,14 @@ def wallet_positions(address: str, session: Session = Depends(get_session), limi
     coverage = session.execute(text("""
         SELECT status, reason, requested_start, earliest_fill_at, latest_fill_at, n_fills, truncated, last_synced_at,
                reconstructed_at, recon_breaks FROM fill_sync WHERE wallet_id = :w"""), {"w": wid}).mappings().first()
+    if coverage is None:  # OKX: whole positions from position-history; an open cycle is a partly closed position
+        coverage = session.execute(text("""
+            SELECT CASE WHEN history_status IN ('target_complete', 'source_complete') THEN 'synced'
+                        ELSE history_status END AS status,
+                   'okx' AS reason, oldest_at AS earliest_fill_at, newest_at AS latest_fill_at, n_positions AS n_fills,
+                   history_status = 'target_complete' AS truncated, history_synced_at AS last_synced_at,
+                   derived_at AS reconstructed_at, 0 AS recon_breaks
+            FROM okx_trader WHERE wallet_id = :w"""), {"w": wid}).mappings().first()
     # A cycle still open where an incomplete sync stops is a data boundary, not a held position.
     sync_complete = bool(coverage and coverage["status"] == "synced")
     by_scale = {r.scale: r for r in session.execute(text("""
@@ -179,8 +233,8 @@ def wallet_replay(
     bars: int = Query(300, ge=50, le=1000),
 ):
     """Candles of one coin with the wallet's buy/sell decisions and the timeframe's swing pivots (K-line replay)."""
-    address = address.lower()
-    if not ADDRESS_RE.match(address):
+    address = parse_trader_key(address) or ''
+    if not address:
         raise HTTPException(422, "invalid address")
     if interval not in REPLAY_INTERVALS:
         raise HTTPException(422, f"interval must be one of {sorted(REPLAY_INTERVALS)}")
@@ -203,9 +257,9 @@ def wallet_replay(
               "pad": f"{step * 20} minutes"}
     candles = session.execute(text("""
         SELECT DISTINCT ON (t) t, o, h, l, c FROM market_candle
-        WHERE coin = :c AND interval = :iv AND source IN ('binance_um', 'hyperliquid')
+        WHERE coin = :c AND interval = :iv AND source IN ('binance_um', 'hyperliquid', 'okx')
           AND t > CAST(:end AS timestamptz) - CAST(:span AS interval) AND t <= CAST(:end AS timestamptz) + CAST(:pad AS interval)
-        ORDER BY t, (source = 'binance_um') DESC"""), params).all()
+        ORDER BY t, CASE source WHEN 'binance_um' THEN 0 WHEN 'hyperliquid' THEN 1 ELSE 2 END"""), params).all()
     if candles:
         lo_t, hi_t = candles[0][0], candles[-1][0]
     else:

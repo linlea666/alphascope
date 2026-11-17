@@ -13,7 +13,7 @@ from app.alerts.diff import EVENT_KINDS
 from app.alerts.mailer import send
 from app.api.common import num
 from app.db import get_session
-from app.sources.leaderboard import ADDRESS_RE
+from app.traders import parse_trader_key
 
 router = APIRouter(prefix="/api/v1", tags=["alerts"])
 OWNER = "default"
@@ -89,8 +89,8 @@ class LiveIn(BaseModel):
 
 
 def _wallet_id(session: Session, address: str) -> int:
-    address = address.lower()
-    if not ADDRESS_RE.match(address):
+    address = parse_trader_key(address) or ''
+    if not address:
         raise HTTPException(422, "invalid address")
     wid = session.execute(text("SELECT id FROM wallet WHERE address = :a"), {"a": address}).scalar()
     if wid is None:

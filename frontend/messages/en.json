@@ -240,7 +240,11 @@
     "cyclesNone": "Fills for this wallet are not archived yet. The fill archive currently covers swing-research candidates.",
     "positionsTitle": "Open positions",
     "syncIncomplete": "Fill sync not finished; figures run to {date}. The rest follows in later batches (other wallets' early fills are rescued first).",
-    "copySim": "Copy sim"
+    "copySim": "Copy sim",
+    "coverageTextOkx": "OKX position history: {n} positions since {from}; last synced {synced}",
+    "truncatedOkx": "backfilled to 365 days only",
+    "cyclesHintOkx": "From OKX's public position history: each record is a whole position (open time and average price, close time and average price, peak size, realized PnL). Adds and trims inside a position are not visible and the open average includes later adds, so OKX timing scores only count 1h and longer scales. Win rate uses realized PnL after fees and funding; brackets show the 95% confidence interval.",
+    "syncIncompleteOkx": "Position history is still being backfilled; statistics up to {date}."
   },
   "health": {
     "title": "Data health & system status",
@@ -555,7 +559,8 @@
     },
     "archiving": "archiving",
     "archived": "{n} fills",
-    "queued": "queued"
+    "queued": "queued",
+    "archivedOkx": "{n} positions"
   },
   "alerts": {
     "subscribe": "Alert me",
@@ -873,5 +878,68 @@
       "saving": "Submitting…",
       "saved": "Saved; applies from the next cycle."
     }
+  },
+  "okx": {
+    "viewProfile": "View on OKX",
+    "asset": "Lead trading assets",
+    "realized": "Realized PnL",
+    "closedN": "{n} closed positions",
+    "winRate": "Win rate",
+    "winRateSub": "positions profitable after costs",
+    "liquidations": "Liquidations",
+    "costs": "Fees + funding",
+    "costsSub": "fees {fee} · funding {fund}",
+    "coins": "Coins traded",
+    "coverage": "History",
+    "days": "{n} days",
+    "history": {
+      "partial": "backfilling",
+      "target_complete": "365 days backfilled",
+      "source_complete": "full history backfilled",
+      "error_backoff": "API error, retrying later"
+    },
+    "curveTitle": "Cumulative realized PnL",
+    "curveHint": "OKX-reported realized PnL (after fees, funding and liquidation penalties) summed by each position's close day; open positions are not included.",
+    "cumRealized": "Cumulative realized",
+    "dayRealized": "Realized that day",
+    "last30": "30 days",
+    "all": "All",
+    "noPositions": "No position history yet",
+    "presenceTitle": "Leaderboard record",
+    "presenceHint": "Days on OKX's lead-trader leaderboards (by return); the 7-day board counts complete daily crawls.",
+    "window": "Board",
+    "seenDays": "Days on board",
+    "streak": "Streak",
+    "bestRank": "Best rank",
+    "lastSeen": "Last seen",
+    "windows": {
+      "7d": "7-day",
+      "30d": "30-day",
+      "90d": "90-day",
+      "365d": "365-day"
+    },
+    "onBoard": "on board",
+    "neverRanked": "No leaderboard record (imported from favourites or old data)",
+    "syncTitle": "Collection",
+    "pool": "Tracking",
+    "pool_": {
+      "active": "active",
+      "watching": "watching",
+      "dropped": "dropped off",
+      "inactive": "inactive",
+      "error_backoff": "backing off"
+    },
+    "historyStatus": "History backfill",
+    "range": "Position range",
+    "synced": "Last synced",
+    "source": "Found via",
+    "lastError": "Last error",
+    "granularity": "OKX publishes whole positions, not fills: the timing of adds and trims is not visible. Traders who dropped off the boards are still checked weekly for new positions.",
+    "ranksTitle": "Daily ranks",
+    "ranksHint": "Rank and official figures from each complete daily crawl; win rate and max drawdown are OKX's own definitions.",
+    "date": "Date",
+    "rank": "Rank",
+    "officialWin": "Official win rate",
+    "officialDd": "Official max DD"
   }
 }

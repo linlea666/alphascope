@@ -1,12 +1,13 @@
 import { Link } from "@/i18n/routing";
-import { shortAddr } from "@/lib/format";
+import { isOkx, shortAddr } from "@/lib/format";
 import { getWatchContext } from "@/lib/watch";
 import { WatchButton } from "./WatchButton";
 
-/** Wallet link used in every table: the owner's alias (if any) leads, then the short address, plus a star. */
+/** Trader link used in every table: the owner's alias (if any) leads, then the short address, plus a star.
+ *  OKX traders have a public nickname, so it leads when there is no alias. */
 export async function AddressLink({ address, name, star = true }: { address: string; name?: string | null; star?: boolean }) {
   const { aliases, watched } = await getWatchContext();
-  const alias = aliases[address];
+  const alias = aliases[address] ?? (isOkx(address) ? name : null);
   return (
     <span className="inline-flex items-start gap-1.5">
       {star && <WatchButton address={address} watched={watched.has(address)} compact />}

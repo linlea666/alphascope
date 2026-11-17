@@ -21,4 +21,4 @@ def data_as_of(session: Session) -> dict:
 
 def baseline_import_at(session: Session) -> datetime | None:
     """first_seen_at of the initial bulk import; wallets seen at this instant are not 'newly discovered'."""
-    return session.execute(text("SELECT min(first_seen_at) FROM wallet")).scalar()
+    return session.execute(text("SELECT min(first_seen_at) FROM wallet WHERE venue = 'hyperliquid'")).scalar()
