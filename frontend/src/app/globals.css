@@ -90,3 +90,16 @@ body {
   display: inline-block;
   animation: as-pop 0.25s ease-out;
 }
+
+@keyframes as-progress {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+.as-progress {
+  animation: as-progress 1s ease-in-out infinite;
+}

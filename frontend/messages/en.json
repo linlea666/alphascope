@@ -1347,7 +1347,8 @@
     "rangeLiq": "Only positions with liquidation price {lo} – {hi}.",
     "clearRange": "clear range",
     "whale": "whale",
-    "whaleHint": "1–2 positions only: one large trader's level, not a crowd's cost or liquidation zone"
+    "whaleHint": "1–2 positions only: one large trader's level, not a crowd's cost or liquidation zone",
+    "sortHint": "Click a header to sort, again to reverse"
   },
   "discover": {
     "title": "Style discovery",

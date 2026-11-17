@@ -62,7 +62,7 @@ export async function TopPerformers({ period }: { period: "7d" | "30d" }) {
       actions={
         <div className="flex gap-1 text-xs">
           {(["7d", "30d"] as const).map((p) => (
-            <Link key={p} href={{ pathname: "/", query: { top: p } }} className={pill(p === period)}>
+            <Link scroll={false} key={p} href={{ pathname: "/", query: { top: p } }} className={pill(p === period)}>
               {t(`periods.${p}`)}
             </Link>
           ))}

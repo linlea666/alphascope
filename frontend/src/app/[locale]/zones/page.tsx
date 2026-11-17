@@ -153,7 +153,7 @@ export default async function ZonesPage({ searchParams }: { searchParams: Promis
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-xs text-muted">{t("presets")}:</span>
           {PRESETS.map((p) => (
-            <Link key={p} href={{ pathname: "/zones", query: { preset: p, ...(sort !== "notional" ? { sort } : {}) } }} className={`rounded border px-3 py-1 ${preset === p ? "border-accent bg-accent text-white" : "border-border text-muted hover:text-text"}`}>
+            <Link scroll={false} key={p} href={{ pathname: "/zones", query: { preset: p, ...(sort !== "notional" ? { sort } : {}) } }} className={`rounded border px-3 py-1 ${preset === p ? "border-accent bg-accent text-white" : "border-border text-muted hover:text-text"}`}>
               {presetLabel[p]}
             </Link>
           ))}
@@ -174,7 +174,7 @@ export default async function ZonesPage({ searchParams }: { searchParams: Promis
                 end: iso(new Date(new Date(l.leg_start).getTime() + dur * 0.5)),
               };
               return (
-                <Link key={l.leg_start} href={{ pathname: "/zones", query: q }} className={`rounded-full border px-2.5 py-0.5 hover:bg-panel-2 ${up ? "border-up/40 text-up" : "border-down/40 text-down"}`} title={t("fromLegsHint")}>
+                <Link scroll={false} key={l.leg_start} href={{ pathname: "/zones", query: q }} className={`rounded-full border px-2.5 py-0.5 hover:bg-panel-2 ${up ? "border-up/40 text-up" : "border-down/40 text-down"}`} title={t("fromLegsHint")}>
                   {t(up ? "legBottom" : "legTop", { date: l.leg_start.slice(5, 10), px: kfmt(px) })}
                   {!l.confirmed && <span className="ml-1 text-muted">({t("provisional")})</span>}
                 </Link>
@@ -218,7 +218,7 @@ export default async function ZonesPage({ searchParams }: { searchParams: Promis
           <div className="flex items-center gap-3 text-xs font-medium text-muted">
             {t("alsoTitle")}
             {second && (
-              <Link href={{ pathname: "/zones", query: firstQuery }} className="font-normal text-accent hover:underline">
+              <Link scroll={false} href={{ pathname: "/zones", query: firstQuery }} className="font-normal text-accent hover:underline">
                 {t("clearSecond")}
               </Link>
             )}
@@ -279,7 +279,7 @@ export default async function ZonesPage({ searchParams }: { searchParams: Promis
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="text-muted">{t("sort")}:</span>
             {SORTS.map((s) => (
-              <Link key={s} href={{ pathname: "/zones", query: { ...current, sort: s } }} className={pill(sort === s)}>
+              <Link scroll={false} key={s} href={{ pathname: "/zones", query: { ...current, sort: s } }} className={pill(sort === s)}>
                 {t(`sorts.${s}`)}
               </Link>
             ))}

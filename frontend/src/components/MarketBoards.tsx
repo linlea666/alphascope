@@ -21,7 +21,7 @@ export async function ViewTabs({ view, q }: { view: View; q: Q }) {
   return (
     <div className="flex flex-wrap gap-1 border-b border-border text-sm">
       {VIEWS.map((v) => (
-        <Link key={v} href={{ pathname: "/market", query: q({ view: v === "overview" ? undefined : v, coin: undefined }) }} className={`-mb-px border-b-2 px-3 py-1.5 ${v === view ? "border-accent text-text" : "border-transparent text-muted hover:text-text"}`}>
+        <Link scroll={false} key={v} href={{ pathname: "/market", query: q({ view: v === "overview" ? undefined : v, coin: undefined }) }} className={`-mb-px border-b-2 px-3 py-1.5 ${v === view ? "border-accent text-text" : "border-transparent text-muted hover:text-text"}`}>
           {t(`tabs.${v}`)}
         </Link>
       ))}
@@ -34,7 +34,7 @@ function Pills({ label, options, current, render, q, param }: { label: string; o
     <span className="flex flex-wrap items-center gap-1 text-xs">
       <span className="text-muted">{label}:</span>
       {options.map((o) => (
-        <Link key={String(o)} href={{ pathname: "/market", query: q({ [param]: String(o) }) }} className={pill(String(o) === current)}>
+        <Link scroll={false} key={String(o)} href={{ pathname: "/market", query: q({ [param]: String(o) }) }} className={pill(String(o) === current)}>
           {render(String(o))}
         </Link>
       ))}
@@ -74,7 +74,7 @@ async function PositionTable({ rows, extra }: { rows: MarketPositionRow[]; extra
                 <AddressLink address={r.address} name={r.display_name} />
               </td>
               <td className={td}>
-                <Link href={{ pathname: "/market", query: { coin: r.coin } }} className="hover:underline">
+                <Link scroll={false} href={{ pathname: "/market", query: { coin: r.coin } }} className="hover:underline">
                   <Badge tone={r.szi > 0 ? "up" : "down"}>
                     {r.szi > 0 ? "▲" : "▼"} {r.coin}
                   </Badge>
@@ -268,7 +268,7 @@ export async function MarketBoard({ view, venue, cohort, sp, q }: { view: Exclud
                       <AddressLink address={r.address} name={r.display_name} />
                     </td>
                     <td className={td}>
-                      <Link href={{ pathname: "/market", query: { coin: r.coin } }}>
+                      <Link scroll={false} href={{ pathname: "/market", query: { coin: r.coin } }}>
                         <Badge tone={r.side === "long" ? "up" : "down"}>
                           {r.side === "long" ? "▲" : "▼"} {r.coin}
                         </Badge>
@@ -302,7 +302,7 @@ export async function MarketBoard({ view, venue, cohort, sp, q }: { view: Exclud
         hint={t("under.hint")}
         actions={
           <div className="flex flex-wrap gap-3">
-            <Link href={{ pathname: "/market", query: q({ adding: adding ? undefined : "1" }) }} className={pill(adding)}>
+            <Link scroll={false} href={{ pathname: "/market", query: q({ adding: adding ? undefined : "1" }) }} className={pill(adding)}>
               {t("under.addingOnly")}
             </Link>
             {minNotional}

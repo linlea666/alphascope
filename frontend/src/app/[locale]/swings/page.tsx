@@ -121,14 +121,14 @@ export default async function SwingsPage({ searchParams }: { searchParams: Promi
           <div className="flex flex-wrap gap-2 text-xs">
             <div className="flex overflow-hidden rounded border border-border">
               {SCOPES.map((s) => (
-                <Link key={s} href={{ pathname: "/swings", query: q({ scope: s, page: 1 }) }} className={`px-2 py-1 ${scope === s ? "bg-accent text-white" : "text-muted hover:text-text"}`}>
+                <Link scroll={false} key={s} href={{ pathname: "/swings", query: q({ scope: s, page: 1 }) }} className={`px-2 py-1 ${scope === s ? "bg-accent text-white" : "text-muted hover:text-text"}`}>
                   {scopeLabel[s]}
                 </Link>
               ))}
             </div>
             <div className="flex overflow-hidden rounded border border-border">
               {SORTS.map((s) => (
-                <Link key={s} href={{ pathname: "/swings", query: q({ sort: s, page: 1 }) }} className={`px-2 py-1 ${sort === s ? "bg-panel-2 text-text" : "text-muted hover:text-text"}`}>
+                <Link scroll={false} key={s} href={{ pathname: "/swings", query: q({ sort: s, page: 1 }) }} className={`px-2 py-1 ${sort === s ? "bg-panel-2 text-text" : "text-muted hover:text-text"}`}>
                   {sortLabel[s]}
                 </Link>
               ))}
@@ -203,12 +203,12 @@ export default async function SwingsPage({ searchParams }: { searchParams: Promi
           <span className="text-xs text-muted">{tc("pageOf", { page, pages, total: fmtNum(c.total, locale) })}</span>
           <div className="flex gap-2">
             {page > 1 && (
-              <Link href={{ pathname: "/swings", query: q({ page: page - 1 }) }} className="rounded border border-border px-3 py-1">
+              <Link scroll={false} href={{ pathname: "/swings", query: q({ page: page - 1 }) }} className="rounded border border-border px-3 py-1">
                 {tc("prev")}
               </Link>
             )}
             {page < pages && (
-              <Link href={{ pathname: "/swings", query: q({ page: page + 1 }) }} className="rounded border border-border px-3 py-1">
+              <Link scroll={false} href={{ pathname: "/swings", query: q({ page: page + 1 }) }} className="rounded border border-border px-3 py-1">
                 {tc("next")}
               </Link>
             )}

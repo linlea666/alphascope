@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getMessages, getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import { Nav } from "@/components/Nav";
+import { NavProgress } from "@/components/NavProgress";
 import { Toaster } from "@/components/Toaster";
 import { themeInitScript } from "@/components/ThemeToggle";
 import { routing, type Locale } from "@/i18n/routing";
@@ -26,6 +27,9 @@ export default async function LocaleLayout({ children, params }: { children: Rea
       </head>
       <body className="min-h-screen antialiased">
         <NextIntlClientProvider messages={messages}>
+          <Suspense fallback={null}>
+            <NavProgress />
+          </Suspense>
           <Nav />
           <main className="mx-auto max-w-[1400px] px-4 py-6">{children}</main>
           <Toaster />

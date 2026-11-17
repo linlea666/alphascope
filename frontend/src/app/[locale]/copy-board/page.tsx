@@ -40,7 +40,7 @@ export default async function CopyBoardPage({ searchParams }: { searchParams: Pr
       </PageHeader>
       <div className="flex flex-wrap items-center gap-2 text-sm">
         {WINDOWS.map((w) => (
-          <Link key={w} href={{ pathname: "/copy-board", query: { window: w, sort } }} className={pill(w === window)}>
+          <Link scroll={false} key={w} href={{ pathname: "/copy-board", query: { window: w, sort } }} className={pill(w === window)}>
             {t("window", { n: w })}
           </Link>
         ))}
@@ -53,7 +53,7 @@ export default async function CopyBoardPage({ searchParams }: { searchParams: Pr
           <div className="flex flex-wrap items-center gap-1 text-xs">
             <span className="text-muted">{t("sort")}:</span>
             {SORTS.map((s) => (
-              <Link key={s} href={{ pathname: "/copy-board", query: { window, sort: s } }} className={small(s === sort)}>
+              <Link scroll={false} key={s} href={{ pathname: "/copy-board", query: { window, sort: s } }} className={small(s === sort)}>
                 {t(`sorts.${s}`)}
               </Link>
             ))}

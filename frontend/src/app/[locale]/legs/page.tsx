@@ -36,7 +36,7 @@ export default async function LegsPage({ searchParams }: { searchParams: Promise
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
           <span className="text-muted">{t("coin")}:</span>
           {list.coins.slice(0, 16).map((c) => (
-            <Link key={c.coin} href={{ pathname: "/legs", query: { coin: c.coin } }} className={`rounded border px-2 py-0.5 ${c.coin === coin ? "border-accent text-accent" : "border-border text-muted hover:text-text"}`}>
+            <Link scroll={false} key={c.coin} href={{ pathname: "/legs", query: { coin: c.coin } }} className={`rounded border px-2 py-0.5 ${c.coin === coin ? "border-accent text-accent" : "border-border text-muted hover:text-text"}`}>
               {c.coin}
             </Link>
           ))}

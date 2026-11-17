@@ -29,10 +29,10 @@ export default async function HoldersPage({ searchParams }: { searchParams: Prom
         <VenueSwitch value={await getVenue()} />
       </PageHeader>
       <div className="flex overflow-hidden rounded border border-border text-sm" style={{ width: "fit-content" }}>
-        <Link href={{ pathname: "/holders", query: { tab: "zones" } }} className={tabClass(tab === "zones")}>
+        <Link scroll={false} href={{ pathname: "/holders", query: { tab: "zones" } }} className={tabClass(tab === "zones")}>
           {t("tabZones")}
         </Link>
-        <Link href={{ pathname: "/holders", query: { tab: "capture" } }} className={tabClass(tab === "capture")}>
+        <Link scroll={false} href={{ pathname: "/holders", query: { tab: "capture" } }} className={tabClass(tab === "capture")}>
           {t("tabCapture")}
         </Link>
         <Link href="/legs" className={tabClass(false)}>
@@ -80,11 +80,11 @@ async function ZonesTab({ sp, locale }: { sp: Search; locale: string }) {
       <Panel hint={t("zonesHint", { share: fmtPct(q.min_share, locale, 0, false) })}>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           {PRESETS.map((p) => (
-            <Link key={p} href={{ pathname: "/holders", query: { tab: "zones", preset: p, ...(near ? { near: "1" } : {}) } }} className={`rounded border px-3 py-1 ${preset === p ? "border-accent bg-accent text-white" : "border-border text-muted hover:text-text"}`}>
+            <Link scroll={false} key={p} href={{ pathname: "/holders", query: { tab: "zones", preset: p, ...(near ? { near: "1" } : {}) } }} className={`rounded border px-3 py-1 ${preset === p ? "border-accent bg-accent text-white" : "border-border text-muted hover:text-text"}`}>
               {presetLabel[p]}
             </Link>
           ))}
-          <Link href={{ pathname: "/holders", query: { ...sp, tab: "zones", near: near ? "0" : "1" } as Record<string, string> }} className={`rounded border px-2 py-1 text-xs ${near ? "border-accent text-accent" : "border-border text-muted"}`}>
+          <Link scroll={false} href={{ pathname: "/holders", query: { ...sp, tab: "zones", near: near ? "0" : "1" } as Record<string, string> }} className={`rounded border px-2 py-1 text-xs ${near ? "border-accent text-accent" : "border-border text-muted"}`}>
             {t("showNear")}
           </Link>
         </div>

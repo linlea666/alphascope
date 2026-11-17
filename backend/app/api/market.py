@@ -23,14 +23,20 @@ NUMERIC = ("margin", "liq_dist", "roe", "near_long_liq_pct", "near_short_liq_pct
 POSITION_EXTRAS = """f.notional_usd / nullif(f.leverage, 0) AS margin,
                abs(f.mark_px - f.liq_px) / nullif(f.mark_px, 0) AS liq_dist,
                f.upl / nullif(f.notional_usd / nullif(f.leverage, 0), 0) AS roe"""
+# sort key -> (expression, default direction); unknown values (no leverage, no liquidation price) always go last
 POSITION_SORTS = {
-    "notional": "f.notional_usd DESC",
-    "margin": "f.notional_usd / nullif(f.leverage, 0) DESC NULLS LAST",
-    "upl": "f.upl ASC NULLS LAST",  # biggest loss first
-    "liq": "abs(f.mark_px - f.liq_px) / nullif(f.mark_px, 0) ASC NULLS LAST",
-    "leverage": "f.leverage DESC NULLS LAST",
-    "opened": "coalesce(f.opened_at, f.first_seen_at) DESC",
+    "notional": ("f.notional_usd", "desc"),
+    "margin": ("f.notional_usd / nullif(f.leverage, 0)", "desc"),
+    "upl": ("f.upl", "asc"),  # biggest loss first
+    "liq": ("abs(f.mark_px - f.liq_px) / nullif(f.mark_px, 0)", "asc"),  # closest to liquidation first
+    "leverage": ("f.leverage", "desc"),
+    "opened": ("coalesce(f.opened_at, f.first_seen_at)", "desc"),
 }
+
+
+def position_order(sort: str, order: str | None) -> str:
+    expr, default = POSITION_SORTS[sort]
+    return f"{expr} {(order or default).upper()} NULLS LAST"
 LIQ_TOLERANCE = 0.005  # a close within 0.5% of (or beyond) the last reported liquidation price
 
 
@@ -71,7 +77,8 @@ def contributors(session: Session = Depends(get_session), coin: str = Query(...,
                  min_lev: int = Query(0, ge=0, le=200), limit: int = Query(200, ge=1, le=1000),
                  entry_min: float | None = None, entry_max: float | None = None,
                  liq_min: float | None = None, liq_max: float | None = None,
-                 sort: Literal["notional", "margin", "upl", "liq", "leverage", "opened"] = "notional"):
+                 sort: Literal["notional", "margin", "upl", "liq", "leverage", "opened"] = "notional",
+                 order: Literal["asc", "desc"] | None = None):
     """The traders and positions behind a coin's numbers (same freshness and cohort rules as the aggregates);
     entry / liquidation price ranges drill into a zone of the positioning structure.
 
@@ -91,9 +98,10 @@ def contributors(session: Session = Depends(get_session), coin: str = Query(...,
                f.observed_at, pw.account_value, {POSITION_EXTRAS}
         FROM fresh f JOIN wallet w ON w.id = f.wallet_id JOIN position_watch pw ON pw.wallet_id = f.wallet_id
         WHERE f.coin = :coin {side_sql}
-        ORDER BY {POSITION_SORTS[sort]}, f.notional_usd DESC LIMIT :n"""),
+        ORDER BY {position_order(sort, order)}, f.notional_usd DESC LIMIT :n"""),
         {"now": now, "coin": coin, "n": limit}).mappings().all()
-    return {"as_of": now, "coin": coin, "sort": sort, "rows": [_clean(dict(r)) for r in rows]}
+    return {"as_of": now, "coin": coin, "sort": sort, "order": order or POSITION_SORTS[sort][1],
+            "rows": [_clean(dict(r)) for r in rows]}
 
 
 @router.get("/events")

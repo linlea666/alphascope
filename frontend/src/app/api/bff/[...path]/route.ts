@@ -5,12 +5,16 @@ import { NextResponse, type NextRequest } from "next/server";
  *  cross-site form or fetch cannot send without a CORS preflight that this route never approves. */
 const BASE = process.env.API_BASE_URL ?? "http://localhost:8000";
 const ALLOWED = [/^watch(\/|$)/, /^alerts(\/|$)/, /^sims(\/|$)/, /^settings(\/|$)/];
+// read-only data the browser may refresh in place (e.g. re-sorting a table without reloading the page)
+const READ_ONLY = [/^market(\/|$)/];
 
 async function forward(req: NextRequest, path: string[]): Promise<Response> {
   if (path.some((seg) => seg === "." || seg === ".." || seg.includes("/") || seg.includes("\\")))
     return NextResponse.json({ detail: "bad path" }, { status: 400 });
   const sub = path.map(encodeURIComponent).join("/");
-  if (!ALLOWED.some((re) => re.test(sub))) return NextResponse.json({ detail: "not allowed" }, { status: 404 });
+  const readOnly = READ_ONLY.some((re) => re.test(sub));
+  if (!ALLOWED.some((re) => re.test(sub)) && !(readOnly && req.method === "GET"))
+    return NextResponse.json({ detail: "not allowed" }, { status: 404 });
   if (req.method !== "GET") {
     const origin = req.headers.get("origin");
     const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");

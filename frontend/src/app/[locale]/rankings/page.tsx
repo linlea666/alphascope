@@ -90,7 +90,7 @@ export default async function RankingsPage({ searchParams }: { searchParams: Pro
     const active = s.sort === key;
     const nextOrder = active && s.order === "desc" ? "asc" : "desc";
     return (
-      <Link href={{ pathname: "/rankings", query: query(s, { sort: key, order: nextOrder, page: 1 }) }} className={active ? "text-text" : "hover:text-text"}>
+      <Link scroll={false} href={{ pathname: "/rankings", query: query(s, { sort: key, order: nextOrder, page: 1 }) }} className={active ? "text-text" : "hover:text-text"}>
         {label}
         {active ? (s.order === "desc" ? " ↓" : " ↑") : ""}
       </Link>
@@ -112,7 +112,7 @@ export default async function RankingsPage({ searchParams }: { searchParams: Pro
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex overflow-hidden rounded border border-border text-sm">
             {WINDOWS.map((w) => (
-              <Link
+              <Link scroll={false}
                 key={w}
                 href={{ pathname: "/rankings", query: query(s, { window: w, page: 1 }) }}
                 className={`px-3 py-1 ${s.window === w ? "bg-accent text-white" : "text-muted hover:text-text"}`}
@@ -123,7 +123,7 @@ export default async function RankingsPage({ searchParams }: { searchParams: Pro
           </div>
           <div className="flex overflow-hidden rounded border border-border text-sm">
             {[false, true].map((raw) => (
-              <Link
+              <Link scroll={false}
                 key={String(raw)}
                 href={{ pathname: "/rankings", query: query(s, { raw, page: 1 }) }}
                 className={`px-3 py-1 ${s.raw === raw ? "bg-panel-2 text-text" : "text-muted hover:text-text"}`}
@@ -169,7 +169,7 @@ export default async function RankingsPage({ searchParams }: { searchParams: Pro
           <button type="submit" className="rounded bg-accent px-3 py-1 text-sm text-white">
             {t("common.apply")}
           </button>
-          <Link href={{ pathname: "/rankings", query: { window: s.window } }} className="px-2 py-1 text-xs text-muted hover:text-text">
+          <Link scroll={false} href={{ pathname: "/rankings", query: { window: s.window } }} className="px-2 py-1 text-xs text-muted hover:text-text">
             {t("common.reset")}
           </Link>
         </form>
@@ -239,12 +239,12 @@ export default async function RankingsPage({ searchParams }: { searchParams: Pro
         <span className="text-xs text-muted">{t("common.pageOf", { page: fmtNum(s.page, locale), pages: fmtNum(pages, locale), total: fmtNum(data.total, locale) })}</span>
         <div className="flex gap-2">
           {s.page > 1 && (
-            <Link href={{ pathname: "/rankings", query: query(s, { page: s.page - 1 }) }} className="rounded border border-border px-3 py-1 hover:text-text">
+            <Link scroll={false} href={{ pathname: "/rankings", query: query(s, { page: s.page - 1 }) }} className="rounded border border-border px-3 py-1 hover:text-text">
               {t("common.prev")}
             </Link>
           )}
           {s.page < pages && (
-            <Link href={{ pathname: "/rankings", query: query(s, { page: s.page + 1 }) }} className="rounded border border-border px-3 py-1 hover:text-text">
+            <Link scroll={false} href={{ pathname: "/rankings", query: query(s, { page: s.page + 1 }) }} className="rounded border border-border px-3 py-1 hover:text-text">
               {t("common.next")}
             </Link>
           )}

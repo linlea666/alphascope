@@ -40,7 +40,7 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
         {styles.styles.map((s) => {
           const good = (s.counts.verified ?? 0) + (s.counts.candidate ?? 0);
           return (
-            <Link key={s.key} href={{ pathname: "/discover", query: q({ style: s.key }) }} className={`${pill(s.key === style)} ${s.risk_flag && s.key !== style ? "border-down/40 text-down" : ""}`}>
+            <Link scroll={false} key={s.key} href={{ pathname: "/discover", query: q({ style: s.key }) }} className={`${pill(s.key === style)} ${s.risk_flag && s.key !== style ? "border-down/40 text-down" : ""}`}>
               {t(`styles.${s.key}`)}
               <span className="ml-1.5 text-xs opacity-80">
                 {s.counts.verified ? `${s.counts.verified}✓ ` : ""}
@@ -56,19 +56,19 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
         actions={
           <div className="flex flex-wrap gap-1 text-xs">
             {VENUES.map((v) => (
-              <Link key={v} href={{ pathname: "/discover", query: q({ venue: v }) }} className={pill(v === venue)}>
+              <Link scroll={false} key={v} href={{ pathname: "/discover", query: q({ venue: v }) }} className={pill(v === venue)}>
                 {t(`venues.${v}`)}
               </Link>
             ))}
             <span className="mx-1 w-px bg-border" />
             {STATUSES.map((s) => (
-              <Link key={s} href={{ pathname: "/discover", query: q({ status: s }) }} className={pill(s === status)} title={t(`statusHints.${s}`)}>
+              <Link scroll={false} key={s} href={{ pathname: "/discover", query: q({ status: s }) }} className={pill(s === status)} title={t(`statusHints.${s}`)}>
                 {t(`statusFilter.${s}`)}
               </Link>
             ))}
             <span className="mx-1 w-px bg-border" />
             {SORTS.map((s) => (
-              <Link key={s} href={{ pathname: "/discover", query: q({ sort: s }) }} className={pill(s === sort)}>
+              <Link scroll={false} key={s} href={{ pathname: "/discover", query: q({ sort: s }) }} className={pill(s === sort)}>
                 {t(`sorts.${s}`)}
               </Link>
             ))}

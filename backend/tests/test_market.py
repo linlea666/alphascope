@@ -203,3 +203,12 @@ def test_position_lists_margin_risk_liquidated_underwater_whales(client, sf):
     w = client.get("/api/v1/market/whales", params={"limit": 2}).json()
     assert [r["notional_usd"] for r in w["rows"]] == [500.0, 300.0]
     assert w["closed"][0]["address"][:3] == "0xb"
+
+
+def test_contributor_sort_direction(client, sf):
+    _seed_market(sf)
+    asc = client.get("/api/v1/market/contributors", params={"coin": "BTC", "sort": "margin", "order": "asc"}).json()
+    assert [r["address"][:3] for r in asc["rows"]] == ["0xb", "0xa", "okx"] and asc["order"] == "asc"
+    far = client.get("/api/v1/market/contributors", params={"coin": "BTC", "sort": "liq", "order": "desc",
+                                                            "side": "long"}).json()["rows"]
+    assert [r["address"][:3] for r in far] == ["0xa", "okx"]  # long only; the unknown liquidation price stays last

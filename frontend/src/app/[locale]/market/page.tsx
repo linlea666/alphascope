@@ -1,13 +1,13 @@
 import { getLocale, getTranslations } from "next-intl/server";
-import type { ReactNode } from "react";
 import { AddressLink } from "@/components/AddressLink";
 import { ApiErrorState } from "@/components/ApiErrorState";
 import { LiqLadder, MarketHistoryChart, MarketTreemap, PriceLadder } from "@/components/MarketCharts";
 import { DivergencePanel } from "@/components/DivergencePanel";
 import { MarketBoard, VIEWS, ViewTabs, type View } from "@/components/MarketBoards";
-import { Term } from "@/components/Term";
+import { ContributorsTable } from "@/components/ContributorsTable";
 import { Badge, PageHeader, Panel, Stat, td, th } from "@/components/ui";
 import { Link } from "@/i18n/routing";
+import { getWatchContext } from "@/lib/watch";
 import { api, ApiError, type MarketCoin, type MarketContributor, type MarketEvent, type MarketHistoryRow, type MarketOverview, type MarketStructure, type PriceZone } from "@/lib/api";
 import { fmtNum, fmtPct, fmtTime, fmtUsd, signClass } from "@/lib/format";
 
@@ -41,13 +41,13 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
         <PageHeader title={t("title")} subtitle={t("subtitle")} />
         <div className="flex flex-wrap items-center gap-2 text-sm">
           {VENUES.map((v) => (
-            <Link key={v} href={{ pathname: "/market", query: qv({ venue: v }) }} className={pillV(v === venue)}>
+            <Link scroll={false} key={v} href={{ pathname: "/market", query: qv({ venue: v }) }} className={pillV(v === venue)}>
               {t(`venues.${v}`)}
             </Link>
           ))}
           <span className="mx-1 h-5 w-px bg-border" />
           {COHORTS.map((c) => (
-            <Link key={c} href={{ pathname: "/market", query: qv({ cohort: c }) }} className={pillV(c === cohort)} title={t(`cohortHints.${c}`)}>
+            <Link scroll={false} key={c} href={{ pathname: "/market", query: qv({ cohort: c }) }} className={pillV(c === cohort)} title={t(`cohortHints.${c}`)}>
               {t(`cohorts.${c}`)}
             </Link>
           ))}
@@ -78,7 +78,7 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
     [{ rows: history }, st, { rows: contributors }] = await Promise.all([
       api.marketHistory({ coin: sp.coin, venue, cohort, days: 7 }).catch(() => ({ rows: [] })),
       api.marketStructure({ coin: sp.coin, venue, cohort, min_lev: sp.minlev ? Number(sp.minlev) : 0 }).catch(() => null),
-      api.marketContributors({ coin: sp.coin, venue, cohort, side: sp.cside === "long" || sp.cside === "short" ? sp.cside : "all", limit: 200, sort: sp.csort, entry_min: sp.elo, entry_max: sp.ehi, liq_min: sp.llo, liq_max: sp.lhi, min_lev: sp.llo ? sp.minlev : undefined }).catch(() => ({ rows: [] })),
+      api.marketContributors({ coin: sp.coin, venue, cohort, side: sp.cside === "long" || sp.cside === "short" ? sp.cside : "all", limit: 200, sort: sp.csort, order: sp.corder, entry_min: sp.elo, entry_max: sp.ehi, liq_min: sp.llo, liq_max: sp.lhi, min_lev: sp.llo ? sp.minlev : undefined }).catch(() => ({ rows: [] })),
     ]);
   } else {
     history = (await api.marketHistory({ coin: "*", venue, cohort, days: 7 }).catch(() => ({ rows: [] }))).rows;
@@ -98,13 +98,13 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
         {VENUES.map((v) => (
-          <Link key={v} href={{ pathname: "/market", query: q({ venue: v }) }} className={pill(v === venue)}>
+          <Link scroll={false} key={v} href={{ pathname: "/market", query: q({ venue: v }) }} className={pill(v === venue)}>
             {t(`venues.${v}`)}
           </Link>
         ))}
         <span className="mx-1 h-5 w-px bg-border" />
         {COHORTS.map((c) => (
-          <Link key={c} href={{ pathname: "/market", query: q({ cohort: c }) }} className={pill(c === cohort)} title={t(`cohortHints.${c}`)}>
+          <Link scroll={false} key={c} href={{ pathname: "/market", query: q({ cohort: c }) }} className={pill(c === cohort)} title={t(`cohortHints.${c}`)}>
             {t(`cohorts.${c}`)}
           </Link>
         ))}
@@ -165,7 +165,7 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
                     return (
                       <tr key={c.coin} className={`border-t border-border/60 hover:bg-panel-2 ${c.coin === sp.coin ? "bg-panel-2" : ""}`}>
                         <td className={td}>
-                          <Link href={{ pathname: "/market", query: q({ coin: c.coin }) }} className="font-medium hover:text-accent">
+                          <Link scroll={false} href={{ pathname: "/market", query: q({ coin: c.coin }) }} className="font-medium hover:text-accent">
                             {c.coin}
                           </Link>
                         </td>
@@ -218,19 +218,19 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
         actions={
           <div className="flex flex-wrap gap-1 text-xs">
             {HOURS.map((h) => (
-              <Link key={h} href={{ pathname: "/market", query: q({ hours: String(h) }) }} className={pill(h === hours)}>
+              <Link scroll={false} key={h} href={{ pathname: "/market", query: q({ hours: String(h) }) }} className={pill(h === hours)}>
                 {t("hours", { h })}
               </Link>
             ))}
             <span className="mx-1 w-px bg-border" />
             {(Object.keys(KINDS) as (keyof typeof KINDS)[]).map((k) => (
-              <Link key={k} href={{ pathname: "/market", query: q({ kind: k }) }} className={pill(k === kind)}>
+              <Link scroll={false} key={k} href={{ pathname: "/market", query: q({ kind: k }) }} className={pill(k === kind)}>
                 {t(`kinds.${k}`)}
               </Link>
             ))}
             <span className="mx-1 w-px bg-border" />
             {(["all", "long", "short"] as const).map((s) => (
-              <Link key={s} href={{ pathname: "/market", query: q({ side: s }) }} className={pill(s === side)}>
+              <Link scroll={false} key={s} href={{ pathname: "/market", query: q({ side: s }) }} className={pill(s === side)}>
                 {t(`sides.${s}`)}
               </Link>
             ))}
@@ -245,17 +245,11 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
 
 async function CoinDetail({ coin, row, history, st, contributors, sp, q, locale }: { coin: string; row: MarketCoin | null; history: MarketHistoryRow[]; st: MarketStructure | null; contributors: MarketContributor[]; sp: Search; q: (o: Record<string, string | undefined>) => Record<string, string>; locale: string }) {
   const t = await getTranslations("market");
-  const pill = (active: boolean) => `rounded border px-2 py-0.5 ${active ? "border-accent text-accent" : "border-border text-muted hover:text-text"}`;
   const cside = sp.cside === "long" || sp.cside === "short" ? sp.cside : "all";
-  const csort = sp.csort ?? "notional";
-  const sortTh = (key: string, label: ReactNode, right = true) => (
-    <th className={`${th} ${right ? "text-right" : ""}`}>
-      <Link href={{ pathname: "/market", query: q({ csort: key === "notional" ? undefined : key }) }} scroll={false} className={`hover:text-text ${csort === key ? "text-accent" : ""}`}>
-        {label}
-        {csort === key ? " ↓" : ""}
-      </Link>
-    </th>
-  );
+  const SORT_KEYS = ["notional", "margin", "upl", "liq", "leverage", "opened"] as const;
+  const csort = SORT_KEYS.find((k) => k === sp.csort) ?? "notional";
+  const corder = sp.corder === "asc" || sp.corder === "desc" ? sp.corder : csort === "upl" || csort === "liq" ? "asc" : "desc";
+  const watch = await getWatchContext();
   const fmtPx = (v: number | null) => (v === null ? "—" : fmtNum(v, locale, v >= 100 ? 2 : 6));
   return (
     <div className="space-y-4">
@@ -266,7 +260,7 @@ async function CoinDetail({ coin, row, history, st, contributors, sp, q, locale 
             {t("coinLine", { traders: row.traders, longs: row.long_traders, shorts: row.short_traders, px: fmtPx(row.mark_px), lev: row.median_leverage === null ? "—" : fmtNum(row.median_leverage, locale, 0) })}
           </span>
         )}
-        <Link href={{ pathname: "/market", query: q({ coin: undefined }) }} className="text-xs text-muted hover:text-text">
+        <Link scroll={false} href={{ pathname: "/market", query: q({ coin: undefined }) }} className="text-xs text-muted hover:text-text">
           ✕ {t("clearCoin")}
         </Link>
       </div>
@@ -283,7 +277,7 @@ async function CoinDetail({ coin, row, history, st, contributors, sp, q, locale 
           sp.elo || sp.llo ? (
             <>
               {t(sp.elo ? "rangeEntry" : "rangeLiq", { lo: fmtPx(Number(sp.elo ?? sp.llo)), hi: fmtPx(Number(sp.ehi ?? sp.lhi)) })}{" "}
-              <Link href={{ pathname: "/market", query: q({ elo: undefined, ehi: undefined, llo: undefined, lhi: undefined }) }} className="text-accent hover:underline">
+              <Link scroll={false} href={{ pathname: "/market", query: q({ elo: undefined, ehi: undefined, llo: undefined, lhi: undefined }) }} className="text-accent hover:underline">
                 ✕ {t("clearRange")}
               </Link>
             </>
@@ -291,68 +285,15 @@ async function CoinDetail({ coin, row, history, st, contributors, sp, q, locale 
             t("contribHint")
           )
         }
-        actions={
-          <div className="flex gap-1 text-xs">
-            {(["all", "long", "short"] as const).map((s) => (
-              <Link key={s} href={{ pathname: "/market", query: q({ cside: s === "all" ? undefined : s }) }} className={pill(s === cside)}>
-                {t(`sides.${s}`)}
-              </Link>
-            ))}
-          </div>
-        }
       >
-        {contributors.length ? (
-          <div className="-mx-4 -my-4 max-h-[480px] overflow-auto">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 bg-panel-2">
-                <tr>
-                  <th className={th}>{t("cols.trader")}</th>
-                  {sortTh("notional", t("cols.notional"))}
-                  {sortTh("margin", <Term k="margin" align="right">{t("cols.margin")}</Term>)}
-                  <th className={`${th} text-right`}>{t("cols.entry")}</th>
-                  {sortTh("leverage", t("cols.lev"))}
-                  {sortTh("liq", t("cols.liq"))}
-                  {sortTh("upl", t("cols.upl"))}
-                  {sortTh("opened", t("cols.opened"), false)}
-                  <th className={th}>{t("cols.observed")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {contributors.map((r) => (
-                  <tr key={`${r.address}`} className="border-t border-border/60 hover:bg-panel-2">
-                    <td className={td}>
-                      <span className="flex items-start gap-2">
-                        <Badge tone={r.szi > 0 ? "up" : "down"}>{r.szi > 0 ? "▲" : "▼"}</Badge>
-                        <AddressLink address={r.address} name={r.display_name} />
-                      </span>
-                    </td>
-                    <td className={`${td} num text-right`}>{fmtUsd(r.notional_usd, locale)}</td>
-                    <td className={`${td} num text-right`}>{fmtUsd(r.margin, locale)}</td>
-                    <td className={`${td} num text-right`}>{fmtPx(r.entry_px)}</td>
-                    <td className={`${td} num text-right`}>
-                      {r.leverage ? `${r.leverage}×` : "—"}
-                      {r.margin_mode && <div className="text-[11px] text-muted">{t(`modes.${r.margin_mode === "isolated" ? "isolated" : "cross"}`)}</div>}
-                    </td>
-                    <td className={`${td} num text-right text-muted`}>
-                      {fmtPx(r.liq_px)}
-                      {r.liq_dist !== null && r.liq_dist !== undefined && <div className={`text-[11px] ${r.liq_dist <= 0.02 ? "font-semibold text-down" : r.liq_dist <= 0.05 ? "text-warn" : ""}`}>{fmtPct(r.liq_dist, locale, 1, false)}</div>}
-                    </td>
-                    <td className={`${td} num text-right ${signClass(r.upl)}`}>
-                      {fmtUsd(r.upl, locale)}
-                      {r.roe !== null && r.roe !== undefined && <div className="text-[11px]">{fmtPct(r.roe, locale, 0)}</div>}
-                    </td>
-                    <td className={`${td} num text-xs text-muted`}>
-                      {r.opened_at ? fmtTime(r.opened_at, locale) : r.opened_at_source === "window" && r.opened_after ? t("openedAfter", { t: fmtTime(r.opened_after, locale) }) : t("openedUnknown")}
-                    </td>
-                    <td className={`${td} num text-xs text-muted`}>{fmtTime(r.observed_at, locale)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="py-6 text-center text-sm text-muted">{t("empty")}</p>
-        )}
+        <ContributorsTable
+          coin={coin}
+          query={Object.fromEntries(Object.entries({ venue: sp.venue, cohort: sp.cohort, entry_min: sp.elo, entry_max: sp.ehi, liq_min: sp.llo, liq_max: sp.lhi, min_lev: sp.llo ? sp.minlev : undefined }).filter((e): e is [string, string] => !!e[1]))}
+          initial={{ rows: contributors, side: cside, sort: csort, order: corder }}
+          aliases={watch.aliases}
+          watched={[...watch.watched]}
+          locale={locale}
+        />
       </Panel>
     </div>
   );
@@ -458,7 +399,7 @@ async function Structure({ st, coin, history, sp, q, locale }: { st: MarketStruc
         <td className={`${td} num text-right text-muted`}>{z.avg_lev ? `${fmtNum(z.avg_lev, locale, 1)}×` : "—"}</td>
         <td className={`${td} text-xs`}>{kind === "entry" ? (z.in_profit ? <span className="text-up">{t("inProfit")}</span> : <span className="text-down">{t("underwater")}</span>) : ""}</td>
         <td className={`${td} text-xs`}>
-          <Link href={{ pathname: "/market", query: q(kind === "entry" ? { cside: side, elo: String(z.lo), ehi: String(z.hi), llo: undefined, lhi: undefined } : { cside: side, llo: String(z.lo), lhi: String(z.hi), elo: undefined, ehi: undefined }) }} className="text-accent hover:underline">
+          <Link scroll={false} href={{ pathname: "/market", query: q(kind === "entry" ? { cside: side, elo: String(z.lo), ehi: String(z.hi), llo: undefined, lhi: undefined } : { cside: side, llo: String(z.lo), lhi: String(z.hi), elo: undefined, ehi: undefined }) }} className="text-accent hover:underline">
             {t("drill")}
           </Link>
         </td>
@@ -491,7 +432,7 @@ async function Structure({ st, coin, history, sp, q, locale }: { st: MarketStruc
           actions={
             <div className="flex gap-1 text-xs">
               {[0, 10, 20].map((l) => (
-                <Link key={l} href={{ pathname: "/market", query: q({ minlev: l ? String(l) : undefined }) }} className={pill(Number(sp.minlev || 0) === l)}>
+                <Link scroll={false} key={l} href={{ pathname: "/market", query: q({ minlev: l ? String(l) : undefined }) }} className={pill(Number(sp.minlev || 0) === l)}>
                   {l ? `≥${l}×` : t("allLev")}
                 </Link>
               ))}

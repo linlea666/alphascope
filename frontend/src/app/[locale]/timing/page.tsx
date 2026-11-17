@@ -84,32 +84,32 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <div className="flex overflow-hidden rounded border border-border">
             {SCALES.map((s) => (
-              <Link key={s} href={{ pathname: "/timing", query: q({ scale: s, window: VALID[s].includes(window) ? window : VALID[s][0], page: 1 }) }} className={tab(s === scale)}>
+              <Link scroll={false} key={s} href={{ pathname: "/timing", query: q({ scale: s, window: VALID[s].includes(window) ? window : VALID[s][0], page: 1 }) }} className={tab(s === scale)}>
                 {tt(`scales.${s}`)}
               </Link>
             ))}
           </div>
           <div className="flex overflow-hidden rounded border border-border">
             {WINDOWS.map((w) => (
-              <Link key={w} href={{ pathname: "/timing", query: q({ window: w, page: 1 }) }} className={`${tab(w === window)} ${VALID[scale].includes(w) ? "" : "opacity-40"}`}>
+              <Link scroll={false} key={w} href={{ pathname: "/timing", query: q({ window: w, page: 1 }) }} className={`${tab(w === window)} ${VALID[scale].includes(w) ? "" : "opacity-40"}`}>
                 {t(`windows.${w}`)}
               </Link>
             ))}
           </div>
           <div className="flex overflow-hidden rounded border border-border">
             {GROUPS.map((g) => (
-              <Link key={g} href={{ pathname: "/timing", query: q({ group: g, page: 1 }) }} className={tab(g === group)}>
+              <Link scroll={false} key={g} href={{ pathname: "/timing", query: q({ group: g, page: 1 }) }} className={tab(g === group)}>
                 {g === "coin" ? t("coinTab") : t(`groups.${g}`)}
               </Link>
             ))}
           </div>
-          <Link href={{ pathname: "/timing", query: { ...q({ page: 1 }), sig: sig ? "0" : "1" } }} className={`rounded border px-2 py-1 text-xs ${sig ? "border-accent text-accent" : "border-border text-muted"}`}>
+          <Link scroll={false} href={{ pathname: "/timing", query: { ...q({ page: 1 }), sig: sig ? "0" : "1" } }} className={`rounded border px-2 py-1 text-xs ${sig ? "border-accent text-accent" : "border-border text-muted"}`}>
             {t("significantOnly")}
           </Link>
-          <Link href={{ pathname: "/timing", query: { ...q({ page: 1 }), small: small ? "0" : "1" } }} className={`rounded border px-2 py-1 text-xs ${small ? "border-accent text-accent" : "border-border text-muted"}`}>
+          <Link scroll={false} href={{ pathname: "/timing", query: { ...q({ page: 1 }), small: small ? "0" : "1" } }} className={`rounded border px-2 py-1 text-xs ${small ? "border-accent text-accent" : "border-border text-muted"}`}>
             {t("includeInsufficient")}
           </Link>
-          <Link href={{ pathname: "/timing", query: { ...q({ page: 1 }), nomm: noMakers ? "0" : "1" } }} className={`rounded border px-2 py-1 text-xs ${noMakers ? "border-accent text-accent" : "border-border text-muted"}`}>
+          <Link scroll={false} href={{ pathname: "/timing", query: { ...q({ page: 1 }), nomm: noMakers ? "0" : "1" } }} className={`rounded border px-2 py-1 text-xs ${noMakers ? "border-accent text-accent" : "border-border text-muted"}`}>
             {t("excludeMakers", { p: fmtPct(d.maker_heavy, locale, 0, false) })}
           </Link>
         </div>
@@ -117,7 +117,7 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
           <div className="mt-3 flex flex-wrap gap-1 text-xs">
             <span className="py-1 text-muted">{t("pickCoin")}:</span>
             {coins.map((c) => (
-              <Link key={c.coin} href={{ pathname: "/timing", query: { ...q({ page: 1 }), coin: c.coin } }} className={`rounded border px-2 py-1 ${c.coin === coin ? "border-accent text-accent" : "border-border text-muted hover:text-text"}`}>
+              <Link scroll={false} key={c.coin} href={{ pathname: "/timing", query: { ...q({ page: 1 }), coin: c.coin } }} className={`rounded border px-2 py-1 ${c.coin === coin ? "border-accent text-accent" : "border-border text-muted hover:text-text"}`}>
                 {c.coin} <span className="text-muted">{c.wallets}</span>
               </Link>
             ))}
@@ -126,7 +126,7 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
         <div className="mt-3 flex flex-wrap gap-1 text-xs">
           <span className="py-1 text-muted">{t("sort")}:</span>
           {SORTS.map((s) => (
-            <Link key={s} href={{ pathname: "/timing", query: q({ sort: s, page: 1 }) }} className={`rounded border px-2 py-1 ${s === sort ? "border-accent text-accent" : "border-border text-muted hover:text-text"}`}>
+            <Link scroll={false} key={s} href={{ pathname: "/timing", query: q({ sort: s, page: 1 }) }} className={`rounded border px-2 py-1 ${s === sort ? "border-accent text-accent" : "border-border text-muted hover:text-text"}`}>
               {sortLabel[s]}
             </Link>
           ))}
@@ -217,12 +217,12 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
         <span className="text-xs text-muted">{tc("pageOf", { page, pages, total: fmtNum(d.total, locale) })}</span>
         <div className="flex gap-2">
           {page > 1 && (
-            <Link href={{ pathname: "/timing", query: q({ page: page - 1 }) }} className="rounded border border-border px-3 py-1">
+            <Link scroll={false} href={{ pathname: "/timing", query: q({ page: page - 1 }) }} className="rounded border border-border px-3 py-1">
               {tc("prev")}
             </Link>
           )}
           {page < pages && (
-            <Link href={{ pathname: "/timing", query: q({ page: page + 1 }) }} className="rounded border border-border px-3 py-1">
+            <Link scroll={false} href={{ pathname: "/timing", query: q({ page: page + 1 }) }} className="rounded border border-border px-3 py-1">
               {tc("next")}
             </Link>
           )}

@@ -36,7 +36,7 @@ export default async function WatchlistPage({ searchParams }: { searchParams: Pr
             {t("all")} <span className="opacity-70">{new Set(d.items.map((i) => i.address)).size}</span>
           </Link>
           {d.groups.map((g) => (
-            <Link key={g.id} href={{ pathname: "/watchlist", query: { g: g.id } }} className={pill(gid === g.id)} style={g.color && gid !== g.id ? { color: g.color } : undefined}>
+            <Link scroll={false} key={g.id} href={{ pathname: "/watchlist", query: { g: g.id } }} className={pill(gid === g.id)} style={g.color && gid !== g.id ? { color: g.color } : undefined}>
               {g.name} <span className="opacity-70">{g.n}</span>
             </Link>
           ))}

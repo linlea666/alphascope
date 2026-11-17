@@ -78,7 +78,7 @@ export default async function SimsPage({ searchParams }: { searchParams: Promise
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
         {PERIODS.map((p) => (
-          <Link key={p} href={{ pathname: "/sims", query: q({ period: p }) }} className={pill(p === period)}>
+          <Link scroll={false} key={p} href={{ pathname: "/sims", query: q({ period: p }) }} className={pill(p === period)}>
             {t(`periods.${p}`)}
           </Link>
         ))}
@@ -123,11 +123,11 @@ export default async function SimsPage({ searchParams }: { searchParams: Promise
           <div className="flex flex-wrap items-center gap-1 text-xs">
             <span className="text-muted">{t("sortBy")}:</span>
             {SORTS.map((k) => (
-              <Link key={k} href={{ pathname: "/sims", query: q({ sort: k }) }} className={`rounded border px-2 py-0.5 ${k === sort ? "border-accent text-accent" : "border-border text-muted hover:text-text"}`}>
+              <Link scroll={false} key={k} href={{ pathname: "/sims", query: q({ sort: k }) }} className={`rounded border px-2 py-0.5 ${k === sort ? "border-accent text-accent" : "border-border text-muted hover:text-text"}`}>
                 {t(`sorts.${k}`)}
               </Link>
             ))}
-            <Link href={{ pathname: "/sims", query: byLeader ? { period, sort } : { period, sort, group: "leader" } }} className={`ml-2 rounded border px-2 py-0.5 ${byLeader ? "border-accent text-accent" : "border-border text-muted hover:text-text"}`}>
+            <Link scroll={false} href={{ pathname: "/sims", query: byLeader ? { period, sort } : { period, sort, group: "leader" } }} className={`ml-2 rounded border px-2 py-0.5 ${byLeader ? "border-accent text-accent" : "border-border text-muted hover:text-text"}`}>
               {t("groupByLeader")}
             </Link>
           </div>
