@@ -26,11 +26,18 @@ def period_stats(equity: list[tuple[datetime, float, float | None]], capital: fl
     open_lead = before[-1][2] if before else (inside[0][2] if inside else None)
     path = [open_eq] + [e[1] for e in inside]
     close_eq = path[-1]
+    times = [start] + [e[0] for e in inside]
     peak, mdd = path[0], 0.0
-    for v in path:
-        peak = max(peak, v)
+    under_since, longest = None, timedelta(0)
+    for t, v in zip(times, path):
+        if v >= peak:
+            peak, under_since = v, None
+        elif under_since is None:
+            under_since = t
         if peak > 0:
             mdd = min(mdd, v / peak - 1)
+        if under_since is not None:
+            longest = max(longest, t - under_since)
     close_lead = inside[-1][2] if inside else open_lead
     lead_ret = (close_lead / open_lead - 1) if open_lead and close_lead is not None and open_lead > 0 else None
     ret = close_eq / open_eq - 1 if open_eq > 0 else None
@@ -38,6 +45,8 @@ def period_stats(equity: list[tuple[datetime, float, float | None]], capital: fl
         "pnl": close_eq - open_eq,
         "return": ret,
         "max_dd": mdd,
+        "current_dd": close_eq / peak - 1 if peak > 0 else 0.0,  # below the period's peak now
+        "max_dd_days": longest.total_seconds() / 86400,  # longest time spent below a previous peak
         "leader_return": lead_ret,
         # what share of the leader's move the copy kept (only meaningful when the leader moved)
         "retention": ret / lead_ret if ret is not None and lead_ret and abs(lead_ret) >= 0.005 else None,
@@ -69,6 +78,9 @@ class Cycle:
     max_notional: float = 0.0
     trades: int = 0
     reasons: set[str] = field(default_factory=set)
+    mae: float | None = None  # worst unrealized PnL while held (from the closing trade)
+    liquidated: bool = False
+    leader_liquidated: bool = False
 
 
 def cycles(trades: list[dict]) -> list[Cycle]:
@@ -111,6 +123,9 @@ def cycles(trades: list[dict]) -> list[Cycle]:
         c.max_notional = max(c.max_notional, abs(after) * float(tr["px"] or 0))
         if after_sign != before_sign and before_sign:
             c.closed_at = tr["t"]
+            c.mae = float(tr["mae"]) if tr.get("mae") is not None else None
+            c.liquidated = tr["kind"] == "liquidation"
+            c.leader_liquidated = tr.get("reason") == "leader_liquidated"
             done.append(open_.pop(coin))
             if flip:
                 n = open_[coin] = Cycle(coin, after_sign, tr["t"], pnl=-fee, fees=fee, trades=1)
@@ -130,6 +145,9 @@ def cycle_stats(cs: list[Cycle], since: datetime | None = None) -> dict:
         "avg_loss": sum(losses) / len(losses) if losses else None,
         "profit_factor": sum(wins) / -sum(losses) if losses and sum(losses) < 0 else None,
         "median_hold_hours": float(np.median(hold)) if hold else None,
+        "worst_mae": min((c.mae for c in closed if c.mae is not None), default=None),
+        "avg_mae": float(np.mean([c.mae for c in closed if c.mae is not None])) if any(c.mae is not None for c in closed) else None,
+        "liquidated": sum(c.liquidated for c in closed),
     }
 
 

@@ -41,8 +41,10 @@
       "alerts": "持仓变动邮件、价位哨兵、每日简报",
       "sims": "用实时价格模拟跟随交易员",
       "dataHealth": "采集任务、预算与覆盖率",
-      "settings": "邮箱与实时监控参数"
-    }
+      "settings": "邮箱与实时监控参数",
+      "copyBoard": "如果跟单这些人，过去 7/30/90 天能赚多少（扣费、含延迟）"
+    },
+    "copyBoard": "跟单收益榜"
   },
   "common": {
     "dataAsOf": "数据时间",
@@ -298,7 +300,14 @@
     "raw": "原始归档",
     "runs": "采集任务",
     "kind": "类型",
-    "status": "状态",
+    "status": {
+      "stable": "稳定",
+      "declining": "走下坡",
+      "drifting": "风格漂移",
+      "dormant": "沉寂",
+      "hot": "近期火热",
+      "insufficient": "样本不足"
+    },
     "started": "开始",
     "duration": "耗时",
     "summary": "摘要",
@@ -323,7 +332,36 @@
     "okxTraders": "人数",
     "okxPositions": "仓位",
     "okxSynced": "24 小时内同步",
-    "okxBackoff": "退避中"
+    "okxBackoff": "退避中",
+    "icon": {
+      "stable": "●",
+      "declining": "↘",
+      "drifting": "↔",
+      "dormant": "☾",
+      "hot": "🔥",
+      "insufficient": "·"
+    },
+    "hint": {
+      "stable": "近 30 天和此前 180 天相比没有明显变化",
+      "declining": "近 30 天有两项以上结果明显变差（胜率、盈亏比、净盈亏、大额亏损）",
+      "drifting": "交易方式变了：短线 / 做空占比、持仓时长或仓位规模和以前明显不同",
+      "dormant": "以前常交易，最近 14 天没有开过仓",
+      "hot": "近 30 天盈亏比 ≥ 2、净盈利且胜率明显高于以前（短期表现，注意均值回归）",
+      "insufficient": "近期或此前的已平仓位太少，无法比较"
+    },
+    "signalsTitle": "状态判断依据（近 30 天 vs 此前 180 天）",
+    "signals": {
+      "dormant": "距上次开仓天数",
+      "win_rate_down": "胜率下降",
+      "pf_down": "盈亏比跌破 1",
+      "net_negative": "近期净亏损",
+      "big_loss": "单笔大亏（vs 以前平均亏损）",
+      "scalp_shift": "短线占比变化",
+      "short_shift": "做空占比变化",
+      "hold_shift": "持仓时长变化（小时）",
+      "size_up": "仓位规模放大",
+      "hot": "盈亏比明显提升"
+    }
   },
   "status": {
     "success": "成功",
@@ -656,12 +694,14 @@
       "timing": "最佳时机超额",
       "archive": "成交归档",
       "note": "备注 / 标签",
-      "added": "收藏于"
+      "added": "收藏于",
+      "health": "状态 / 可跟单"
     },
     "archiving": "归档中",
     "archived": "{n} 条",
     "queued": "排队中",
-    "archivedOkx": "{n} 个仓位"
+    "archivedOkx": "{n} 个仓位",
+    "gradeHint": "可跟单性评分等级"
   },
   "alerts": {
     "subscribe": "订阅提醒",
@@ -810,7 +850,9 @@
       "winRate": "胜率",
       "costs": "本期成本",
       "exposure": "杠杆",
-      "status": "状态"
+      "status": "状态",
+      "sims": "模拟数",
+      "liq": "强平"
     },
     "closedN": "{n} 个已平仓周期",
     "positionsN": "{n} 个持仓",
@@ -857,7 +899,11 @@
       "winRate": "胜率",
       "profitFactor": "盈亏比（总盈 ÷ 总亏）",
       "avgWinLoss": "平均盈 / 平均亏",
-      "medianHold": "持仓时长中位数"
+      "medianHold": "持仓时长中位数",
+      "ddDays": "最长水下时间",
+      "currentDd": "当前回撤",
+      "worstMae": "最差持仓浮亏",
+      "liquidated": "强平次数"
     },
     "hours": "{n} 小时",
     "chartTitle": "收益曲线",
@@ -878,7 +924,12 @@
       "value": "名义价值",
       "upnl": "浮盈",
       "leader": "交易员",
-      "state": "状态"
+      "state": "状态",
+      "worst": "持仓最大浮亏",
+      "lev": "杠杆 / 保证金",
+      "liq": "强平价 / 距离",
+      "cross": "全仓",
+      "liqShort": "强平"
     },
     "pendingUntil": "延迟下单，{t} 执行",
     "followed": "跟随中",
@@ -901,7 +952,10 @@
       "closed": "平仓",
       "peak": "最大仓位",
       "pnl": "盈亏",
-      "open": "持仓中"
+      "open": "持仓中",
+      "mae": "最大浮亏",
+      "liq": "强平",
+      "leaderLiq": "交易员被强平（推断）"
     },
     "tradesTitle": "成交记录",
     "tradesHint": "最近 200 条。成交价 = 中间价 ± 滑点；成本 = 手续费 + 滑点（资金费单列）。",
@@ -923,6 +977,10 @@
         "liquidation": "强平",
         "stop": "止损/停止",
         "trade": "成交"
+      },
+      "reasons": {
+        "leader_liquidated": "交易员被强平（推断）",
+        "isolated_liquidation": "逐仓强平"
       }
     },
     "noTrades": "还没有成交。",
@@ -944,12 +1002,12 @@
       "capital": "模拟资金（USD）",
       "sizing": "仓位计算",
       "sizings": {
-        "equity_ratio": "按净值比例",
+        "equity_ratio": "按比例跟单（推荐）",
         "fixed_multiple": "固定倍数",
         "fixed_cap": "每币固定金额"
       },
       "sizingHints": {
-        "equity_ratio": "他用 40% 净值开仓，你也用 40%（× 系数）。最接近真实跟单。",
+        "equity_ratio": "交易员用多少比例的余额开仓，你也用同样比例（再乘跟单比例）。最接近真实跟单。",
         "fixed_multiple": "仓位 = 他的仓位 × 系数，与你的资金无关。",
         "fixed_cap": "每个币开固定美元金额，只跟方向。"
       },
@@ -978,8 +1036,40 @@
       "create": "开始模拟",
       "save": "保存参数",
       "saving": "提交中…",
-      "saved": "已保存，下一轮生效。"
-    }
+      "saved": "已保存，下一轮生效。",
+      "ratio": "跟单比例",
+      "ratioHint": "你的仓位 = 比例 ×（他的仓位 ÷ 他的净值）× 你的净值。100% = 和他同样占比；200% = 两倍；50% = 一半。",
+      "leverageMode": "杠杆与强平",
+      "leverageModes": {
+        "account": "按账户（全仓）",
+        "leader": "跟随交易员杠杆（逐仓）"
+      },
+      "leverageModeHints": {
+        "account": "所有仓位共用你的资金，总敞口不超过「最高杠杆」；账户保证金不足时整体强平。",
+        "leader": "每个仓位用交易员在该币上的杠杆（不超过最高杠杆和币种上限）单独计算保证金和强平价；某个仓位被强平只损失它的保证金，其他继续。"
+      },
+      "formulaTitle": "按比例跟单是怎么算的",
+      "formula": "你的开仓金额 = 跟单比例 ×（交易员开仓金额 ÷ 交易员账户余额）× 你的账户余额",
+      "formulaExample": "例：交易员余额 1,000、开仓 100（占 10%）→ 你的 {capital} × 10% × {ratio}% = {result}"
+    },
+    "sortBy": "排序",
+    "sorts": {
+      "return": "收益率",
+      "pnl": "盈亏金额",
+      "mdd": "回撤最小",
+      "retention": "保留率",
+      "calmar": "收益/回撤"
+    },
+    "groupByLeader": "按交易员汇总",
+    "champ": {
+      "topReturn": "收益冠军",
+      "steadiest": "最稳（收益/回撤）",
+      "smallestDd": "回撤最小"
+    },
+    "ratioShort": "比例 {r}%",
+    "ddDays": "水下 {n} 天",
+    "liqN": "强平 {n}",
+    "days": "{n} 天"
   },
   "okx": {
     "viewProfile": "在 OKX 查看主页",
@@ -1606,7 +1696,8 @@
       "decrease": "减仓",
       "close": "平仓",
       "flip": "反手"
-    }
+    },
+    "health": "交易员状态变化"
   },
   "guide": {
     "find": {
@@ -1695,6 +1786,191 @@
     "divergence": {
       "label": "分歧度",
       "text": "节奏显著交易员的做多人数占比减去全体观测交易员的做多占比。正数说明聪明钱比大众更看多。"
+    },
+    "retention": {
+      "label": "保留率",
+      "text": "跟单收益 ÷ 交易员自己的收益。100% 表示跟单者拿到了他的全部收益；低于 100% 是延迟、滑点、费用和仓位比例差异吃掉的部分。"
+    },
+    "delay": {
+      "label": "延迟敏感度",
+      "text": "同样的跟单设置，在立即、30 秒、5 分钟、30 分钟、2 小时延迟下的收益。下降越快，越难跟（多见于短线交易员）。"
+    },
+    "copyability": {
+      "label": "可跟单性",
+      "text": "0～100 分：不是他赚多少，而是“你跟他能不能也赚到”。A ≥ 80，B ≥ 65，C ≥ 50。"
+    },
+    "mae": {
+      "label": "最大浮亏",
+      "text": "一个仓位从开到平期间，曾经出现过的最大未实现亏损。它衡量的是“拿着这单最难受的时候”。",
+      "example": "例：开多后先跌到 -300 再涨回来盈利 +200 平仓，最大浮亏是 -300。"
     }
+  },
+  "copyBoard": {
+    "title": "跟单收益榜",
+    "subtitle": "假如过去 7 / 30 / 90 天按同一套设置跟单这些交易员，扣掉手续费和滑点、算上 30 秒延迟后，谁最赚钱。每天用真实历史开平仓和 K 线回放一次。",
+    "window": "近 {n} 天",
+    "computed": "计算于 {t}",
+    "notYet": "还没有计算结果（每天北京时间 09:00 更新，服务启动 20 分钟后也会先算一次）",
+    "tableTitle": "近 {n} 天跟单回测",
+    "hint": "统一设置：本金 1 万美元、100% 比例跟单、30 秒延迟、手续费 4.5bp、滑点 3bp、最高 10 倍、全仓。候选池：收藏、正在模拟、风格标签、节奏显著和 OKX 在榜的交易员。",
+    "sort": "排序",
+    "sorts": {
+      "ret": "跟单收益",
+      "pnl": "盈亏金额",
+      "score": "可跟单性",
+      "mdd": "回撤最小",
+      "retention": "保留率"
+    },
+    "cols": {
+      "trader": "交易员",
+      "ret": "跟单收益",
+      "mdd": "最大回撤",
+      "leader": "他自己",
+      "retention": "保留率",
+      "delay": "延迟敏感度",
+      "score": "可跟单性"
+    },
+    "delays": {
+      "0": "立即",
+      "30": "30 秒",
+      "300": "5 分钟",
+      "1800": "30 分钟",
+      "7200": "2 小时"
+    },
+    "approx": "净值近似",
+    "approxHint": "OKX 没有历史净值，用当前带单资产代替，比例可能有偏差",
+    "onCapital": "1 万本金 {pnl}",
+    "trades": "{n} 笔",
+    "liq": "强平 {n}",
+    "insufficient": "数据不足",
+    "simulate": "模拟",
+    "details": "回测详情",
+    "empty": "还没有回测结果。",
+    "method": "方法：按交易员每一次开仓、加减仓、平仓的真实时间，加上延迟后用当时最细的 K 线（1 分钟～1 小时）成交，按小时检查强平。OKX 只有整笔仓位记录，跟单者在他首次开仓和最终平仓时进出，吃不到他中途的加减仓。资金费未计入。这是事后回放，不代表未来。"
+  },
+  "copyCard": {
+    "title": "可跟单性评分",
+    "hint": "综合实力显著性、真实跟单回测、回撤、强平与杠杆、延迟敏感度、样本和集中度，满分 100。每项都可以看到依据。",
+    "pending": "还没有评分（每天北京时间 09:00 计算候选池里的交易员）。",
+    "insufficient": "数据不足：已平仓位少于 15 笔或没有可用的跟单回测。",
+    "grade": "等级 {g}",
+    "parts": {
+      "skill": "实力显著性",
+      "copy_return": "跟单回测收益",
+      "drawdown": "回撤",
+      "risk": "强平与杠杆",
+      "latency": "延迟敏感度",
+      "activity": "样本与活跃度",
+      "concentration": "收益集中度"
+    },
+    "yes": "是",
+    "no": "否",
+    "ev": {
+      "skill": "节奏 q = {q}，样本外验证：{verified}",
+      "copy_return": "近 {w} 天跟单回测 {ret}",
+      "drawdown": "回测最大回撤 {mdd}，回撤/盈利 {ratio}",
+      "risk": "强平率 {liq}，中位杠杆 {lev}×",
+      "latency": "延迟 5 分钟保留 {kept}（{r0} → {r5}）",
+      "latencyNa": "立即跟单本身不赚钱，无法衡量延迟影响",
+      "activity": "已平 {n} 笔，距上次交易 {days} 天",
+      "concentration": "最赚的一笔占总盈利 {top}"
+    },
+    "bt": {
+      "window": "回测窗口",
+      "ret": "跟单收益",
+      "mdd": "最大回撤",
+      "leader": "他自己",
+      "trades": "笔数",
+      "costs": "费用",
+      "days": "近 {n} 天",
+      "liq": "强平 {n}"
+    }
+  },
+  "backtest": {
+    "title": "历史回测跟单",
+    "hint": "不用等几周：用他过去的真实开平仓时间和 K 线，立刻算出按你的设置跟单会怎样。包含延迟、手续费、滑点和强平。",
+    "days": "回测天数",
+    "daysN": "近 {n} 天",
+    "ratio": "跟单比例 %",
+    "delay": "延迟",
+    "delays": {
+      "0": "立即",
+      "30": "30 秒",
+      "300": "5 分钟",
+      "1800": "30 分钟",
+      "7200": "2 小时"
+    },
+    "lev": "杠杆",
+    "levs": {
+      "account": "全仓",
+      "leader": "跟随交易员"
+    },
+    "capital": "本金",
+    "run": "开始回测",
+    "idle": "设好参数后点「开始回测」。",
+    "reasons": {
+      "no_decisions": "这段时间没有交易记录。",
+      "no_leader_equity": "没有交易员净值数据（OKX 需要带单资产），无法按比例回测。",
+      "too_many_decisions": "这段时间交易太多（超过 2 万次决策），请缩短回测天数。",
+      "window_too_long": "回测天数最多 365 天。",
+      "error": "回测失败，请稍后再试。"
+    },
+    "mdd": "最大回撤",
+    "tradesCosts": "{n} 笔，费用 {costs}",
+    "liq": "强平 {n} 次",
+    "blown": "爆仓",
+    "leader": "他自己",
+    "kept": "保留 {p}",
+    "series": "跟单资金",
+    "delayTitle": "延迟敏感度：不同延迟下的跟单收益",
+    "nightly": "来自每日 30 天回测",
+    "equity": {
+      "history": "交易员净值来自历史账户曲线。",
+      "current_assets": "OKX 没有历史净值，用当前带单资产换算比例（近似）。"
+    },
+    "capped": "{p} 的时候按他的比例会超过最高杠杆，被压到上限：结果更多反映杠杆上限而不是他的仓位。",
+    "prices": "成交价精度：{res} K 线。",
+    "notes": "每小时用最高/最低价检查强平；资金费未计入；OKX 只有整笔仓位，吃不到他中途的加减仓。事后回放，不代表未来。"
+  },
+  "behavior": {
+    "title": "交易行为指纹",
+    "hint": "他什么时候交易、怎么对待盈利和亏损。来自已归档的开平仓，样本不足时不下结论。",
+    "flags": {
+      "holds_losers": "死扛亏损",
+      "lets_winners_run": "让利润奔跑",
+      "fat_tail_losses": "偶有巨亏",
+      "cuts_losses": "止损干脆",
+      "sizes_up_after_loss": "亏损后加码",
+      "averages_down": "摊平亏损（马丁）",
+      "size_up": "仓位变大",
+      "leverage_up": "杠杆变高"
+    },
+    "flagHint": {
+      "holds_losers": "亏损仓的中位持仓时间是盈利仓的 2 倍以上",
+      "lets_winners_run": "盈利仓拿得比亏损仓久 1.5 倍以上",
+      "fat_tail_losses": "最大一笔亏损超过平均亏损的 8 倍：跟单可能一次吃大亏",
+      "cuts_losses": "最大亏损不到平均亏损的 3 倍，亏损控制稳定",
+      "sizes_up_after_loss": "亏损平仓后 24 小时内，有 30% 以上的下一笔仓位超过中位规模的 1.5 倍",
+      "averages_down": "60% 以上的加仓发生在价格比持仓均价更差的时候",
+      "size_up": "近 30 天中位仓位规模是以前的 2 倍以上",
+      "leverage_up": "近 30 天中位杠杆是以前的 1.5 倍以上"
+    },
+    "heatTitle": "开仓时间分布（{n} 次，UTC）",
+    "weekdays": {
+      "0": "一",
+      "1": "二",
+      "2": "三",
+      "3": "四",
+      "4": "五",
+      "5": "六",
+      "6": "日"
+    },
+    "holdTitle": "持仓时长：亏损仓 vs 盈利仓",
+    "losses": "亏损",
+    "wins": "盈利",
+    "streaks": "最长连胜 / 连亏",
+    "revenge": "亏损后加码比例",
+    "avgDown": "逆势加仓占比",
+    "lev": "杠杆变化（此前 → 近 30 天）"
   }
 }

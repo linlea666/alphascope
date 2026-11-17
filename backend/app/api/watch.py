@@ -99,6 +99,8 @@ def watchlist(session: Session = Depends(get_session)):
                coalesce(f.n_fills, ot.n_positions) AS n_fills,
                (SELECT max(edge_shrunk) FROM timing_score t WHERE t.wallet_id = w.id AND t.status = 'scored'
                   AND t.coin_group = 'all' AND t.q_value < 0.1) AS best_edge,
+               (SELECT status FROM trader_health h WHERE h.wallet_id = w.id) AS health,
+               (SELECT grade FROM copy_score c WHERE c.wallet_id = w.id) AS grade,
                (SELECT jsonb_agg(jsonb_build_object('coin', p.coin, 'szi', p.szi, 'value', p.position_value)
                                  ORDER BY abs(p.position_value) DESC)
                   FROM position_snapshot p WHERE p.account_snapshot_id =

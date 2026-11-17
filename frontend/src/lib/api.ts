@@ -760,6 +760,8 @@ export type Watchlist = {
     sync_status: string | null;
     n_fills: number | null;
     best_edge: number | null;
+    health: HealthStatus | null;
+    grade: string | null;
     positions: { coin: string; szi: number; value: number }[];
   }[];
 };
@@ -846,7 +848,13 @@ export type SimSummary = {
   open_positions: number;
   pnl: number;
   return: number | null;
+  leverage_mode: LeverageMode;
+  liquidations: number;
+  leader_health: HealthStatus | null;
 };
+
+export type LeverageMode = "account" | "leader";
+export type HealthStatus = "stable" | "declining" | "drifting" | "dormant" | "hot" | "insufficient";
 
 export type SimParams = {
   sizing: SimSizing;
@@ -863,6 +871,7 @@ export type SimParams = {
   min_trade_usd: number;
   rebalance_pct: number;
   stop_drawdown_pct: number | null;
+  leverage_mode: LeverageMode;
 };
 
 export type SimPeriod = "1d" | "7d" | "30d" | "all";
@@ -879,6 +888,11 @@ export type SimPeriodStats = {
   avg_loss: number | null;
   profit_factor: number | null;
   median_hold_hours: number | null;
+  current_dd: number;
+  max_dd_days: number;
+  worst_mae: number | null;
+  avg_mae: number | null;
+  liquidated: number;
 };
 
 export type SimDaily = { day: string; pnl: number; return: number | null; equity: number };
@@ -890,12 +904,12 @@ export type SimDetail = {
     periods: Record<SimPeriod, SimPeriodStats>;
     daily: SimDaily[];
     per_coin: { coin: string; realized: number; unrealized: number; fees: number; slippage: number; funding: number; net: number; trades: number }[];
-    cycles: { coin: string; side: 1 | -1; opened_at: string; closed_at: string | null; pnl: number; fees: number; funding: number; max_notional: number; trades: number }[];
+    cycles: { coin: string; side: 1 | -1; opened_at: string; closed_at: string | null; pnl: number; fees: number; funding: number; max_notional: number; trades: number; mae: number | null; liquidated: boolean; leader_liquidated: boolean }[];
   };
   params: SimParams;
   state: { followed?: string[]; baseline?: Record<string, number>; pending?: Record<string, { target: string; due: string }>; started_at?: string };
-  positions: { coin: string; size: number; entry_px: number; opened_at: string; mark: number | null }[];
-  leader_positions: { coin: string; szi: number; value: number | null }[];
+  positions: { coin: string; size: number; entry_px: number; opened_at: string; mark: number | null; leverage: number | null; liq_px: number | null; margin: number | null; worst_upnl: number | null; best_upnl: number | null }[];
+  leader_positions: { coin: string; szi: number; value: number | null; leverage: number | null; liq_px: number | null }[];
   trades: {
     t: string;
     coin: string;
@@ -911,6 +925,7 @@ export type SimDetail = {
     position_after: number | null;
     leader_szi: number | null;
     reason: string | null;
+    mae: number | null;
   }[];
   equity: [string, number, number, number | null][];
 };
@@ -918,7 +933,7 @@ export type SimDetail = {
 export type SimDashboard = {
   period: SimPeriod;
   timezone: string;
-  sims: (SimSummary & { period: SimPeriodStats & { trades: number; fees: number; slippage: number; funding: number } })[];
+  sims: (SimSummary & { period: SimPeriodStats & { trades: number; liquidations: number; fees: number; slippage: number; funding: number } })[];
   portfolio: {
     count: number;
     active: number;
@@ -1062,7 +1077,84 @@ export type Digest = {
     new_significant_total: number;
     significant_total: number;
     sentinel_hits: { name: string; coin: string; side: string; address: string; name_w: string | null; avg_px: number | null; notional: number | null }[];
+    health_changes?: { address: string; name: string | null; venue: string; status: HealthStatus; prev_status: HealthStatus | null }[];
   };
+};
+
+export type Backtest = {
+  ok: boolean;
+  reason?: string;
+  approx_equity?: boolean;
+  equity_source?: "history" | "current_assets" | null;
+  stopped?: string | null;
+  capped_share?: number | null;
+  capital?: number;
+  final?: number;
+  ret?: number;
+  pnl?: number;
+  mdd?: number;
+  trades?: number;
+  liquidations?: number;
+  costs?: number;
+  n_decisions?: number;
+  leader_ret?: number | null;
+  retention?: number | null;
+  resolution?: Record<string, string>;
+  curve?: [string, number][];
+  delay_curve?: [number, number | null][] | null;
+  delay_curve_source?: "live" | "nightly_30d" | null;
+  since?: string;
+  until?: string;
+};
+
+export type ScorePart = { key: string; points: number; max: number; [k: string]: unknown };
+export type Copyability = {
+  score: { status: "scored" | "insufficient"; score: number | null; grade: string | null; components: ScorePart[]; computed_at: string } | null;
+  health: { status: HealthStatus; prev_status: HealthStatus | null; signals: { key: string; recent: number | null; prior: number | null }[]; changed_at: string | null; computed_at: string } | null;
+  backtests: { window_days: number; ret: number; pnl: number; mdd: number; leader_ret: number | null; retention: number | null; trades: number; liquidations: number; costs: number; approx_equity: boolean; computed_at: string }[];
+};
+
+export type Behavior = {
+  heat: number[][];
+  opens: number;
+  hold: { win: number[]; loss: number[] };
+  hold_buckets: number[];
+  closed: number;
+  flags: { key: string; value: number; n: number; good: boolean | null }[];
+  hold_win_h?: number;
+  hold_loss_h?: number;
+  max_loss_ratio?: number | null;
+  tail_loss_share?: number;
+  revenge_share?: number;
+  avg_down_share?: number;
+  size_drift?: number;
+  lev_recent?: number;
+  lev_before?: number;
+  win_streak: number;
+  loss_streak: number;
+};
+
+export type CopyBoard = {
+  window: number;
+  sort: string;
+  computed_at: string | null;
+  rows: (Person & {
+    ret: number;
+    pnl: number;
+    mdd: number;
+    leader_ret: number | null;
+    retention: number | null;
+    trades: number;
+    liquidations: number;
+    costs: number;
+    approx_equity: boolean;
+    curve: [string, number][] | null;
+    delay_curve: [number, number | null][] | null;
+    score: number | null;
+    grade: string | null;
+    score_status: string | null;
+    health: HealthStatus | null;
+  })[];
 };
 
 export type Candles = { coin: string; interval: string; source: string | null; rows: [string, number, number, number, number][] };
@@ -1117,6 +1209,10 @@ export const api = {
   divergence: (venue: string, coin: string) => get<Divergence>("/api/v1/market/divergence", { venue, coin }),
   sentinels: () => get<Sentinels>("/api/v1/alerts/sentinels"),
   digest: () => get<Digest>("/api/v1/alerts/digest"),
+  backtest: (address: string, params: Record<string, string | number | undefined>) => get<Backtest>(`/api/v1/wallets/${encodeURIComponent(address)}/backtest`, params),
+  behavior: (address: string) => get<Behavior>(`/api/v1/wallets/${encodeURIComponent(address)}/behavior`),
+  copyability: (address: string) => get<Copyability>(`/api/v1/wallets/${encodeURIComponent(address)}/copyability`),
+  copyBoard: (params: Record<string, string | number | undefined>) => get<CopyBoard>("/api/v1/copy-board", params),
   candles: (coin: string, interval: string, since: string) => get<Candles>("/api/v1/candles", { coin, interval, since }),
   swingCandidates: (params: Record<string, string | number | boolean | undefined>) => get<SwingCandidates>("/api/v1/swings/candidates", params),
 };

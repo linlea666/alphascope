@@ -1,5 +1,6 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { AddressLink } from "@/components/AddressLink";
+import { HealthBadge } from "@/components/HealthBadge";
 import { AlertButton } from "@/components/AlertButton";
 import { ApiErrorState } from "@/components/ApiErrorState";
 import { Badge, PageHeader, Panel, td, th } from "@/components/ui";
@@ -54,6 +55,7 @@ export default async function WatchlistPage({ searchParams }: { searchParams: Pr
                   <th className={`${th} text-right`}>{t("cols.pnl30")}</th>
                   <th className={th}>{t("cols.positions")}</th>
                   <th className={`${th} text-right`}>{t("cols.timing")}</th>
+                  <th className={th}>{t("cols.health")}</th>
                   <th className={th}>{t("cols.archive")}</th>
                   <th className={th}>{t("cols.note")}</th>
                   <th className={th}>{t("cols.added")}</th>
@@ -81,6 +83,13 @@ export default async function WatchlistPage({ searchParams }: { searchParams: Pr
                       </span>
                     </td>
                     <td className={`${td} num text-right ${signClass(i.best_edge)}`}>{i.best_edge === null ? "—" : fmtNum(i.best_edge, locale, 3)}</td>
+                    <td className={`${td} text-xs`}>
+                      <span className="flex flex-wrap gap-1">
+                        <HealthBadge status={i.health} />
+                        {i.grade && <Badge tone={i.grade === "A" ? "up" : i.grade === "B" ? "accent" : i.grade === "C" ? "warn" : "down"} title={t("gradeHint")}>{i.grade}</Badge>}
+                        {!i.health && !i.grade && <span className="text-muted">—</span>}
+                      </span>
+                    </td>
                     <td className={`${td} text-xs text-muted`}>
                       {i.n_fills ? t(i.venue === "okx" ? "archivedOkx" : "archived", { n: fmtNum(i.n_fills, locale) }) : t("queued")}
                     </td>

@@ -35,6 +35,8 @@ class SimParams(BaseModel):
     min_trade_usd: float = Field(10, ge=0)
     rebalance_pct: float = Field(5, ge=0, le=100)
     stop_drawdown_pct: float | None = Field(None, gt=0, lt=100)
+    # account: one cross-margined account; leader: each position isolated at the leader's leverage on that coin
+    leverage_mode: Literal["account", "leader"] = "account"
 
     @model_validator(mode="after")
     def _cap(self):
@@ -70,7 +72,7 @@ def _get(session: Session, sim_id: int):
 
 SUMMARY_SQL = """
     SELECT c.id, c.name, c.status, c.stop_reason, c.capital, c.cash, c.peak_equity, c.sizing, c.size_factor,
-           c.max_leverage, c.delay_seconds, c.created_at, c.stopped_at, w.address AS leader,
+           c.max_leverage, c.delay_seconds, c.leverage_mode, c.created_at, c.stopped_at, w.address AS leader,
            coalesce((c.state ->> 'stop_requested')::boolean, false) AS stop_pending,
            coalesce(a.alias, w.display_name) AS leader_name,
            e.equity, e.t AS equity_at, e.gross_exposure,
@@ -80,7 +82,9 @@ SUMMARY_SQL = """
            (SELECT coalesce(sum(funding), 0) FROM sim_trade t WHERE t.sim_id = c.id) AS funding,
            (SELECT least(min(equity / NULLIF(greatest(peak, c.capital), 0)) - 1, 0) FROM (
                SELECT equity, max(equity) OVER (ORDER BY t) AS peak FROM sim_equity q WHERE q.sim_id = c.id) x) AS max_dd,
-           (SELECT count(*) FROM sim_position p WHERE p.sim_id = c.id) AS open_positions
+           (SELECT count(*) FROM sim_position p WHERE p.sim_id = c.id) AS open_positions,
+           (SELECT count(*) FROM sim_trade t WHERE t.sim_id = c.id AND t.kind = 'liquidation') AS liquidations,
+           (SELECT status FROM trader_health h WHERE h.wallet_id = w.id) AS leader_health
     FROM copy_sim c JOIN wallet w ON w.id = c.leader_wallet_id
     LEFT JOIN wallet_alias a ON a.wallet_id = w.id AND a.owner = c.owner
     LEFT JOIN LATERAL (SELECT equity, t, gross_exposure FROM sim_equity q WHERE q.sim_id = c.id ORDER BY t DESC LIMIT 1) e
@@ -131,15 +135,16 @@ def create_sim(body: SimCreate, session: Session = Depends(get_session)):
     sid = session.execute(text("""
         INSERT INTO copy_sim (owner, name, leader_wallet_id, status, capital, sizing, size_factor, cap_per_coin,
           max_leverage, coins_include, coins_exclude, follow_adjust, copy_existing, delay_seconds, fee_bps, slippage_bps,
-          min_trade_usd, rebalance_pct, stop_drawdown_pct, cash, peak_equity, state)
+          min_trade_usd, rebalance_pct, stop_drawdown_pct, leverage_mode, cash, peak_equity, state)
         VALUES (:o, :name, :w, 'running', :cap, :sizing, :sf, :cpc, :ml, :inc, :exc, :fa, :ce, :delay, :fee, :slip,
-          :mt, :rb, :dd, :cap, :cap, '{}')
+          :mt, :rb, :dd, :lm, :cap, :cap, '{}')
         RETURNING id"""),
         {"o": OWNER, "name": body.name.strip(), "w": wid, "cap": body.capital, "sizing": body.sizing,
          "sf": body.size_factor, "cpc": body.cap_per_coin, "ml": body.max_leverage,
          "inc": _clean_coins(body.coins_include), "exc": _clean_coins(body.coins_exclude), "fa": body.follow_adjust,
          "ce": body.copy_existing, "delay": body.delay_seconds, "fee": body.fee_bps, "slip": body.slippage_bps,
-         "mt": body.min_trade_usd, "rb": body.rebalance_pct, "dd": body.stop_drawdown_pct}).scalar_one()
+         "mt": body.min_trade_usd, "rb": body.rebalance_pct, "dd": body.stop_drawdown_pct,
+         "lm": body.leverage_mode}).scalar_one()
     _queue_fills(session, wid)  # the leader's fills feed replay / timing for comparison
     session.commit()
     return {"id": sid}
@@ -150,7 +155,7 @@ def _tz(session: Session) -> str:
 
 
 TRADES_SQL = """
-    SELECT sim_id, id, t, coin, kind, size, px, fee, slippage_cost, funding, realized_pnl, position_after
+    SELECT sim_id, id, t, coin, kind, size, px, fee, slippage_cost, funding, realized_pnl, position_after, reason, mae
     FROM sim_trade WHERE sim_id = ANY(:ids) ORDER BY t, id"""
 
 
@@ -189,6 +194,7 @@ def dashboard(period: Literal["1d", "7d", "30d", "all"] = "7d", session: Session
         cyc = an.cycle_stats(an.cycles(trades[s["id"]]), since=start)
         rows.append({**s, "period": {**stats, **cyc,
                                      "trades": sum(t["kind"] != "funding" for t in seg),
+                                     "liquidations": sum(t["kind"] == "liquidation" for t in seg),
                                      "fees": sum(float(t["fee"] or 0) for t in seg),
                                      "slippage": sum(float(t["slippage_cost"] or 0) for t in seg),
                                      "funding": sum(float(t["funding"] or 0) for t in seg)}})
@@ -239,11 +245,12 @@ def update_sim(sim_id: int, body: SimPatch, session: Session = Depends(get_sessi
         session.execute(text("""
             UPDATE copy_sim SET sizing = :sizing, size_factor = :sf, cap_per_coin = :cpc, max_leverage = :ml,
               coins_include = :inc, coins_exclude = :exc, follow_adjust = :fa, delay_seconds = :delay, fee_bps = :fee,
-              slippage_bps = :slip, min_trade_usd = :mt, rebalance_pct = :rb, stop_drawdown_pct = :dd WHERE id = :id"""),
+              slippage_bps = :slip, min_trade_usd = :mt, rebalance_pct = :rb, stop_drawdown_pct = :dd,
+              leverage_mode = :lm WHERE id = :id"""),
             {"sizing": p.sizing, "sf": p.size_factor, "cpc": p.cap_per_coin, "ml": p.max_leverage,
              "inc": _clean_coins(p.coins_include), "exc": _clean_coins(p.coins_exclude), "fa": p.follow_adjust,
              "delay": p.delay_seconds, "fee": p.fee_bps, "slip": p.slippage_bps, "mt": p.min_trade_usd,
-             "rb": p.rebalance_pct, "dd": p.stop_drawdown_pct, "id": sim_id})
+             "rb": p.rebalance_pct, "dd": p.stop_drawdown_pct, "lm": p.leverage_mode, "id": sim_id})
     session.commit()
     return {"ok": True}
 
@@ -264,21 +271,23 @@ def sim_detail(sim_id: int, session: Session = Depends(get_session), trades: int
     params = {k: (num(sim[k]) if isinstance(sim[k], Decimal) else sim[k]) for k in (
         "sizing", "size_factor", "cap_per_coin", "max_leverage", "coins_include", "coins_exclude", "follow_adjust",
         "copy_existing", "delay_seconds", "fee_bps", "slippage_bps", "min_trade_usd", "rebalance_pct",
-        "stop_drawdown_pct")}
+        "stop_drawdown_pct", "leverage_mode")}
     positions = [{"coin": r.coin, "size": num(r.size), "entry_px": num(r.entry_px), "opened_at": r.opened_at,
-                  "mark": num(r.mark_px)} for r in session.execute(text(
-                      "SELECT coin, size, entry_px, opened_at, mark_px FROM sim_position WHERE sim_id = :s ORDER BY coin"),
-                      {"s": sim_id}).all()]
+                  "mark": num(r.mark_px), "leverage": num(r.leverage), "liq_px": num(r.liq_px), "margin": num(r.margin),
+                  "worst_upnl": num(r.worst_upnl), "best_upnl": num(r.best_upnl)} for r in session.execute(text("""
+                      SELECT coin, size, entry_px, opened_at, mark_px, leverage, liq_px, margin, worst_upnl, best_upnl
+                      FROM sim_position WHERE sim_id = :s ORDER BY coin"""), {"s": sim_id}).all()]
     trade_rows = session.execute(text("""
         SELECT t, coin, kind, side, size, mid, px, fee, slippage_cost, funding, realized_pnl, position_after,
-               leader_szi, reason FROM sim_trade WHERE sim_id = :s ORDER BY t DESC, id DESC LIMIT :n"""),
+               leader_szi, reason, mae FROM sim_trade WHERE sim_id = :s ORDER BY t DESC, id DESC LIMIT :n"""),
         {"s": sim_id, "n": trades}).mappings().all()
     equity = session.execute(text("""
         SELECT t AS at, equity, gross_exposure, leader_equity FROM sim_equity WHERE sim_id = :s ORDER BY t"""),
         {"s": sim_id}).all()
-    leader_pos = [{"coin": r.coin, "szi": num(r.szi), "value": num(r.position_value)} for r in session.execute(text("""
-        SELECT coin, szi, position_value FROM live_position WHERE wallet_id = :w ORDER BY abs(position_value) DESC"""),
-        {"w": sim["leader_wallet_id"]}).all()]
+    leader_pos = [{"coin": r.coin, "szi": num(r.szi), "value": num(r.position_value), "leverage": r.leverage,
+                   "liq_px": num(r.liquidation_px)} for r in session.execute(text("""
+        SELECT coin, szi, position_value, leverage, liquidation_px FROM live_position WHERE wallet_id = :w
+        ORDER BY abs(position_value) DESC"""), {"w": sim["leader_wallet_id"]}).all()]
     tz = _tz(session)
     eq_series = [(e.at, float(e.equity), an.as_float(e.leader_equity)) for e in equity]
     all_trades = [dict(r) for r in session.execute(text(TRADES_SQL), {"ids": [sim_id]}).mappings().all()]
@@ -293,7 +302,8 @@ def sim_detail(sim_id: int, session: Session = Depends(get_session), trades: int
         "per_coin": an.per_coin(all_trades, positions),
         "cycles": [{"coin": c.coin, "side": c.side, "opened_at": c.opened_at, "closed_at": c.closed_at,
                     "pnl": c.pnl, "fees": c.fees, "funding": c.funding, "max_notional": c.max_notional,
-                    "trades": c.trades} for c in sorted(cs, key=lambda c: c.opened_at, reverse=True)[:100]],
+                    "trades": c.trades, "mae": c.mae, "liquidated": c.liquidated, "leader_liquidated": c.leader_liquidated}
+                   for c in sorted(cs, key=lambda c: c.opened_at, reverse=True)[:100]],
     }
     return {
         "summary": summary,
@@ -303,7 +313,7 @@ def sim_detail(sim_id: int, session: Session = Depends(get_session), trades: int
         "positions": positions,
         "leader_positions": leader_pos,
         "trades": [{**dict(t), **{k: num(t[k]) for k in ("size", "mid", "px", "fee", "slippage_cost", "funding",
-                                                         "realized_pnl", "position_after", "leader_szi")}}
+                                                         "realized_pnl", "position_after", "leader_szi", "mae")}}
                    for t in trade_rows],
         "equity": [[e.at, float(e.equity), float(e.gross_exposure), num(e.leader_equity)] for e in equity],
     }

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { useRouter } from "@/i18n/routing";
 import { bff } from "@/lib/bff";
 import { toast } from "@/lib/toast";
-import type { SimParams, SimSizing } from "@/lib/api";
+import type { LeverageMode, SimParams, SimSizing } from "@/lib/api";
 
 const DEFAULTS: SimParams = {
   sizing: "equity_ratio",
@@ -22,6 +22,7 @@ const DEFAULTS: SimParams = {
   min_trade_usd: 10,
   rebalance_pct: 5,
   stop_drawdown_pct: null,
+  leverage_mode: "account",
 };
 
 const input = "mt-1 w-full rounded border border-border bg-panel-2 px-2 py-1";
@@ -32,7 +33,9 @@ export function SimForm({ simId, initial, leader = "" }: { simId?: number; initi
   const tt = useTranslations("toast");
   const router = useRouter();
   // OKX's taker fee is 5 bp (Hyperliquid 4.5 bp); a prefilled OKX leader starts from OKX costs
-  const [p, setP] = useState<SimParams>(initial ?? (leader.startsWith("okx:") ? { ...DEFAULTS, fee_bps: 5 } : DEFAULTS));
+  const [p, setP] = useState<SimParams>(
+    initial ? { ...DEFAULTS, ...initial, leverage_mode: initial.leverage_mode ?? "account" } : leader.startsWith("okx:") ? { ...DEFAULTS, fee_bps: 5 } : DEFAULTS,
+  );
   const [name, setName] = useState("");
   const [addr, setAddr] = useState(leader);
   const [capital, setCapital] = useState(10000);
@@ -113,8 +116,36 @@ export function SimForm({ simId, initial, leader = "" }: { simId?: number; initi
         )}
         {p.sizing === "fixed_cap"
           ? field(t("capPerCoin"), <input type="number" min={1} step="any" required value={p.cap_per_coin ?? ""} onChange={num("cap_per_coin", true)} className={input} />)
-          : field(t("factor"), <input type="number" min={0.0001} max={100} step="any" required value={p.size_factor} onChange={num("size_factor")} className={input} />, t("factorHint"))}
+          : p.sizing === "equity_ratio"
+            ? field(
+                t("ratio"),
+                <span className="mt-1 flex items-center gap-1.5">
+                  <input type="number" min={1} max={10000} step="any" required value={Math.round(p.size_factor * 10000) / 100} onChange={(e) => setP({ ...p, size_factor: Number(e.target.value) / 100 })} className={`${input} mt-0 w-24`} />
+                  <span className="text-muted">%</span>
+                  {[50, 100, 200].map((r) => (
+                    <button key={r} type="button" onClick={() => setP({ ...p, size_factor: r / 100 })} className={`rounded-full border px-2 py-0.5 text-[11px] ${Math.abs(p.size_factor * 100 - r) < 0.01 ? "border-accent text-accent" : "border-border text-muted hover:text-text"}`}>
+                      {r}%
+                    </button>
+                  ))}
+                </span>,
+                t("ratioHint"),
+              )
+            : field(t("factor"), <input type="number" min={0.0001} max={100} step="any" required value={p.size_factor} onChange={num("size_factor")} className={input} />, t("factorHint"))}
         {field(t("maxLeverage"), <input type="number" min={0.1} max={50} step="any" required value={p.max_leverage} onChange={num("max_leverage")} className={input} />, t("maxLeverageHint"))}
+      </div>
+      {p.sizing === "equity_ratio" && <FormulaCard capital={simId ? 10000 : capital} ratio={p.size_factor} />}
+      <div className="grid gap-3 sm:grid-cols-2">
+        {field(
+          t("leverageMode"),
+          <select value={p.leverage_mode} onChange={(e) => setP({ ...p, leverage_mode: e.target.value as LeverageMode })} className={input}>
+            {(["account", "leader"] as const).map((m) => (
+              <option key={m} value={m}>
+                {t(`leverageModes.${m}`)}
+              </option>
+            ))}
+          </select>,
+          t(`leverageModeHints.${p.leverage_mode}`),
+        )}
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {field(t("include"), <input value={include} onChange={(e) => setInclude(e.target.value)} placeholder="BTC, ETH" className={input} />, t("includeHint"))}
@@ -146,5 +177,20 @@ export function SimForm({ simId, initial, leader = "" }: { simId?: number; initi
         {busy ? t("saving") : simId ? t("save") : t("create")}
       </button>
     </form>
+  );
+}
+
+/** The proportional-copy rule with a worked example on the owner's capital. */
+function FormulaCard({ capital, ratio }: { capital: number; ratio: number }) {
+  const t = useTranslations("sims.form");
+  const f = (v: number) => new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(v);
+  return (
+    <div className="rounded-lg border border-accent/30 bg-accent/5 p-3 text-xs leading-relaxed">
+      <div className="font-medium text-text">{t("formulaTitle")}</div>
+      <div className="mt-1 font-mono text-[12px] text-accent">{t("formula")}</div>
+      <div className="mt-1.5 text-muted">
+        {t("formulaExample", { capital: f(capital), ratio: f(ratio * 100), result: f(capital * 0.1 * ratio) })}
+      </div>
+    </div>
   );
 }

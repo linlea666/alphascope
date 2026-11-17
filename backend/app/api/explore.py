@@ -14,7 +14,9 @@ from sqlalchemy.orm import Session
 from app.api.common import VenueFilter, num, venue_clause
 from app.db import get_session
 from app.quant.returns import Point, index_path
+from app.research.behavior import fingerprint
 from app.research.timing import TIMING_VERSION
+from app.sim.backtest import DELAYS, BacktestParams, backtest
 from app.traders import parse_trader_key
 
 router = APIRouter(prefix="/api/v1", tags=["explore"])
@@ -288,3 +290,77 @@ def compare(session: Session = Depends(get_session), addr: list[str] = Query(...
     for p in people:
         p.pop("_daily")
     return {"days": days, "since": since, "traders": people, "correlation": matrix}
+
+
+INTERACTIVE_DELAY_LIMIT = 3000  # decisions: above this the delay curve is left to the nightly batch
+
+
+@router.get("/wallets/{address}/backtest")
+def wallet_backtest(address: str, session: Session = Depends(get_session), days: int = Query(30, ge=3, le=365),
+                    ratio: float = Query(100, gt=0, le=1000), delay: int = Query(30, ge=0, le=86400),
+                    capital: float = Query(10_000, gt=0, le=1e9),
+                    leverage_mode: Literal["account", "leader"] = "account",
+                    max_leverage: float = Query(10, gt=0, le=50)):
+    """Historical copy backtest (see app/sim/backtest.py for every assumption). ratio is the copy ratio in percent."""
+    w = _wallet(session, address)
+    p = BacktestParams(days=days, capital=capital, ratio=ratio / 100, delay_seconds=delay,
+                       leverage_mode=leverage_mode, max_leverage=max_leverage)
+    n = session.execute(text("""SELECT count(*) FROM trade_decision WHERE wallet_id = :w
+                                AND started_at >= now() - make_interval(days => :d)"""), {"w": w["id"], "d": days}).scalar_one()
+    r = backtest(session, w["id"], p, delays=DELAYS if n <= INTERACTIVE_DELAY_LIMIT else ())
+    if not r.get("ok"):
+        return r
+    stored = session.execute(text("""SELECT delay_curve FROM copy_backtest WHERE wallet_id = :w AND window_days = 30
+                                     AND params_key = 'default'"""), {"w": w["id"]}).scalar()
+    return {**r, "delay_curve": r.get("delay_curve") or stored, "delay_curve_source": "live" if r.get("delay_curve")
+            else ("nightly_30d" if stored else None)}
+
+
+@router.get("/wallets/{address}/behavior")
+def wallet_behavior(address: str, session: Session = Depends(get_session)):
+    w = _wallet(session, address)
+    return fingerprint(session, w["id"], w["venue"])
+
+
+@router.get("/wallets/{address}/copyability")
+def wallet_copyability(address: str, session: Session = Depends(get_session)):
+    """Stored copyability score, trader health and the nightly default copy backtests (7 / 30 / 90 days)."""
+    w = _wallet(session, address)
+    score = session.execute(text("SELECT status, score, grade, components, computed_at FROM copy_score WHERE wallet_id = :w"),
+                            {"w": w["id"]}).mappings().first()
+    h = session.execute(text("""SELECT status, prev_status, signals, changed_at, computed_at FROM trader_health
+                                WHERE wallet_id = :w"""), {"w": w["id"]}).mappings().first()
+    bts = session.execute(text("""
+        SELECT window_days, ret, pnl, mdd, leader_ret, retention, trades, liquidations, costs, approx_equity, computed_at
+        FROM copy_backtest WHERE wallet_id = :w AND params_key = 'default' ORDER BY window_days"""),
+        {"w": w["id"]}).mappings().all()
+    nums = ("ret", "pnl", "mdd", "leader_ret", "retention", "costs")
+    return {"score": {**dict(score), "score": num(score["score"])} if score else None,
+            "health": dict(h) if h else None,
+            "backtests": [{**dict(b), **{k: num(b[k]) for k in nums}} for b in bts]}
+
+
+@router.get("/copy-board")
+def copy_board(session: Session = Depends(get_session), window: int = Query(30, description="7, 30 or 90"),
+               sort: Literal["ret", "pnl", "score", "mdd", "retention"] = "ret", venue: VenueFilter = "all",
+               limit: int = Query(100, ge=1, le=500), min_trades: int = Query(3, ge=0)):
+    """Who would have been most profitable to copy: the nightly default backtests (100% ratio, 30 s delay, fees and
+    slippage, 10x cap), with copyability score and health."""
+    if window not in (7, 30, 90):
+        raise HTTPException(422, "window must be 7, 30 or 90")
+    order = {"ret": "b.ret DESC", "pnl": "b.pnl DESC", "score": "s.score DESC NULLS LAST", "mdd": "b.mdd DESC",
+             "retention": "b.retention DESC NULLS LAST"}[sort]
+    rows = session.execute(text(f"""
+        SELECT w.address, w.display_name, w.venue, b.ret, b.pnl, b.mdd, b.leader_ret, b.retention, b.trades,
+               b.liquidations, b.costs, b.approx_equity, b.curve, b.computed_at,
+               (SELECT d.delay_curve FROM copy_backtest d WHERE d.wallet_id = b.wallet_id AND d.window_days = 30
+                  AND d.params_key = b.params_key) AS delay_curve,
+               s.score, s.grade, s.status AS score_status, h.status AS health
+        FROM copy_backtest b JOIN wallet w ON w.id = b.wallet_id
+        LEFT JOIN copy_score s ON s.wallet_id = b.wallet_id LEFT JOIN trader_health h ON h.wallet_id = b.wallet_id
+        WHERE b.window_days = :win AND b.params_key = 'default' AND b.trades >= :mt{venue_clause(venue)}
+        ORDER BY {order} LIMIT :n"""), {"win": window, "mt": min_trades, "n": limit}).mappings().all()
+    computed = session.execute(text("SELECT max(computed_at) FROM copy_backtest")).scalar()
+    nums = ("ret", "pnl", "mdd", "leader_ret", "retention", "costs", "score")
+    return {"window": window, "sort": sort, "computed_at": computed,
+            "rows": [{**dict(r), **{k: num(r[k]) for k in nums}} for r in rows]}

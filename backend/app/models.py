@@ -740,6 +740,7 @@ class CopySim(Base):
     min_trade_usd: Mapped[Decimal] = mapped_column(Numeric)
     rebalance_pct: Mapped[Decimal] = mapped_column(Numeric)
     stop_drawdown_pct: Mapped[Decimal | None] = _num()
+    leverage_mode: Mapped[str] = mapped_column(String(8), default="account", server_default="account")  # account | leader
     cash: Mapped[Decimal] = mapped_column(Numeric)  # capital + realized - fees - funding
     peak_equity: Mapped[Decimal] = mapped_column(Numeric)
     state: Mapped[dict] = mapped_column(JSONB, default=dict)  # followed coins, baseline, pending delayed orders
@@ -758,6 +759,11 @@ class SimPosition(Base):
     entry_px: Mapped[Decimal] = mapped_column(Numeric)
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     mark_px: Mapped[Decimal | None] = _num()  # live mid at the last cycle
+    leverage: Mapped[Decimal | None] = _num()  # isolated (leverage_mode = leader) only
+    liq_px: Mapped[Decimal | None] = _num()
+    margin: Mapped[Decimal | None] = _num()
+    worst_upnl: Mapped[Decimal | None] = _num()  # worst / best unrealized PnL while held
+    best_upnl: Mapped[Decimal | None] = _num()
 
 
 class SimTrade(Base):
@@ -779,6 +785,7 @@ class SimTrade(Base):
     position_after: Mapped[Decimal] = mapped_column(Numeric)
     leader_szi: Mapped[Decimal | None] = _num()
     reason: Mapped[str | None] = mapped_column(String(32))
+    mae: Mapped[Decimal | None] = _num()  # on a closing trade: worst unrealized PnL of the closed position
 
     __table_args__ = (Index("ix_sim_trade_sim_t", "sim_id", "t"),)
 
@@ -1113,3 +1120,57 @@ class DailyDigest(Base):
     payload: Mapped[dict] = mapped_column(JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     emailed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+# --- Copy analysis: historical copy backtests, copyability score, trader health (migration 0014) ---
+
+
+class CopyBacktest(Base):
+    """Historical copy backtest of a trader over the last `window_days` with a named parameter set."""
+
+    __tablename__ = "copy_backtest"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    window_days: Mapped[int] = mapped_column(Integer, primary_key=True)
+    params_key: Mapped[str] = mapped_column(String(32), primary_key=True)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    capital: Mapped[Decimal] = mapped_column(Numeric)
+    ret: Mapped[Decimal | None] = _num()
+    pnl: Mapped[Decimal | None] = _num()
+    mdd: Mapped[Decimal | None] = _num()
+    leader_ret: Mapped[Decimal | None] = _num()
+    retention: Mapped[Decimal | None] = _num()
+    trades: Mapped[int] = mapped_column(Integer)
+    liquidations: Mapped[int] = mapped_column(Integer)
+    costs: Mapped[Decimal] = mapped_column(Numeric)
+    n_decisions: Mapped[int] = mapped_column(Integer)
+    approx_equity: Mapped[bool] = mapped_column(Boolean)
+    delay_curve: Mapped[list | None] = mapped_column(JSONB)  # [[delay_seconds, return], ...]
+    curve: Mapped[list | None] = mapped_column(JSONB)  # down-sampled [[t, equity], ...]
+
+    __table_args__ = (Index("ix_copy_backtest_rank", "window_days", "params_key", "ret"),)
+
+
+class CopyScore(Base):
+    __tablename__ = "copy_score"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    status: Mapped[str] = mapped_column(String(16))  # scored | insufficient
+    score: Mapped[Decimal | None] = _num()
+    grade: Mapped[str | None] = mapped_column(String(2))
+    components: Mapped[list] = mapped_column(JSONB)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class TraderHealth(Base):
+    """Recent (30d) vs earlier behaviour and results: stable / declining / drifting / dormant / hot."""
+
+    __tablename__ = "trader_health"
+
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    status: Mapped[str] = mapped_column(String(12))
+    prev_status: Mapped[str | None] = mapped_column(String(12))
+    signals: Mapped[list] = mapped_column(JSONB)
+    changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

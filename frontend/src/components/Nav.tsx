@@ -14,7 +14,7 @@ export async function Nav() {
     { href: "/market", label: t("market") },
     {
       label: t("find"),
-      items: [item("/discover", "discover"), item("/rankings", "rankings"), item("/okx", "okx"), item("/timing", "timing"), item("/compare", "compare")],
+      items: [item("/copy-board", "copyBoard"), item("/discover", "discover"), item("/rankings", "rankings"), item("/okx", "okx"), item("/timing", "timing"), item("/compare", "compare")],
     },
     {
       label: t("research"),

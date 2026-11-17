@@ -244,3 +244,67 @@ def test_dashboard_and_detail_analytics(client, sf):
     assert set(a["periods"]) == {"1d", "7d", "30d", "all"} and len(a["daily"]) == 1 and a["cycles"] == []
     assert len(client.get(f"/api/v1/sims/{sid}").json()["equity"]) == 1
     assert client.get("/api/v1/sims/dashboard", params={"period": "2y"}).status_code == 422
+
+
+def test_proportional_copy_formula():
+    """Your size = copy ratio x (leader position / leader balance) x your balance."""
+    mids = {"BTC": D(100)}
+    leader = {"BTC": D(1)}  # $100 on a $1,000 account = 10%
+    full = target_sizes(Params(size_factor=D(1)), leader, D(1000), D(100), mids, {"BTC"}, {})
+    double = target_sizes(Params(size_factor=D(2)), leader, D(1000), D(100), mids, {"BTC"}, {})
+    half = target_sizes(Params(size_factor=D("0.5")), leader, D(1000), D(100), mids, {"BTC"}, {})
+    assert full["BTC"] * 100 == pytest.approx(D(10)) and double["BTC"] * 100 == pytest.approx(D(20))
+    assert half["BTC"] * 100 == pytest.approx(D(5))
+
+
+def set_leader_risk(s, wid, coin, szi, lev, liq):
+    s.execute(text("DELETE FROM live_position WHERE wallet_id = :w"), {"w": wid})
+    if szi:
+        s.execute(text("""INSERT INTO live_position (wallet_id, coin, szi, leverage, liquidation_px, liq_risk, updated_at)
+                          VALUES (:w, :c, :z, :l, :q, false, now())"""), {"w": wid, "c": coin, "z": szi, "l": lev, "q": liq})
+
+
+def test_leader_leverage_isolated_liquidation_and_mae(sf):
+    wid, sid = seed(sf, {})
+    with sf() as s:
+        s.execute(text("UPDATE copy_sim SET leverage_mode = 'leader' WHERE id = :s"), {"s": sid})
+        s.commit()
+    step_simulations(sf, MIDS, now=T0)
+    with sf() as s:
+        set_leader_risk(s, wid, "BTC", "2", 10, None)  # 40% of equity at 10x
+        s.commit()
+    step_simulations(sf, MIDS, now=T0 + timedelta(seconds=30))
+    with sf() as s:
+        p = s.execute(text("SELECT size, leverage, liq_px, margin FROM sim_position WHERE sim_id = :s"), {"s": sid}).one()
+    entry = D(80000) * D("1.0003")
+    assert p.leverage == 10 and p.margin == pytest.approx(D("0.05") * entry / 10)
+    assert p.liq_px == pytest.approx(entry * (1 - D("0.1") + D(1) / 40))  # mmr = 1 / (2 x 20x)
+    step_simulations(sf, {**MIDS, "BTC": D(77000)}, now=T0 + timedelta(seconds=60))  # drawdown, not liquidated
+    step_simulations(sf, {**MIDS, "BTC": D(73000)}, now=T0 + timedelta(seconds=90))  # through the isolated liq price
+    with sf() as s:
+        sim = s.execute(text("SELECT status, cash FROM copy_sim WHERE id = :s"), {"s": sid}).one()
+        liq = s.execute(text("""SELECT kind, reason, mae FROM sim_trade WHERE sim_id = :s ORDER BY id DESC LIMIT 1"""),
+                        {"s": sid}).one()
+    assert sim.status == "running"  # only that position went; the account goes on
+    assert liq.kind == "liquidation" and liq.reason == "isolated_liquidation"
+    assert liq.mae < D("0.05") * (D(77000) - entry)  # worst point is the liquidation fill, below the 77k mark
+    lost = D(10000) - sim.cash  # margin ~$400; liquidated at 1 - mmr x lev = 75% of it, plus fees: never the margin+
+    assert D(290) < lost < D(320)
+
+
+def test_leader_liquidation_is_mirrored(sf):
+    wid, sid = seed(sf, {})
+    step_simulations(sf, MIDS, now=T0)
+    with sf() as s:
+        set_leader_risk(s, wid, "BTC", "2", 20, 76500)
+        s.commit()
+    step_simulations(sf, MIDS, now=T0 + timedelta(seconds=30))
+    with sf() as s:
+        set_leader_risk(s, wid, "BTC", None, None, None)  # position gone with the price at the liquidation level
+        s.commit()
+    step_simulations(sf, {**MIDS, "BTC": D(76400)}, now=T0 + timedelta(seconds=60))
+    assert pos(sf, sid) == {}
+    with sf() as s:
+        last = s.execute(text("SELECT kind, reason FROM sim_trade WHERE sim_id = :s ORDER BY id DESC LIMIT 1"),
+                         {"s": sid}).one()
+    assert last.reason == "leader_liquidated" and last.kind == "trade"  # account mode: a close, labelled

@@ -5,6 +5,7 @@ import { CopyButton } from "@/components/CopyButton";
 import { EquityChart } from "@/components/EquityChart";
 import { Freshness } from "@/components/Freshness";
 import { OkxTraderPanels } from "@/components/OkxTraderPanels";
+import { BacktestCard, BehaviorPanel, CopyabilityCard } from "@/components/CopyAnalysis";
 import { CycleTimeline } from "@/components/CycleTimeline";
 import { PositionCycles } from "@/components/PositionCycles";
 import { SimilarTraders } from "@/components/SimilarTraders";
@@ -224,6 +225,13 @@ export default async function TraderPage({
         />
         </Panel>
       )}
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        <CopyabilityCard address={w.address} />
+        <BehaviorPanel address={w.address} />
+      </div>
+
+      <BacktestCard address={w.address} search={search} />
 
       {!okx && <FollowCard address={w.address} search={search} />}
 

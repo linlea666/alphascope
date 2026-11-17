@@ -1,5 +1,6 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { AddressLink } from "@/components/AddressLink";
+import { HealthBadge } from "@/components/HealthBadge";
 import { Panel } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { api, type Digest } from "@/lib/api";
@@ -31,6 +32,7 @@ export async function StartGuide() {
 /** The latest daily digest: watched traders' moves, smart-vs-crowd gaps, newly significant traders. */
 export async function DigestCard() {
   const t = await getTranslations("digest");
+  const th = await getTranslations("health");
   const locale = await getLocale();
   let d: Digest;
   try {
@@ -109,6 +111,20 @@ export async function DigestCard() {
           )}
         </div>
       </div>
+      {g.health_changes && g.health_changes.length > 0 && (
+        <div className="mt-4 border-t border-border pt-3">
+          <h3 className="mb-2 text-xs font-medium text-muted">{t("health")}</h3>
+          <ul className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm">
+            {g.health_changes.slice(0, 8).map((h) => (
+              <li key={h.address} className="flex items-center gap-1.5">
+                <AddressLink address={h.address} name={h.name} star={false} />
+                <span className="text-xs text-muted">{h.prev_status ? `${th(`status.${h.prev_status}`)} →` : ""}</span>
+                <HealthBadge status={h.status} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </Panel>
   );
 }

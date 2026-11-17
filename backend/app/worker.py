@@ -18,6 +18,7 @@ from app.ingest.market_ingest import record_candles
 from app.ingest.portfolio_ingest import enrich_batch
 from app.ingest.runs import mark_abandoned_runs
 from app.alerts import digest, sentinel
+from app.factors.copy_run import run_copy_analysis
 from app.factors.run import run_styles
 from app.market.collect import sweep_hyperliquid, sweep_okx, sync_watch
 from app.market.stats import snapshot_hour
@@ -165,6 +166,9 @@ def main() -> None:
     def digest_job() -> None:
         log.info("digest: %s", digest.run(sf))
 
+    def copy_analysis_job() -> None:
+        log.info("copy analysis: %s", run_copy_analysis(sf))
+
     sched = BlockingScheduler(timezone="UTC", job_defaults={"coalesce": True, "max_instances": 1,
                                                              "misfire_grace_time": 300})
     now = datetime.now(UTC)
@@ -203,6 +207,9 @@ def main() -> None:
     # Price-zone sentinels follow fill archiving; the digest goes out at 08:20 Beijing time
     sched.add_job(sentinel_job, "interval", minutes=30, next_run_time=now + timedelta(minutes=9), id="sentinels")
     sched.add_job(digest_job, "cron", hour=0, minute=20, id="digest")
+    # Copy backtests, copyability and trader health: nightly, and once shortly after a (re)start
+    sched.add_job(copy_analysis_job, "cron", hour=1, minute=0, id="copy_analysis")
+    sched.add_job(copy_analysis_job, "date", run_date=now + timedelta(minutes=20), id="copy_analysis_boot")
     log.info("worker started: leaderboard every %dm, enrich %d wallets every %dm",
              settings.leaderboard_interval_minutes, settings.enrich_batch_size, settings.enrich_interval_minutes)
     try:

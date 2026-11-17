@@ -44,6 +44,13 @@ def build(session: Session, now: datetime) -> dict:
         FROM sentinel_hit h JOIN zone_sentinel s ON s.id = h.sentinel_id JOIN wallet w ON w.id = h.wallet_id
         LEFT JOIN wallet_alias a ON a.wallet_id = w.id AND a.owner = :o
         WHERE h.found_at >= :s ORDER BY h.notional DESC LIMIT 10"""), {"o": OWNER, "s": since}).mappings().all()
+    health = session.execute(text("""
+        SELECT w.address, coalesce(a.alias, w.display_name) AS name, w.venue, h.status, h.prev_status, h.signals
+        FROM trader_health h JOIN wallet w ON w.id = h.wallet_id
+        LEFT JOIN wallet_alias a ON a.wallet_id = w.id AND a.owner = :o
+        WHERE h.changed_at >= :s AND h.prev_status IS NOT NULL AND h.status NOT IN ('insufficient')
+        ORDER BY (h.wallet_id IN (SELECT wallet_id FROM watch_item)) DESC, h.changed_at DESC LIMIT 10"""),
+        {"o": OWNER, "s": since}).mappings().all()
     num = lambda v: None if v is None else float(v)  # noqa: E731
     return {
         "generated_at": now.isoformat(), "since": since.isoformat(),
@@ -54,6 +61,7 @@ def build(session: Session, now: datetime) -> dict:
         "baseline": prev is None,  # first digest: nothing to compare "new" against
         "significant_total": len(significant), "significant_ids": sorted(significant),
         "sentinel_hits": [{**dict(h), "avg_px": num(h["avg_px"]), "notional": num(h["notional"])} for h in hits],
+        "health_changes": [dict(h) for h in health],
     }
 
 
@@ -78,6 +86,12 @@ def compose(day: date, p: dict, public_url: str) -> tuple[str, str]:
     lines += ["", f"【新进入节奏显著名单】{p['new_significant_total']} 人"]
     for r in p["new_significant"][:5]:
         lines.append(f"· {r['display_name'] or r['address']} · {r['scale']} q={r['q']:.3f}")
+    if p.get("health_changes"):
+        names = {"declining": "走下坡", "dormant": "沉寂", "drifting": "风格漂移", "hot": "近期火热", "stable": "稳定"}
+        lines += ["", "【交易员状态变化】"]
+        for h in p["health_changes"][:5]:
+            lines.append(f"· {h['name'] or h['address']}：{names.get(h['prev_status'], h['prev_status'])} → "
+                         f"{names.get(h['status'], h['status'])}")
     if p["sentinel_hits"]:
         lines += ["", "【价位哨兵命中】"]
         for h in p["sentinel_hits"][:5]:

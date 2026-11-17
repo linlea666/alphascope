@@ -41,8 +41,10 @@
       "alerts": "Position emails, price-zone sentinels, daily digest",
       "sims": "Simulate following a trader at live prices",
       "dataHealth": "Collection jobs, budgets and coverage",
-      "settings": "Email and live monitor settings"
-    }
+      "settings": "Email and live monitor settings",
+      "copyBoard": "What copying them would have made over 7/30/90 days (after costs, with delay)"
+    },
+    "copyBoard": "Copy profit board"
   },
   "common": {
     "dataAsOf": "Data as of",
@@ -298,7 +300,14 @@
     "raw": "Raw archive",
     "runs": "Collection runs",
     "kind": "Kind",
-    "status": "Status",
+    "status": {
+      "stable": "Stable",
+      "declining": "Declining",
+      "drifting": "Drifting",
+      "dormant": "Dormant",
+      "hot": "Hot",
+      "insufficient": "Too few trades"
+    },
     "started": "Started",
     "duration": "Duration",
     "summary": "Summary",
@@ -323,7 +332,36 @@
     "okxTraders": "Traders",
     "okxPositions": "Positions",
     "okxSynced": "Synced in 24h",
-    "okxBackoff": "Backing off"
+    "okxBackoff": "Backing off",
+    "icon": {
+      "stable": "●",
+      "declining": "↘",
+      "drifting": "↔",
+      "dormant": "☾",
+      "hot": "🔥",
+      "insufficient": "·"
+    },
+    "hint": {
+      "stable": "No clear change over the last 30 days vs the 180 before",
+      "declining": "Two or more results clearly worse in the last 30 days (win rate, profit factor, net PnL, big loss)",
+      "drifting": "The way of trading changed: scalp / short share, holding time or size",
+      "dormant": "Traded before, nothing opened in the last 14 days",
+      "hot": "Last 30 days: profit factor ≥ 2, net profit and a clearly higher win rate (short-term; expect mean reversion)",
+      "insufficient": "Too few closed positions to compare"
+    },
+    "signalsTitle": "Why (last 30 days vs the 180 before)",
+    "signals": {
+      "dormant": "days since last open",
+      "win_rate_down": "win rate down",
+      "pf_down": "profit factor below 1",
+      "net_negative": "recent net loss",
+      "big_loss": "big single loss (vs earlier average loss)",
+      "scalp_shift": "scalp share changed",
+      "short_shift": "short share changed",
+      "hold_shift": "holding time changed (hours)",
+      "size_up": "position size up",
+      "hot": "profit factor up"
+    }
   },
   "status": {
     "success": "Success",
@@ -656,12 +694,14 @@
       "timing": "Best timing excess",
       "archive": "Fill archive",
       "note": "Note / tags",
-      "added": "Added"
+      "added": "Added",
+      "health": "Health / grade"
     },
     "archiving": "archiving",
     "archived": "{n} fills",
     "queued": "queued",
-    "archivedOkx": "{n} positions"
+    "archivedOkx": "{n} positions",
+    "gradeHint": "Copyability grade"
   },
   "alerts": {
     "subscribe": "Alert me",
@@ -810,7 +850,9 @@
       "winRate": "Win rate",
       "costs": "Period costs",
       "exposure": "Leverage",
-      "status": "Status"
+      "status": "Status",
+      "sims": "Sims",
+      "liq": "Liquidations"
     },
     "closedN": "{n} closed cycles",
     "positionsN": "{n} positions",
@@ -857,7 +899,11 @@
       "winRate": "Win rate",
       "profitFactor": "Profit factor",
       "avgWinLoss": "Avg win / avg loss",
-      "medianHold": "Median holding time"
+      "medianHold": "Median holding time",
+      "ddDays": "Longest time under water",
+      "currentDd": "Current drawdown",
+      "worstMae": "Worst floating loss",
+      "liquidated": "Liquidations"
     },
     "hours": "{n} h",
     "chartTitle": "Return curve",
@@ -878,7 +924,12 @@
       "value": "Notional",
       "upnl": "uPnL",
       "leader": "Leader",
-      "state": "State"
+      "state": "State",
+      "worst": "Worst floating loss",
+      "lev": "Leverage / margin",
+      "liq": "Liq. price / distance",
+      "cross": "cross",
+      "liqShort": "liq"
     },
     "pendingUntil": "delayed, fills {t}",
     "followed": "following",
@@ -901,7 +952,10 @@
       "closed": "Closed",
       "peak": "Peak size",
       "pnl": "PnL",
-      "open": "open"
+      "open": "open",
+      "mae": "Worst floating",
+      "liq": "Liquidated",
+      "leaderLiq": "Leader liquidated (inferred)"
     },
     "tradesTitle": "Fills",
     "tradesHint": "Latest 200. Fill price = mid ± slippage; cost = fee + slippage (funding listed separately).",
@@ -923,6 +977,10 @@
         "liquidation": "Liquidation",
         "stop": "Stop",
         "trade": "Fill"
+      },
+      "reasons": {
+        "leader_liquidated": "leader liquidated (inferred)",
+        "isolated_liquidation": "isolated liquidation"
       }
     },
     "noTrades": "No fills yet.",
@@ -944,12 +1002,12 @@
       "capital": "Capital (USD)",
       "sizing": "Sizing",
       "sizings": {
-        "equity_ratio": "Equity ratio",
+        "equity_ratio": "Proportional (recommended)",
         "fixed_multiple": "Fixed multiple",
         "fixed_cap": "Fixed USD per coin"
       },
       "sizingHints": {
-        "equity_ratio": "They put 40% of equity in, you put 40% (× factor). Closest to real copy trading.",
+        "equity_ratio": "Use the same share of your balance as the leader uses of theirs (times the copy ratio). Closest to real copy trading.",
         "fixed_multiple": "Size = their size × factor, regardless of your capital.",
         "fixed_cap": "A fixed USD amount per coin; direction only."
       },
@@ -978,8 +1036,40 @@
       "create": "Start simulation",
       "save": "Save parameters",
       "saving": "Submitting…",
-      "saved": "Saved; applies from the next cycle."
-    }
+      "saved": "Saved; applies from the next cycle.",
+      "ratio": "Copy ratio",
+      "ratioHint": "Your size = ratio × (their position ÷ their equity) × your equity. 100% = the same share; 200% = double; 50% = half.",
+      "leverageMode": "Leverage & liquidation",
+      "leverageModes": {
+        "account": "Account (cross)",
+        "leader": "Follow the leader's leverage (isolated)"
+      },
+      "leverageModeHints": {
+        "account": "All positions share your capital; gross exposure stays within max leverage; the whole account is liquidated when margin runs out.",
+        "leader": "Each position uses the leader's leverage on that coin (capped by max leverage and the coin's limit) with its own margin and liquidation price; a liquidated position loses only its margin."
+      },
+      "formulaTitle": "How proportional copying works",
+      "formula": "Your size = copy ratio × (leader's position ÷ leader's balance) × your balance",
+      "formulaExample": "E.g. leader balance 1,000, opens 100 (10%) → your {capital} × 10% × {ratio}% = {result}"
+    },
+    "sortBy": "Sort",
+    "sorts": {
+      "return": "Return",
+      "pnl": "PnL",
+      "mdd": "Smallest drawdown",
+      "retention": "Retention",
+      "calmar": "Return / drawdown"
+    },
+    "groupByLeader": "Group by leader",
+    "champ": {
+      "topReturn": "Top return",
+      "steadiest": "Steadiest (return / drawdown)",
+      "smallestDd": "Smallest drawdown"
+    },
+    "ratioShort": "ratio {r}%",
+    "ddDays": "{n} d under water",
+    "liqN": "{n} liquidated",
+    "days": "{n} days"
   },
   "okx": {
     "viewProfile": "View on OKX",
@@ -1606,7 +1696,8 @@
       "decrease": "reduced",
       "close": "closed",
       "flip": "flipped"
-    }
+    },
+    "health": "Trader health changes"
   },
   "guide": {
     "find": {
@@ -1695,6 +1786,191 @@
     "divergence": {
       "label": "Divergence",
       "text": "Long share among timing-significant traders minus long share among everyone observed. Positive = smart money more bullish than the crowd."
+    },
+    "retention": {
+      "label": "Retention",
+      "text": "Copy return ÷ the leader's own return. 100% = the follower got all of it; less is what delay, slippage, fees and sizing differences ate."
+    },
+    "delay": {
+      "label": "Delay sensitivity",
+      "text": "Copy return with no delay, 30 s, 5 min, 30 min and 2 h. The faster it falls, the harder the trader is to copy (typical of scalpers)."
+    },
+    "copyability": {
+      "label": "Copyability",
+      "text": "0-100: not how much they make, but whether you can make it by copying them. A ≥ 80, B ≥ 65, C ≥ 50."
+    },
+    "mae": {
+      "label": "Worst floating loss",
+      "text": "The largest unrealized loss a position showed between open and close: the most painful moment of holding it.",
+      "example": "E.g. long, down to -300, then closed at +200: worst floating loss -300."
     }
+  },
+  "copyBoard": {
+    "title": "Copy profit board",
+    "subtitle": "If you had copied these traders over the last 7 / 30 / 90 days with one setting, after fees, slippage and a 30-second delay, who would have made you the most? Replayed nightly from real trades and candles.",
+    "window": "{n} days",
+    "computed": "computed {t}",
+    "notYet": "Not computed yet (nightly at 01:00 UTC, and 20 minutes after the service starts)",
+    "tableTitle": "Copy backtest, last {n} days",
+    "hint": "Same setting for all: $10k, 100% proportional copy, 30 s delay, 4.5 bp fee, 3 bp slippage, max 10x, cross margin. Pool: watchlist, simulated, style-labelled, timing-significant and OKX-board traders.",
+    "sort": "Sort",
+    "sorts": {
+      "ret": "Copy return",
+      "pnl": "PnL",
+      "score": "Copyability",
+      "mdd": "Smallest drawdown",
+      "retention": "Retention"
+    },
+    "cols": {
+      "trader": "Trader",
+      "ret": "Copy return",
+      "mdd": "Max drawdown",
+      "leader": "Leader",
+      "retention": "Retention",
+      "delay": "Delay sensitivity",
+      "score": "Copyability"
+    },
+    "delays": {
+      "0": "instant",
+      "30": "30 s",
+      "300": "5 min",
+      "1800": "30 min",
+      "7200": "2 h"
+    },
+    "approx": "approx. equity",
+    "approxHint": "OKX has no equity history; current lead assets are used, so the ratio may be off",
+    "onCapital": "{pnl} on $10k",
+    "trades": "{n} trades",
+    "liq": "{n} liquidated",
+    "insufficient": "insufficient",
+    "simulate": "Simulate",
+    "details": "Details",
+    "empty": "No backtests yet.",
+    "method": "Method: every open, add, reduce and close at its real time plus the delay, filled at the finest candle available (1 minute to 1 hour), liquidation checked hourly. OKX only records whole positions, so a follower enters at the first open and exits at the final close and misses intermediate adds and trims. Funding not modelled. Hindsight, not a forecast."
+  },
+  "copyCard": {
+    "title": "Copyability score",
+    "hint": "Skill significance, a real copy backtest, drawdown, liquidations and leverage, latency sensitivity, sample and concentration; out of 100, each part with its evidence.",
+    "pending": "Not scored yet (nightly for the candidate pool).",
+    "insufficient": "Insufficient: fewer than 15 closed positions or no usable copy backtest.",
+    "grade": "Grade {g}",
+    "parts": {
+      "skill": "Skill significance",
+      "copy_return": "Copy backtest return",
+      "drawdown": "Drawdown",
+      "risk": "Liquidations & leverage",
+      "latency": "Latency sensitivity",
+      "activity": "Sample & activity",
+      "concentration": "Concentration"
+    },
+    "yes": "yes",
+    "no": "no",
+    "ev": {
+      "skill": "timing q = {q}, out-of-sample verified: {verified}",
+      "copy_return": "{w}-day copy backtest {ret}",
+      "drawdown": "backtest max drawdown {mdd}, drawdown/profit {ratio}",
+      "risk": "liquidation rate {liq}, median leverage {lev}×",
+      "latency": "a 5-minute delay keeps {kept} ({r0} → {r5})",
+      "latencyNa": "the instant copy itself does not make money; latency cannot be measured",
+      "activity": "{n} closed, last trade {days} days ago",
+      "concentration": "best position = {top} of total profit"
+    },
+    "bt": {
+      "window": "Window",
+      "ret": "Copy return",
+      "mdd": "Max drawdown",
+      "leader": "Leader",
+      "trades": "Trades",
+      "costs": "Costs",
+      "days": "{n} days",
+      "liq": "{n} liquidated"
+    }
+  },
+  "backtest": {
+    "title": "Historical copy backtest",
+    "hint": "No need to wait weeks: replay their real trade times on candles and see what copying with your setting would have done, with delay, fees, slippage and liquidation.",
+    "days": "Days",
+    "daysN": "last {n} days",
+    "ratio": "Copy ratio %",
+    "delay": "Delay",
+    "delays": {
+      "0": "instant",
+      "30": "30 s",
+      "300": "5 min",
+      "1800": "30 min",
+      "7200": "2 h"
+    },
+    "lev": "Leverage",
+    "levs": {
+      "account": "cross",
+      "leader": "follow leader"
+    },
+    "capital": "Capital",
+    "run": "Run backtest",
+    "idle": "Set the parameters and run the backtest.",
+    "reasons": {
+      "no_decisions": "No trades in this period.",
+      "no_leader_equity": "No leader equity (OKX needs lead assets); a proportional backtest is not possible.",
+      "too_many_decisions": "Too many trades (over 20,000 decisions); shorten the period.",
+      "window_too_long": "At most 365 days.",
+      "error": "Backtest failed; try again later."
+    },
+    "mdd": "Max drawdown",
+    "tradesCosts": "{n} trades, costs {costs}",
+    "liq": "{n} liquidations",
+    "blown": "Blown up",
+    "leader": "Leader",
+    "kept": "kept {p}",
+    "series": "Follower capital",
+    "delayTitle": "Delay sensitivity: copy return at different delays",
+    "nightly": "from the nightly 30-day backtest",
+    "equity": {
+      "history": "Leader equity from the account history.",
+      "current_assets": "OKX has no equity history; current lead assets set the ratio (approximate)."
+    },
+    "capped": "{p} of the time their ratio exceeded max leverage and was capped: the result reflects the cap more than their sizing.",
+    "prices": "Fill precision: {res} candles.",
+    "notes": "Liquidation checked hourly at the high / low; funding not modelled; OKX records whole positions only. Hindsight, not a forecast."
+  },
+  "behavior": {
+    "title": "Behaviour fingerprint",
+    "hint": "When they trade and how they treat wins and losses, from archived trades; no conclusion on small samples.",
+    "flags": {
+      "holds_losers": "Holds losers",
+      "lets_winners_run": "Lets winners run",
+      "fat_tail_losses": "Rare huge losses",
+      "cuts_losses": "Cuts losses",
+      "sizes_up_after_loss": "Sizes up after losses",
+      "averages_down": "Averages down",
+      "size_up": "Bigger positions",
+      "leverage_up": "Higher leverage"
+    },
+    "flagHint": {
+      "holds_losers": "Losing positions are held over twice as long as winners",
+      "lets_winners_run": "Winners are held 1.5× longer than losers",
+      "fat_tail_losses": "Largest loss over 8× the average loss: one trade can hurt a follower badly",
+      "cuts_losses": "Largest loss under 3× the average loss",
+      "sizes_up_after_loss": "After 30%+ of losing closes, the next position within 24h is over 1.5× the median size",
+      "averages_down": "60%+ of adds are at a worse price than the average entry",
+      "size_up": "Median position size in the last 30 days is 2×+ earlier",
+      "leverage_up": "Median leverage in the last 30 days is 1.5×+ earlier"
+    },
+    "heatTitle": "Opens by time ({n}, UTC)",
+    "weekdays": {
+      "0": "Mo",
+      "1": "Tu",
+      "2": "We",
+      "3": "Th",
+      "4": "Fr",
+      "5": "Sa",
+      "6": "Su"
+    },
+    "holdTitle": "Holding time: losers vs winners",
+    "losses": "losers",
+    "wins": "winners",
+    "streaks": "Longest win / loss streak",
+    "revenge": "Size-up after loss",
+    "avgDown": "Adds against the position",
+    "lev": "Leverage (before → last 30 days)"
   }
 }
