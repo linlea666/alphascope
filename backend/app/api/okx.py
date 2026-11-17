@@ -78,3 +78,20 @@ def okx_board(
         "runs": [dict(r) for r in runs],
         "rows": [_row(r) for r in rows],
     }
+
+
+@router.get("/summary")
+def okx_summary(session: Session = Depends(get_session)):
+    """Headline numbers for the overview page."""
+    counts = session.execute(text("""
+        SELECT count(*) AS traders, coalesce(sum(n_positions), 0) AS positions,
+               count(*) FILTER (WHERE history_status IN ('target_complete', 'source_complete')) AS complete,
+               count(*) FILTER (WHERE pool_status = 'active') AS active,
+               count(*) FILTER (WHERE pool_status = 'dropped') AS dropped,
+               count(*) FILTER (WHERE pool_status = 'watching') AS watching
+        FROM okx_trader""")).mappings().one()
+    run = session.execute(text("""
+        SELECT business_date, completed_at, expected_total, unique_count, new_traders FROM okx_leaderboard_run
+        WHERE time_window = '7d' AND status = 'complete' ORDER BY business_date DESC, completed_at DESC LIMIT 1""")
+                          ).mappings().first()
+    return {**dict(counts), "latest_7d": dict(run) if run else None}

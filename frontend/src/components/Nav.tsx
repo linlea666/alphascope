@@ -8,6 +8,7 @@ export async function Nav() {
   const items = [
     { href: "/", label: t("overview") },
     { href: "/rankings", label: t("rankings") },
+    { href: "/okx", label: t("okx") },
     { href: "/swings", label: t("swings") },
     { href: "/timing", label: t("timing") },
     { href: "/holders", label: t("holders") },
@@ -23,7 +24,7 @@ export async function Nav() {
       <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
         <Link href="/" className="flex items-baseline gap-2">
           <span className="text-lg font-semibold tracking-tight">AlphaScope</span>
-          <span className="hidden text-xs text-muted sm:inline">Hyperliquid · {t("tagline")}</span>
+          <span className="hidden text-xs text-muted sm:inline">Hyperliquid · OKX · {t("tagline")}</span>
         </Link>
         <nav className="flex gap-4 text-sm">
           {items.map((i) => (

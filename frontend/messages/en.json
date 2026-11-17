@@ -17,7 +17,8 @@
     "watchlist": "Watchlist",
     "alerts": "Alerts",
     "settings": "Settings",
-    "sims": "Copy sim"
+    "sims": "Copy sim",
+    "okx": "OKX"
   },
   "common": {
     "dataAsOf": "Data as of",
@@ -140,7 +141,16 @@
     "newTitle": "Newly discovered wallets",
     "newHint": "Addresses that appeared on the leaderboard after the initial bulk import.",
     "newEmpty": "No new wallets since the initial import. Discovery starts with the second leaderboard update.",
-    "ratio": "Return / DD"
+    "ratio": "Return / DD",
+    "okxTitle": "OKX lead traders",
+    "okxHint": "Today's 7-day board ({date}): official {total}, {n} captured in full. Traders who drop off stay tracked; position history goes back up to 2 years.",
+    "okxOpen": "Open OKX boards",
+    "okxTraders": "Traders tracked",
+    "okxPositions": "Position history",
+    "okxComplete": "Full history",
+    "okxActive": "On the boards",
+    "okxDropped": "Dropped, still tracked",
+    "okxNewToday": "New today"
   },
   "rankings": {
     "title": "Rankings",

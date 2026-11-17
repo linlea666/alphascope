@@ -4,7 +4,8 @@ import { ApiErrorState } from "@/components/ApiErrorState";
 import { FlagBadges, ReliabilityBadge, TierBadge } from "@/components/badges";
 import { Freshness } from "@/components/Freshness";
 import { Badge, PageHeader, Panel, Stat, td, th } from "@/components/ui";
-import { api, ApiError, type Overview } from "@/lib/api";
+import { Link } from "@/i18n/routing";
+import { api, ApiError, type Overview, type OkxSummary } from "@/lib/api";
 import { fmtNum, fmtPct, fmtTime, fmtUsd, signClass } from "@/lib/format";
 
 const TIER_ORDER = ["B", "C", "Z", "A", "S"];
@@ -17,6 +18,12 @@ export default async function OverviewPage() {
     data = await api.overview();
   } catch (e) {
     return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
+  }
+  let okx: OkxSummary | null = null;
+  try {
+    okx = await api.okxSummary();
+  } catch {
+    okx = null; // OKX is a second source: the overview still renders without it
   }
   const { counts, screening } = data;
   const presentTotal = Object.values(data.tiers).reduce((a, b) => a + b, 0) || 1;
@@ -40,6 +47,27 @@ export default async function OverviewPage() {
         <Stat label={t("overview.new24h")} value={fmtNum(counts.new_24h, locale)} />
         <Stat label={t("overview.new7d")} value={fmtNum(counts.new_7d, locale)} />
       </div>
+
+      {okx && (
+        <Panel
+          title={t("overview.okxTitle")}
+          hint={okx.latest_7d ? t("overview.okxHint", { date: okx.latest_7d.business_date, n: okx.latest_7d.unique_count, total: okx.latest_7d.expected_total }) : undefined}
+          actions={
+            <Link href="/okx" className="rounded border border-accent px-3 py-1 text-xs text-accent hover:bg-accent hover:text-white">
+              {t("overview.okxOpen")} →
+            </Link>
+          }
+        >
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+            <Stat label={t("overview.okxTraders")} value={fmtNum(okx.traders, locale)} />
+            <Stat label={t("overview.okxPositions")} value={fmtNum(okx.positions, locale)} />
+            <Stat label={t("overview.okxComplete")} value={fmtNum(okx.complete, locale)} />
+            <Stat label={t("overview.okxActive")} value={fmtNum(okx.active, locale)} />
+            <Stat label={t("overview.okxDropped")} value={fmtNum(okx.dropped, locale)} />
+            <Stat label={t("overview.okxNewToday")} value={fmtNum(okx.latest_7d?.new_traders ?? 0, locale)} />
+          </div>
+        </Panel>
+      )}
 
       <Panel
         title={t("overview.screeningTitle")}

@@ -10,7 +10,7 @@ const WINDOWS = ["7d", "30d", "90d", "365d"] as const;
 const VIEWS = ["board", "new", "dropped"] as const;
 
 /** OKX lead-trader boards with our own evidence next to the official numbers. */
-export async function OkxBoard({ sp }: { sp: Record<string, string | undefined> }) {
+export async function OkxBoard({ sp, basePath = "/rankings" }: { sp: Record<string, string | undefined>; basePath?: "/rankings" | "/okx" }) {
   const t = await getTranslations("okxBoard");
   const to = await getTranslations("okx");
   const locale = await getLocale();
@@ -29,13 +29,13 @@ export async function OkxBoard({ sp }: { sp: Record<string, string | undefined> 
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 text-sm">
         {VIEWS.map((v) => (
-          <Link key={v} href={{ pathname: "/rankings", query: { view: v, owin: window } }} className={pill(v === view)}>
+          <Link key={v} href={{ pathname: basePath, query: { view: v, owin: window } }} className={pill(v === view)}>
             {t(`views.${v}`)}
           </Link>
         ))}
         <span className="mx-2 h-5 w-px bg-border" />
         {WINDOWS.map((w) => (
-          <Link key={w} href={{ pathname: "/rankings", query: { view, owin: w } }} className={pill(w === window)}>
+          <Link key={w} href={{ pathname: basePath, query: { view, owin: w } }} className={pill(w === window)}>
             {to(`windows.${w}`)}
           </Link>
         ))}

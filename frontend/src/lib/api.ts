@@ -126,6 +126,16 @@ export type OkxDetail = {
   pnl_curve: [string, number, number][];
 };
 
+export type OkxSummary = {
+  traders: number;
+  positions: number;
+  complete: number;
+  active: number;
+  dropped: number;
+  watching: number;
+  latest_7d: { business_date: string; completed_at: string; expected_total: number; unique_count: number; new_traders: number } | null;
+};
+
 export type OkxBoard = {
   window: "7d" | "30d" | "90d" | "365d";
   view: "board" | "new" | "dropped";
@@ -782,6 +792,7 @@ export const api = {
   walletTiming: (address: string) => get<WalletTiming>(`/api/v1/wallets/${encodeURIComponent(address)}/timing`),
   zones: (params: Record<string, string | number | boolean | undefined>) => get<ZoneResult>("/api/v1/zones", params),
   timingCoins: (scale: string, window: string, venue?: string) => get<{ coins: { coin: string; wallets: number }[] }>("/api/v1/timing/coins", { scale, window, venue }),
+  okxSummary: () => get<OkxSummary>("/api/v1/okx/summary"),
   okxBoard: (params: Record<string, string | number | boolean | undefined>) => get<OkxBoard>("/api/v1/okx/board", params),
   holderZones: (params: Record<string, string | number | boolean | undefined>) => get<HolderZones>("/api/v1/holders/zones", params),
   holderLegs: (coin: string) => get<LegList>("/api/v1/holders/legs", { coin }),

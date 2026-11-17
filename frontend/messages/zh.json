@@ -17,7 +17,8 @@
     "watchlist": "我的收藏",
     "alerts": "仓位提醒",
     "settings": "设置",
-    "sims": "模拟跟单"
+    "sims": "模拟跟单",
+    "okx": "OKX 榜单"
   },
   "common": {
     "dataAsOf": "数据时间",
@@ -140,7 +141,16 @@
     "newTitle": "新发现钱包",
     "newHint": "首次全量导入之后才出现在排行榜上的地址。",
     "newEmpty": "首次导入后暂未发现新钱包。增量发现从第二次排行榜更新开始生效。",
-    "ratio": "收益/回撤"
+    "ratio": "收益/回撤",
+    "okxTitle": "OKX 带单交易员",
+    "okxHint": "今日 7 天榜（{date}）：官方 {total} 人，已完整抓取 {n} 人。下榜的交易员也持续跟踪，历史仓位最长 2 年。",
+    "okxOpen": "查看 OKX 榜单",
+    "okxTraders": "跟踪的交易员",
+    "okxPositions": "历史仓位",
+    "okxComplete": "历史已回填完整",
+    "okxActive": "在榜（活跃）",
+    "okxDropped": "已下榜仍跟踪",
+    "okxNewToday": "今日新面孔"
   },
   "rankings": {
     "title": "智能排行榜",
