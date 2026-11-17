@@ -23,7 +23,10 @@ SORTS = {
     "q": "t.q_value ASC NULLS LAST",
     # both sides right: the weaker of "bought in the bottom 20%" and "sold in the top 20%" shares
     "two_sided": "least(t.buy_extreme, t.sell_extreme) DESC NULLS LAST",
+    # contrarian: consistently buying highs / selling lows (negative edge); research only, see the page note
+    "contrarian": "t.edge_shrunk ASC NULLS LAST",
 }
+CONTRARIAN_P = 0.95  # one-sided p is "share of random shifts doing at least as well": >= 0.95 = worse than 95%
 
 NUMERIC = ("location", "null_mean", "edge", "edge_shrunk", "p_value", "q_value", "precision", "recall", "alignment",
            "net_pnl", "buy_location", "sell_location", "buy_extreme", "sell_extreme", "null_extreme", "maker_share")
@@ -85,7 +88,11 @@ def timing_board(
         where.append(f"coalesce(t.maker_share, 0) <= {MAKER_HEAVY}")
     if not include_insufficient:
         where.append("t.status = 'scored'")
-    if significant_only:
+    if sort == "contrarian":
+        where.append("t.edge_shrunk < 0")
+        if significant_only:
+            where.append(f"t.p_value >= {CONTRARIAN_P}")
+    elif significant_only:
         where.append("t.q_value < 0.1")
     base = f"FROM timing_score t JOIN wallet w ON w.id = t.wallet_id WHERE {' AND '.join(where)}{venue_clause(venue)}"
     params = {"scale": scale, "window": window, "group": group_key, "v": TIMING_VERSION}
@@ -119,7 +126,8 @@ def wallet_timing(address: str, session: Session = Depends(get_session), days: i
     scores = session.execute(text("""
         SELECT scale, time_window, coin_group, status, as_of, n_decisions, n_scored, location, null_mean, edge,
                edge_shrunk, p_value, q_value, pivot_hits, pivots, pivots_hit, precision, recall, alignment, cycles,
-               net_pnl, n_buy, n_sell, buy_location, sell_location, buy_extreme, sell_extreme, null_extreme, maker_share
+               net_pnl, n_buy, n_sell, buy_location, sell_location, buy_extreme, sell_extreme, null_extreme, maker_share,
+               null_quantiles
         FROM timing_score WHERE wallet_id = :w AND version = :v"""), {"w": wid, "v": TIMING_VERSION}).mappings().all()
     # Calendar: per day and scale, notional-weighted mean location of scored decisions + pivot hits.
     calendar = session.execute(text("""

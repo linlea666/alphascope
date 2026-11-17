@@ -26,15 +26,15 @@ CYCLE_SQL = """
     SELECT c.id, c.wallet_id, c.coin, c.direction, c.opened_at, c.closed_at, c.status, c.complete, c.entry_px,
            c.exit_px, c.max_size, c.max_notional, c.realized_pnl - c.fees AS net, c.holding_hours,
            {sync} AS sync_status,
-           (SELECT coalesce(sum((e->>2)::numeric), 0) FROM jsonb_array_elements(coalesce(c.exits, '[]')) e
+           (SELECT coalesce(sum((e->>2)::numeric), 0) FROM jsonb_array_elements(coalesce(nullif(c.exits, 'null'::jsonb), '[]')) e
               WHERE (e->>1)::numeric BETWEEN :xmin AND :xmax) AS exit_in_zone,
            (SELECT sum((e->>2)::numeric * (e->>1)::numeric) / nullif(sum((e->>2)::numeric), 0)
-              FROM jsonb_array_elements(coalesce(c.exits, '[]')) e
+              FROM jsonb_array_elements(coalesce(nullif(c.exits, 'null'::jsonb), '[]')) e
               WHERE (e->>1)::numeric BETWEEN :xmin AND :xmax) AS zone_exit_px,
-           (SELECT min((e->>0)::timestamptz) FROM jsonb_array_elements(coalesce(c.exits, '[]')) e
+           (SELECT min((e->>0)::timestamptz) FROM jsonb_array_elements(coalesce(nullif(c.exits, 'null'::jsonb), '[]')) e
               WHERE (e->>1)::numeric BETWEEN :xmin AND :xmax) AS first_zone_exit_at,
-           (SELECT coalesce(sum((e->>2)::numeric), 0) FROM jsonb_array_elements(coalesce(c.entries, '[]')) e)
-             - (SELECT coalesce(sum((e->>2)::numeric), 0) FROM jsonb_array_elements(coalesce(c.exits, '[]')) e)
+           (SELECT coalesce(sum((e->>2)::numeric), 0) FROM jsonb_array_elements(coalesce(nullif(c.entries, 'null'::jsonb), '[]')) e)
+             - (SELECT coalesce(sum((e->>2)::numeric), 0) FROM jsonb_array_elements(coalesce(nullif(c.exits, 'null'::jsonb), '[]')) e)
              AS remaining
     FROM position_cycle c JOIN wallet w ON w.id = c.wallet_id
     LEFT JOIN fill_sync f ON f.wallet_id = c.wallet_id LEFT JOIN okx_trader o ON o.wallet_id = c.wallet_id

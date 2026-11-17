@@ -17,6 +17,7 @@ from app.ingest.leaderboard_ingest import ingest_leaderboard
 from app.ingest.market_ingest import record_candles
 from app.ingest.portfolio_ingest import enrich_batch
 from app.ingest.runs import mark_abandoned_runs
+from app.alerts import digest, sentinel
 from app.factors.run import run_styles
 from app.market.collect import sweep_hyperliquid, sweep_okx, sync_watch
 from app.market.stats import snapshot_hour
@@ -158,6 +159,12 @@ def main() -> None:
             s.commit()
         log.info("market snapshot: %s rows", n)
 
+    def sentinel_job() -> None:
+        log.info("sentinels: %s", sentinel.run(sf))
+
+    def digest_job() -> None:
+        log.info("digest: %s", digest.run(sf))
+
     sched = BlockingScheduler(timezone="UTC", job_defaults={"coalesce": True, "max_instances": 1,
                                                              "misfire_grace_time": 300})
     now = datetime.now(UTC)
@@ -193,6 +200,9 @@ def main() -> None:
     sched.add_job(market_snapshot_job, "cron", minute=55, id="market_snapshot")
     # Factors and style labels (~20 s): after new cycles, timing scores and radar polls have landed
     sched.add_job(styles_job, "interval", hours=6, next_run_time=now + timedelta(minutes=50), id="styles")
+    # Price-zone sentinels follow fill archiving; the digest goes out at 08:20 Beijing time
+    sched.add_job(sentinel_job, "interval", minutes=30, next_run_time=now + timedelta(minutes=9), id="sentinels")
+    sched.add_job(digest_job, "cron", hour=0, minute=20, id="digest")
     log.info("worker started: leaderboard every %dm, enrich %d wallets every %dm",
              settings.leaderboard_interval_minutes, settings.enrich_batch_size, settings.enrich_interval_minutes)
     try:

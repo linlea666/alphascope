@@ -1,6 +1,7 @@
 """Multi-style discovery: style boards with evidence, a trader's ability profile, and the week's / month's best
 performers with sample gates (docs/13)."""
 
+import math
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
@@ -150,3 +151,73 @@ def top_performers(session: Session = Depends(get_session), period: Literal["7d"
         "hyperliquid": [{**dict(r), "asset": num(r["asset"]), "net": num(r["net"]), "ret": num(r["ret"]),
                          "mdd": num(r["mdd"]), "styles": list(r["styles"] or []), "venue": "hyperliquid"} for r in hl],
     }
+
+
+# Style dimensions for "similar traders": how someone trades, not how much they made. Heavy-tailed ones are logged.
+SIMILAR_FACTORS = ("median_leverage", "short_share", "scalp_share", "top_coin_share", "hold_win_h", "hold_loss_h",
+                   "win_rate", "profit_factor", "dd_ratio", "coin_hhi")
+LOGGED = {"median_leverage", "hold_win_h", "hold_loss_h", "profit_factor"}
+SIMILAR_MIN_CLOSED = 15
+SIMILAR_MIN_SHARED = 6
+
+
+@router.get("/similar/{address}")
+def similar(address: str, session: Session = Depends(get_session), limit: int = Query(6, ge=1, le=20),
+            venue: Literal["all", "hyperliquid", "okx"] = "all"):
+    """Traders whose style factors are closest (standardised distance over the dimensions both have).
+    Only traders with at least SIMILAR_MIN_CLOSED closed cycles take part."""
+    key = parse_trader_key(address)
+    if not key:
+        raise HTTPException(422, "invalid address")
+    me = session.execute(text("SELECT id FROM wallet WHERE address = :a"), {"a": key}).scalar()
+    if me is None:
+        raise HTTPException(404, "wallet not in database")
+    rows = session.execute(text(f"""
+        SELECT f.wallet_id, f.factor, f.value FROM factor_value f JOIN wallet w ON w.id = f.wallet_id
+        WHERE f.time_window = 'all' AND f.factor = ANY(:f) AND f.value IS NOT NULL
+          AND f.wallet_id IN (SELECT wallet_id FROM factor_value WHERE factor = 'n_closed' AND time_window = 'all'
+                              AND value >= :m){venue_clause(venue)}"""),
+        {"f": list(SIMILAR_FACTORS), "m": SIMILAR_MIN_CLOSED}).all()
+    vec: dict[int, dict[str, float]] = {}
+    for wid, f, v in rows:
+        x = float(v)
+        vec.setdefault(wid, {})[f] = math.log1p(max(x, 0)) if f in LOGGED else x
+    if me not in vec:
+        mine = session.execute(text(f"""
+            SELECT factor, value FROM factor_value WHERE wallet_id = :w AND time_window = 'all'
+              AND factor = ANY(:f) AND value IS NOT NULL"""), {"w": me, "f": list(SIMILAR_FACTORS)}).all()
+        vec[me] = {f: (math.log1p(max(float(v), 0)) if f in LOGGED else float(v)) for f, v in mine}
+    stats = {}
+    for f in SIMILAR_FACTORS:
+        xs = [v[f] for v in vec.values() if f in v]
+        if len(xs) > 2:
+            m = sum(xs) / len(xs)
+            sd = math.sqrt(sum((x - m) ** 2 for x in xs) / len(xs)) or 1.0
+            stats[f] = (m, sd)
+    target = vec[me]
+    scored = []
+    for wid, v in vec.items():
+        if wid == me:
+            continue
+        shared = [f for f in stats if f in v and f in target]
+        if len(shared) < SIMILAR_MIN_SHARED:
+            continue
+        diffs = {f: abs(v[f] - target[f]) / stats[f][1] for f in shared}
+        d = math.sqrt(sum(x * x for x in diffs.values()) / len(shared))
+        scored.append((d, wid, sorted(diffs, key=diffs.get)[:3]))
+    scored.sort()
+    top = scored[:limit]
+    if not top:
+        return {"rows": [], "factors": list(SIMILAR_FACTORS), "min_closed": SIMILAR_MIN_CLOSED}
+    meta = {r["id"]: r for r in session.execute(text("""
+        SELECT w.id, w.address, w.display_name, w.venue,
+               (SELECT value FROM factor_value f WHERE f.wallet_id = w.id AND f.factor = 'net_pnl' AND f.time_window = 'all') AS net_pnl,
+               (SELECT value FROM factor_value f WHERE f.wallet_id = w.id AND f.factor = 'n_closed' AND f.time_window = 'all') AS n_closed,
+               (SELECT array_agg(style ORDER BY style) FROM style_tag s WHERE s.wallet_id = w.id
+                  AND s.status IN ('verified', 'candidate')) AS styles
+        FROM wallet w WHERE w.id = ANY(:ids)"""), {"ids": [w for _, w, _ in top]}).mappings().all()}
+    return {"factors": list(SIMILAR_FACTORS), "min_closed": SIMILAR_MIN_CLOSED, "rows": [
+        {"address": meta[w]["address"], "display_name": meta[w]["display_name"], "venue": meta[w]["venue"],
+         "similarity": 1 / (1 + d), "closest": close, "net_pnl": num(meta[w]["net_pnl"]),
+         "n_closed": int(meta[w]["n_closed"] or 0), "styles": list(meta[w]["styles"] or [])}
+        for d, w, close in top if w in meta]}

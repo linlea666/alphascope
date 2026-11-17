@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@/i18n/routing";
 import { bff } from "@/lib/bff";
+import { toast } from "@/lib/toast";
 
 const KINDS = ["open", "increase", "decrease", "close", "flip", "leverage", "liq_risk"] as const;
 type Sub = { enabled: boolean; events: string[]; min_notional: number; min_change_pct: number; coins: string[]; recipients: string[]; quiet_start: number | null; quiet_end: number | null };
 
 export function AlertButton({ address, subscribed, compact = false }: { address: string; subscribed: boolean; compact?: boolean }) {
   const t = useTranslations("alerts");
+  const tt = useTranslations("toast");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [sub, setSub] = useState<Sub | null>(null);
@@ -41,6 +43,7 @@ export function AlertButton({ address, subscribed, compact = false }: { address:
     try {
       await fn();
       setOpen(false);
+      toast(tt("alertSaved"));
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

@@ -1,5 +1,6 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { AddressLink } from "@/components/AddressLink";
+import { Term } from "@/components/Term";
 import { ApiErrorState } from "@/components/ApiErrorState";
 import { FlagBadges } from "@/components/badges";
 import { Freshness } from "@/components/Freshness";
@@ -13,7 +14,7 @@ import { fmtNum, fmtPct, fmtUsd, signClass } from "@/lib/format";
 const SCALES: ScaleKey[] = ["scalp", "short", "swing", "macro"];
 const WINDOWS = ["7d", "30d", "90d", "all"] as const;
 const GROUPS = ["all", "btc_eth", "coin"] as const;
-const SORTS = ["edge", "two_sided", "location", "precision", "recall", "pnl", "q"] as const;
+const SORTS = ["edge", "two_sided", "location", "precision", "recall", "pnl", "q", "contrarian"] as const;
 const VALID: Record<ScaleKey, string[]> = {
   scalp: ["7d", "30d", "90d"],
   short: ["7d", "30d", "90d", "all"],
@@ -54,7 +55,7 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
         ? { freshness: (await api.timing({ scale, window, page_size: 1 })).freshness, scale, window, group, coin: null, sort, valid: VALID[scale].includes(window), maker_heavy: 0.8, extreme: 0.8, min_decisions: 0, page: 1, page_size: PAGE_SIZE, total: 0, rows: [] }
         : await api.timing({ scale, window, group, coin: group === "coin" ? coin : undefined, sort, significant_only: sig || undefined, include_insufficient: small || undefined, exclude_makers: noMakers || undefined, page, page_size: PAGE_SIZE, venue });
   } catch (e) {
-    return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
+    return <ApiErrorState status={e instanceof ApiError ? e.status : undefined} detail={e instanceof ApiError ? e.message : undefined} />;
   }
   const pages = Math.max(1, Math.ceil(d.total / PAGE_SIZE));
   const q = (over: Record<string, string | number>) => {
@@ -67,7 +68,7 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
   };
   const tab = (active: boolean) => `px-3 py-1 ${active ? "bg-accent text-white" : "text-muted hover:text-text"}`;
   const sortLabel: Record<string, string> = {
-    edge: t("sortEdge"), two_sided: t("sortTwoSided"), location: t("sortLocation"), precision: t("sortPrecision"), recall: t("sortRecall"), pnl: t("sortPnl"), q: t("sortQ"),
+    edge: t("sortEdge"), two_sided: t("sortTwoSided"), location: t("sortLocation"), precision: t("sortPrecision"), recall: t("sortRecall"), pnl: t("sortPnl"), q: t("sortQ"), contrarian: t("sortContrarian"),
   };
 
   return (
@@ -77,6 +78,7 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
         <Freshness value={d.freshness} />
       </PageHeader>
       <p className="-mt-2 text-xs text-warn">{t("retro")}</p>
+      {sort === "contrarian" && <p className="rounded border border-warn/40 bg-warn/5 px-3 py-2 text-xs leading-relaxed text-warn">⚠ {t("contrarianNote")}</p>}
 
       <Panel>
         <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -146,9 +148,9 @@ export default async function TimingPage({ searchParams }: { searchParams: Promi
                   <th className={th}>{tcol("trader")}</th>
                   <th className={`${th} text-right`}>{tcol("accountValue")}</th>
                   <th className={`${th} text-right`}>{t("decisions")}</th>
-                  <th className={`${th} text-right`} title={t("locationHint")}>{t("location")} ⓘ</th>
-                  <th className={`${th} text-right`} title={t("edgeHint")}>{t("edge")} ⓘ</th>
-                  <th className={`${th} text-right`} title={t("qHint")}>{t("q")} ⓘ</th>
+                  <th className={`${th} text-right`}><Term k="location">{t("location")}</Term></th>
+                  <th className={`${th} text-right`}><Term k="edge">{t("edge")}</Term></th>
+                  <th className={`${th} text-right`}><Term k="q">{t("q")}</Term></th>
                   <th className={`${th} text-right`} title={t("twoSidedHint")}>{t("buyExt")} / {t("sellExt")} · {t("nullExt")} ⓘ</th>
                   <th className={`${th} text-right`} title={t("precisionHint")}>{t("precision")} ⓘ</th>
                   <th className={`${th} text-right`} title={t("recallHint")}>{t("recall")} ⓘ</th>

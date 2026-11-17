@@ -183,3 +183,21 @@ def window_return(points: list[Point], start: datetime, end: datetime, tolerance
         return None
     return {"twr": index - 1.0, "pnl": seg[-1].pnl - seg[0].pnl, "net_flows": flows,
             "anchor_start": a.ts, "anchor_end": b.ts, "n_points": len(seg)}
+
+
+def index_path(points: list[Point], start: datetime) -> list[tuple[datetime, float]]:
+    """Flow-adjusted growth of 1 from the last point at/before `start` (or the first point after it), period by
+    period with the same Modified Dietz rule as compute_series_metrics. Periods on a tiny capital base are flat."""
+    pts, _ = _select(points, start, max((p.ts for p in points), default=start))
+    if not pts:
+        return []
+    index = 1.0
+    out = [(pts[0].ts, index)]
+    for a, b in zip(pts, pts[1:]):
+        d_pnl = b.pnl - a.pnl
+        flow = (b.account_value - a.account_value) - d_pnl
+        base = a.account_value + 0.5 * flow
+        if base >= MIN_CAPITAL_USD:
+            index *= 1.0 + max(d_pnl / base, -1.0)
+        out.append((b.ts, index))
+    return out

@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useRouter } from "@/i18n/routing";
 import { bff } from "@/lib/bff";
+import { toast } from "@/lib/toast";
 import type { SimParams, SimSizing } from "@/lib/api";
 
 const DEFAULTS: SimParams = {
@@ -28,6 +29,7 @@ const input = "mt-1 w-full rounded border border-border bg-panel-2 px-2 py-1";
 /** Create a simulation, or (with simId) edit the parameters of a running one. */
 export function SimForm({ simId, initial, leader = "" }: { simId?: number; initial?: SimParams; leader?: string }) {
   const t = useTranslations("sims.form");
+  const tt = useTranslations("toast");
   const router = useRouter();
   // OKX's taker fee is 5 bp (Hyperliquid 4.5 bp); a prefilled OKX leader starts from OKX costs
   const [p, setP] = useState<SimParams>(initial ?? (leader.startsWith("okx:") ? { ...DEFAULTS, fee_bps: 5 } : DEFAULTS));
@@ -54,9 +56,11 @@ export function SimForm({ simId, initial, leader = "" }: { simId?: number; initi
       if (simId) {
         await bff(`sims/${simId}`, "PATCH", { params });
         setSaved(true);
+        toast(tt("simSaved"));
         router.refresh();
       } else {
         const r = await bff<{ id: number }>("sims", "POST", { ...params, name: name.trim() || addr.slice(0, 10), leader: addr.trim(), capital });
+        toast(tt("simCreated"));
         router.push(`/sims/${r.id}`);
       }
     } catch (err) {

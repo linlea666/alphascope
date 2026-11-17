@@ -16,6 +16,7 @@ DEFAULTS: dict[str, dict] = {
              "recipients": [], "public_url": ""},
     "live": {"interval_seconds": 30, "coalesce_seconds": 60, "max_emails_per_hour": 30, "liq_risk_pct": 5.0,
              "timezone": "Asia/Shanghai", "okx_interval_seconds": 60},
+    "digest": {"enabled": False, "recipients": []},
 }
 
 

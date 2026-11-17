@@ -15,6 +15,7 @@ Candles: Binance USDT-M where imported (validated mapping), then Hyperliquid's o
 OKX traders (whole positions, open average price includes later adds) are not scored at the scalp scale.
 """
 
+import json
 import logging
 import math
 from dataclasses import dataclass
@@ -224,8 +225,10 @@ class Scored:
     pivot: Pivot | None
 
 
-def permutation_test(items: list[Scored], market, span: tuple[int, int], rng: np.random.Generator) -> tuple[float, float, float]:
-    """(null mean, p, null extreme share) for the weighted mean location under circular time shifts."""
+def permutation_test(items: list[Scored], market, span: tuple[int, int], rng: np.random.Generator
+                     ) -> tuple[float, float, float, list[float] | None]:
+    """(null mean, p, null extreme share, null quantiles at 0, 5, ..., 100%) for the weighted mean location under
+    circular time shifts."""
     a, b = span
     length = max(b - a, 1)
     shifts = rng.integers(0, length, size=N_PERM)[:, None]
@@ -256,10 +259,11 @@ def permutation_test(items: list[Scored], market, span: tuple[int, int], rng: np
     null = np.where(den > 0, num / np.where(den > 0, den, 1), np.nan)
     null = null[~np.isnan(null)]
     if null.size == 0:
-        return float("nan"), float("nan"), float("nan")
+        return float("nan"), float("nan"), float("nan"), None
     p = (1 + int((null >= actual - 1e-12).sum())) / (1 + null.size)
     extreme = float(ext_num.sum() / ext_den.sum()) if ext_den.sum() else float("nan")
-    return float(null.mean()), p, extreme
+    quantiles = [round(float(q), 5) for q in np.quantile(null, np.linspace(0, 1, 21))]
+    return float(null.mean()), p, extreme, quantiles
 
 
 COARSE_SCALES = {"okx": {"scalp"}}  # venues reporting whole positions: too coarse for the 15m window
@@ -337,7 +341,7 @@ def score_wallet(session: Session, wallet_id: int, as_of: datetime, market, rng:
                        "edge": None, "edge_s": None, "p": None, "hits": sum(1 for s in ok if s.pivot),
                        "pivots": 0, "pivots_hit": 0, "precision": None, "recall": None, "align": None,
                        "cycles": 0, "net": None, "n_buy": 0, "n_sell": 0, "buy_loc": None, "sell_loc": None,
-                       "buy_ext": None, "sell_ext": None, "null_ext": None, "maker": None}
+                       "buy_ext": None, "sell_ext": None, "null_ext": None, "maker": None, "null_q": None}
                 scoped_fills = [x for c, m, x in fill_minutes if in_scope(c, m)]
                 if scoped_fills:
                     res["maker"] = sum(1 for x in scoped_fills if not x) / len(scoped_fills)
@@ -397,9 +401,10 @@ def score_wallet(session: Session, wallet_id: int, as_of: datetime, market, rng:
                 else:
                     res["status"] = "scored"
                     span = (start_min if start_min is not None else min(s.minute for s in ok), now_min)
-                    null_mean, p, null_ext = permutation_test(ok, market, span, rng)
+                    null_mean, p, null_ext, null_q = permutation_test(ok, market, span, rng)
                     if not math.isnan(null_mean):
                         res["null"], res["p"], res["null_ext"] = null_mean, p, null_ext
+                        res["null_q"] = json.dumps(null_q)
                         res["edge"] = res["loc"] - null_mean
                         res["edge_s"] = res["edge"] * len(ok) / (len(ok) + MIN_DECISIONS[scale])
                 results.append(res)
@@ -453,10 +458,10 @@ def run_timing(sf: sessionmaker[Session], seed: int = 7, venue: str = "hyperliqu
                 INSERT INTO timing_score (wallet_id, scale, time_window, coin_group, version, as_of, status, n_decisions,
                   n_scored, location, null_mean, edge, edge_shrunk, p_value, q_value, pivot_hits, pivots, pivots_hit,
                   precision, recall, alignment, cycles, net_pnl, n_buy, n_sell, buy_location, sell_location,
-                  buy_extreme, sell_extreme, null_extreme, maker_share)
+                  buy_extreme, sell_extreme, null_extreme, maker_share, null_quantiles)
                 VALUES (:w, :scale, :window, :group, :v, :as_of, :status, :n, :n_scored, :loc, :null, :edge, :edge_s,
                   :p, :q, :hits, :pivots, :pivots_hit, :precision, :recall, :align, :cycles, :net, :n_buy, :n_sell,
-                  :buy_loc, :sell_loc, :buy_ext, :sell_ext, :null_ext, :maker)"""),
+                  :buy_loc, :sell_loc, :buy_ext, :sell_ext, :null_ext, :maker, CAST(:null_q AS jsonb))"""),
                 [{**r, "q": r.get("q")} for r in all_rows])
         s.commit()
     scored = [r for r in all_rows if r["status"] == "scored"]

@@ -1,6 +1,6 @@
 import { getLocale, getTranslations } from "next-intl/server";
-import type { ScaleKey, WalletTiming } from "@/lib/api";
-import { fmtNum } from "@/lib/format";
+import type { ScaleKey, TimingScore, WalletTiming } from "@/lib/api";
+import { fmtNum, fmtPct } from "@/lib/format";
 import { Badge, Panel, td, th } from "./ui";
 
 const SCALES: ScaleKey[] = ["scalp", "short", "swing", "macro"];
@@ -74,6 +74,8 @@ export async function TimingPanel({ data }: { data: WalletTiming | null }) {
         </table>
       </div>
 
+      <LuckChart data={data} />
+
       <h3 className="mt-5 text-xs font-medium text-muted">{t("calendarTitle")}</h3>
       <p className="mt-1 text-xs text-muted">{t("calendarHint")}</p>
       {days.length ? (
@@ -106,5 +108,60 @@ export async function TimingPanel({ data }: { data: WalletTiming | null }) {
       ) : null}
       {pending > 0 && <p className="mt-3 text-xs text-muted">{t("pending", { n: pending })}</p>}
     </Panel>
+  );
+}
+
+/** "Luck or skill": where the trader's actual timing score sits inside the distribution of the same decisions
+ *  shifted to random times (the permutation test behind p / q). Shown for the most significant scored cell. */
+async function LuckChart({ data }: { data: WalletTiming }) {
+  const t = await getTranslations("luck");
+  const tt = await getTranslations("trader");
+  const tw = await getTranslations("timing");
+  const locale = await getLocale();
+  const scored = data.scores.filter((s): s is TimingScore & { location: number; p_value: number } => s.status === "scored" && s.coin_group === "all" && s.location !== null && s.p_value !== null);
+  if (!scored.length) return null;
+  const best = [...scored].sort((a, b) => a.p_value - b.p_value || (b.n_scored ?? 0) - (a.n_scored ?? 0))[0];
+  const better = Math.max(0, 1 - best.p_value);
+  const q = best.null_quantiles;
+  const W = 600;
+  const H = 120;
+  let chart = null;
+  if (q && q.length === 21) {
+    const lo = Math.min(q[0], best.location) - 0.03;
+    const hi = Math.max(q[20], best.location) + 0.03;
+    const x = (v: number) => 20 + ((v - lo) / (hi - lo)) * (W - 40);
+    const dens = q.slice(0, 20).map((v, i) => 0.05 / Math.max(q[i + 1] - v, 1e-4));
+    const top = Math.max(...dens);
+    chart = (
+      <svg viewBox={`0 0 ${W} ${H}`} className="mt-2 w-full max-w-2xl" role="img" aria-label={t("title")}>
+        {dens.map((d, i) => {
+          const h = (Math.min(d, top) / top) * (H - 40);
+          return <rect key={i} x={x(q[i])} y={H - 22 - h} width={Math.max(1, x(q[i + 1]) - x(q[i]) - 1)} height={h} fill="var(--muted)" fillOpacity={0.35} />;
+        })}
+        <line x1={20} x2={W - 20} y1={H - 22} y2={H - 22} stroke="var(--border)" />
+        <line x1={x(best.location)} x2={x(best.location)} y1={8} y2={H - 22} stroke="var(--accent)" strokeWidth={3} />
+        <text x={x(best.location)} y={8} dy={-1} textAnchor="middle" fontSize="11" fill="var(--accent)" dominantBaseline="hanging">
+          {t("you")}
+        </text>
+        {[q[0], q[10], q[20]].map((v, i) => (
+          <text key={i} x={x(v)} y={H - 6} textAnchor="middle" fontSize="10" fill="var(--muted)">
+            {fmtNum(v, locale, 2)}
+          </text>
+        ))}
+      </svg>
+    );
+  }
+  return (
+    <div className="mt-5 rounded-lg border border-border/60 bg-panel-2/50 p-3">
+      <h3 className="text-xs font-medium text-muted">
+        🎲 {t("title")} · {tt(`scales.${best.scale}`).split(" ")[0]} · {tw(`windows.${best.time_window}`)}
+      </h3>
+      <p className="mt-1 text-sm">
+        {t("lead", { better: fmtPct(better, locale, 0, false), loc: fmtNum(best.location, locale, 3), p: fmtNum(best.p_value, locale, 3) })}
+        {best.q_value !== null && best.q_value < 0.1 ? <span className="ml-1 text-up">{t("significant")}</span> : <span className="ml-1 text-muted">{t("notSignificant")}</span>}
+      </p>
+      {chart ?? <p className="mt-1 text-[11px] text-muted">{t("pending")}</p>}
+      <p className="mt-1 text-[11px] leading-relaxed text-muted">{t("explain")}</p>
+    </div>
   );
 }

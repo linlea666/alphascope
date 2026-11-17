@@ -123,12 +123,15 @@ def _wallet_rows(session: Session, ids: list[int]) -> dict[int, dict]:
                (SELECT edge_shrunk FROM timing_score t WHERE t.wallet_id = w.id AND t.scale = 'macro'
                   AND t.time_window = 'all' AND t.coin_group = 'all' AND t.status = 'scored') AS macro_edge,
                (SELECT q_value FROM timing_score t WHERE t.wallet_id = w.id AND t.scale = 'macro'
-                  AND t.time_window = 'all' AND t.coin_group = 'all' AND t.status = 'scored') AS macro_q
-        FROM wallet w LEFT JOIN fill_sync f ON f.wallet_id = w.id WHERE w.id = ANY(:ids)"""),
+                  AND t.time_window = 'all' AND t.coin_group = 'all' AND t.status = 'scored') AS macro_q,
+               o.asset AS okx_asset
+        FROM wallet w LEFT JOIN fill_sync f ON f.wallet_id = w.id LEFT JOIN okx_trader o ON o.wallet_id = w.id
+        WHERE w.id = ANY(:ids)"""),
         {"ids": ids}).mappings().all()
     return {r["id"]: {**{k: r[k] for k in ("address", "display_name", "venue", "tier", "earliest_fill_at",
                                            "truncated", "sync_status")},
-                      "account_value": num(r["account_value"]), "flags": list(r["flags"] or []),
+                      "account_value": num(r["account_value"]), "okx_asset": num(r["okx_asset"]),
+                      "flags": list(r["flags"] or []),
                       "macro_edge": num(r["macro_edge"]), "macro_q": num(r["macro_q"])} for r in rows}
 
 

@@ -3,7 +3,10 @@ import { AddressLink } from "@/components/AddressLink";
 import { ApiErrorState } from "@/components/ApiErrorState";
 import { FlagBadges } from "@/components/badges";
 import { Freshness } from "@/components/Freshness";
-import { Badge, PageHeader, Panel, td, th } from "@/components/ui";
+import { ShareSlider } from "@/components/QueryHelpers";
+import { SubmitButton } from "@/components/SubmitButton";
+import { Term } from "@/components/Term";
+import { Badge, PageHeader, Panel, Stat, td, th } from "@/components/ui";
 import { VenueSwitch } from "@/components/VenueSwitch";
 import { Link } from "@/i18n/routing";
 import { getVenue } from "@/lib/venue";
@@ -32,6 +35,9 @@ export default async function HoldersPage({ searchParams }: { searchParams: Prom
         <Link href={{ pathname: "/holders", query: { tab: "capture" } }} className={tabClass(tab === "capture")}>
           {t("tabCapture")}
         </Link>
+        <Link href="/legs" className={tabClass(false)}>
+          {t("tabHall")} →
+        </Link>
       </div>
       {tab === "zones" ? <ZonesTab sp={sp} locale={locale} /> : <CaptureTab sp={sp} locale={locale} />}
     </div>
@@ -53,13 +59,21 @@ async function ZonesTab({ sp, locale }: { sp: Search; locale: string }) {
         : { preset, include_near: near || undefined, venue },
     );
   } catch (e) {
-    return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
+    return <ApiErrorState status={e instanceof ApiError ? e.status : undefined} detail={e instanceof ApiError ? e.message : undefined} />;
   }
   const q = d.query;
   const input = "rounded border border-border bg-panel-2 px-2 py-1 text-sm outline-none focus:border-accent";
   const presetLabel = { btc_long_hold: t("presetLong"), btc_short_hold: t("presetShort") };
   const statusTone = (s: string) => (s === "open" ? "accent" : s === "data_end" ? "warn" : "neutral");
   const tt = await getTranslations("trader");
+  const qualified = d.rows.filter((r) => r.qualifies);
+  const median = (xs: number[]) => {
+    if (!xs.length) return null;
+    const a = [...xs].sort((x, y) => x - y);
+    return a.length % 2 ? a[(a.length - 1) / 2] : (a[a.length / 2 - 1] + a[a.length / 2]) / 2;
+  };
+  const medianMove = median(qualified.flatMap((r) => (r.move_captured === null ? [] : [r.move_captured])));
+  const medianDays = median(qualified.map((r) => r.holding_days));
 
   return (
     <>
@@ -74,7 +88,7 @@ async function ZonesTab({ sp, locale }: { sp: Search; locale: string }) {
             {t("showNear")}
           </Link>
         </div>
-        <form method="get" className="mt-4 flex flex-wrap items-end gap-2 text-sm">
+        <form key={JSON.stringify(q)} method="get" className="mt-4 flex flex-wrap items-end gap-2 text-sm">
           <input type="hidden" name="tab" value="zones" />
           {near && <input type="hidden" name="near" value="1" />}
           <label className="flex flex-col gap-1 text-xs text-muted">
@@ -102,13 +116,8 @@ async function ZonesTab({ sp, locale }: { sp: Search; locale: string }) {
             {t("end")}
             <input name="end" type="date" defaultValue={q.end} className={input} />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-muted">
-            {t("minShare")}
-            <input name="min_share" type="number" step="0.05" min="0" max="1" defaultValue={q.min_share} className={`${input} w-20`} />
-          </label>
-          <button type="submit" className="rounded bg-accent px-4 py-1 text-white">
-            {t("query")}
-          </button>
+          <ShareSlider name="min_share" defaultValue={q.min_share} label={t("minShare")} explain={t("minShareExplain", { p: "{p}" })} />
+          <SubmitButton pending={t("querying")}>{t("query")}</SubmitButton>
         </form>
         <p className="mt-3 text-xs text-muted">
           {d.last_price !== null && <span className="mr-3">{t("lastPrice", { px: fmtNum(d.last_price, locale, 1) })}</span>}
@@ -117,6 +126,14 @@ async function ZonesTab({ sp, locale }: { sp: Search; locale: string }) {
       </Panel>
 
       <Panel title={t("qualifying", { n: d.qualifying })}>
+        {d.qualifying > 0 && (
+          <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
+            <Stat label={t("sum.qualifying")} value={fmtNum(d.qualifying, locale)} />
+            <Stat label={t("sum.holding")} value={fmtNum(qualified.filter((r) => r.status === "open").length, locale)} sub={t("sum.holdingSub")} />
+            <Stat label={t("sum.medianMove")} value={<span className={signClass(medianMove)}>{fmtPct(medianMove, locale, 1)}</span>} />
+            <Stat label={t("sum.medianDays")} value={fmtNum(medianDays, locale, 1)} />
+          </div>
+        )}
         {d.rows.length ? (
           <div className="-mx-4 -my-4 overflow-x-auto">
             <table className="w-full text-sm">
@@ -127,9 +144,15 @@ async function ZonesTab({ sp, locale }: { sp: Search; locale: string }) {
                   <th className={th}>{t("cols.opened")}</th>
                   <th className={`${th} text-right`}>{t("cols.entry")}</th>
                   <th className={`${th} text-right`}>{t("cols.zoneExit")}</th>
-                  <th className={`${th} text-right`}>{t("cols.exitedShare")}</th>
-                  <th className={`${th} text-right`}>{t("cols.holding")}</th>
-                  <th className={`${th} text-right`}>{t("cols.move")}</th>
+                  <th className={`${th} text-right`}>
+                    <Term k="exitedShare">{t("cols.exitedShare")}</Term>
+                  </th>
+                  <th className={`${th} text-right`}>
+                    <Term k="holdingShare">{t("cols.holding")}</Term>
+                  </th>
+                  <th className={`${th} text-right`}>
+                    <Term k="moveCaptured">{t("cols.move")}</Term>
+                  </th>
                   <th className={`${th} text-right`}>{t("cols.days")}</th>
                   <th className={`${th} text-right`}>{t("cols.size")}</th>
                   <th className={`${th} text-right`}>{t("cols.sizeVsEq")}</th>
@@ -143,6 +166,11 @@ async function ZonesTab({ sp, locale }: { sp: Search; locale: string }) {
                     <td className={td}>
                       {r.address ? <AddressLink address={r.address} name={r.display_name} /> : "—"}
                       {r.flags && <FlagBadges flags={r.flags} hide={["inactive_30d"]} />}
+                      {r.address && r.qualifies && (
+                        <Link href={{ pathname: "/sims", query: { new: 1, leader: r.address } }} className="ml-1 text-[11px] text-muted hover:text-accent" title={t("simHint")}>
+                          ⧉
+                        </Link>
+                      )}
                     </td>
                     <td className={td}>
                       <Badge tone={r.qualifies ? "up" : "neutral"}>{r.qualifies ? t("yes") : t("no")}</Badge>{" "}
@@ -189,7 +217,7 @@ async function CaptureTab({ sp, locale }: { sp: Search; locale: string }) {
       full_only: sp.full === "1" || undefined,
     });
   } catch (e) {
-    return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
+    return <ApiErrorState status={e instanceof ApiError ? e.status : undefined} detail={e instanceof ApiError ? e.message : undefined} />;
   }
   const input = "rounded border border-border bg-panel-2 px-2 py-1 text-sm outline-none focus:border-accent";
   const current = d.leg_start;
@@ -206,7 +234,7 @@ async function CaptureTab({ sp, locale }: { sp: Search; locale: string }) {
   return (
     <>
       <Panel hint={t("captureHint")}>
-        <form method="get" className="flex flex-wrap items-end gap-2 text-sm">
+        <form key={`${coin}|${current}|${JSON.stringify(d.filters)}`} method="get" className="flex flex-wrap items-end gap-2 text-sm">
           <input type="hidden" name="tab" value="capture" />
           <label className="flex flex-col gap-1 text-xs text-muted">
             {t("coin")}
@@ -240,9 +268,7 @@ async function CaptureTab({ sp, locale }: { sp: Search; locale: string }) {
             <input type="checkbox" name="full" value="1" defaultChecked={d.filters.full_only} />
             {t("fullOnly")}
           </label>
-          <button type="submit" className="rounded bg-accent px-4 py-1 text-white">
-            {t("query")}
-          </button>
+          <SubmitButton pending={t("querying")}>{t("query")}</SubmitButton>
         </form>
       </Panel>
       <Panel>
@@ -253,8 +279,12 @@ async function CaptureTab({ sp, locale }: { sp: Search; locale: string }) {
                 <tr>
                   <th className={th}>#</th>
                   <th className={th}>{tcol("trader")}</th>
-                  <th className={`${th} text-right`}>{t("capCols.capture")}</th>
-                  <th className={`${th} text-right`}>{t("capCols.aligned")}</th>
+                  <th className={`${th} text-right`}>
+                    <Term k="capture">{t("capCols.capture")}</Term>
+                  </th>
+                  <th className={`${th} text-right`}>
+                    <Term k="timeAligned">{t("capCols.aligned")}</Term>
+                  </th>
                   <th className={`${th} text-right`}>{t("capCols.against")}</th>
                   <th className={`${th} text-right`}>{t("capCols.maxNotional")}</th>
                   <th className={`${th} text-right`}>{t("capCols.avgNotional")}</th>

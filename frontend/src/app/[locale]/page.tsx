@@ -3,6 +3,7 @@ import { AddressLink } from "@/components/AddressLink";
 import { ApiErrorState } from "@/components/ApiErrorState";
 import { FlagBadges, ReliabilityBadge, TierBadge } from "@/components/badges";
 import { Freshness } from "@/components/Freshness";
+import { DigestCard, StartGuide } from "@/components/HomeExtras";
 import { TopPerformers } from "@/components/TopPerformers";
 import { Badge, PageHeader, Panel, Stat, td, th } from "@/components/ui";
 import { Link } from "@/i18n/routing";
@@ -19,7 +20,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
   try {
     data = await api.overview();
   } catch (e) {
-    return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
+    return <ApiErrorState status={e instanceof ApiError ? e.status : undefined} detail={e instanceof ApiError ? e.message : undefined} />;
   }
   let okx: OkxSummary | null = null;
   try {
@@ -36,6 +37,10 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
       <PageHeader title={t("overview.title")} subtitle={t("overview.subtitle")}>
         <Freshness value={data.freshness} />
       </PageHeader>
+
+      <StartGuide />
+
+      <DigestCard />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
         <Stat label={t("overview.walletsTotal")} value={fmtNum(counts.total, locale)} />

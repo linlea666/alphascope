@@ -4,12 +4,14 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { bff } from "@/lib/bff";
+import { toast } from "@/lib/toast";
 
 type Membership = { groups: { id: number; name: string; color: string | null; member: boolean }[]; alias: string; note: string; tags: string[] };
 
 /** Star toggle with a small panel: choose groups, alias, note and tags. Saving replaces the membership. */
 export function WatchButton({ address, watched, compact = false }: { address: string; watched: boolean; compact?: boolean }) {
   const t = useTranslations("watch");
+  const tt = useTranslations("toast");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<Membership | null>(null);
@@ -53,6 +55,7 @@ export function WatchButton({ address, watched, compact = false }: { address: st
         tags: tags.split(/[,，]/).map((x) => x.trim()).filter(Boolean),
       });
       setOpen(false);
+      toast(groupIds.length ? tt("watched") : tt("unwatched"));
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -94,7 +97,7 @@ export function WatchButton({ address, watched, compact = false }: { address: st
         }}
         className={`${compact ? "text-sm leading-[18px]" : "rounded border border-border px-2 py-0.5 text-xs"} ${watched ? "text-warn" : "text-muted hover:text-warn"}`}
       >
-        {watched ? "★" : "☆"}
+        <span key={String(watched)} className={watched ? "as-pop" : undefined}>{watched ? "★" : "☆"}</span>
         {!compact && <span className="ml-1">{watched ? t("watched") : t("add")}</span>}
       </button>
       {open && (

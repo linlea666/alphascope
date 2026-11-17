@@ -543,6 +543,8 @@ class TimingScore(Base):
     sell_extreme: Mapped[Decimal | None] = _num()
     null_extreme: Mapped[Decimal | None] = _num()  # same share under random time shifts (~0.2)
     maker_share: Mapped[Decimal | None] = _num()  # share of fills that rested on the book (not crossed)
+    # mean location under random time shifts at 0, 5, ..., 100% (21 values): the "luck" distribution
+    null_quantiles: Mapped[list | None] = mapped_column(JSONB)
 
     __table_args__ = (Index("ix_timing_score_rank", "scale", "time_window", "coin_group", "edge_shrunk"),)
 
@@ -1065,3 +1067,49 @@ class StyleTag(Base):
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (Index("ix_style_tag_style", "style", "status"),)
+
+
+# --- Price-zone sentinels and the daily digest (migration 0013) ---
+
+
+class ZoneSentinel(Base):
+    """A saved price-zone query: new traders opening the side inside the zone (after created_at) are reported."""
+
+    __tablename__ = "zone_sentinel"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    owner: Mapped[str] = mapped_column(String(32), default="default")
+    name: Mapped[str] = mapped_column(String(120))
+    coin: Mapped[str] = mapped_column(String(48))
+    side: Mapped[str] = mapped_column(String(5))  # long | short
+    px_min: Mapped[Decimal] = mapped_column(Numeric)
+    px_max: Mapped[Decimal] = mapped_column(Numeric)
+    cohort: Mapped[str] = mapped_column(String(16), default="all")  # all | timing | watchlist
+    venue: Mapped[str] = mapped_column(String(16), default="all")
+    min_notional: Mapped[Decimal] = mapped_column(Numeric, default=0)
+    recipients: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_hit_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SentinelHit(Base):
+    __tablename__ = "sentinel_hit"
+
+    sentinel_id: Mapped[int] = mapped_column(ForeignKey("zone_sentinel.id", ondelete="CASCADE"), primary_key=True)
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"), primary_key=True)
+    first_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))  # first matching decision
+    avg_px: Mapped[Decimal | None] = _num()
+    notional: Mapped[Decimal | None] = _num()
+    found_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    notify_status: Mapped[str] = mapped_column(String(12), default="pending")  # pending sent skipped failed
+
+
+class DailyDigest(Base):
+    __tablename__ = "daily_digest"
+
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    payload: Mapped[dict] = mapped_column(JSONB)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    emailed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

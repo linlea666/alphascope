@@ -4,6 +4,7 @@ import { getMessages, getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { Nav } from "@/components/Nav";
+import { Toaster } from "@/components/Toaster";
 import { themeInitScript } from "@/components/ThemeToggle";
 import { routing, type Locale } from "@/i18n/routing";
 import "../globals.css";
@@ -27,6 +28,7 @@ export default async function LocaleLayout({ children, params }: { children: Rea
         <NextIntlClientProvider messages={messages}>
           <Nav />
           <main className="mx-auto max-w-[1400px] px-4 py-6">{children}</main>
+          <Toaster />
         </NextIntlClientProvider>
       </body>
     </html>

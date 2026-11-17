@@ -98,6 +98,18 @@ def test_zone_holders_presets(client, sf):
     assert r["status"] == "open" and r["holding_share"] == 1.0 and r["unrealized"] == pytest.approx(2 * 22000)
 
 
+def test_zone_holders_tolerate_json_null_exits(client, sf):
+    """Open cycles written before migration 0012 hold JSON null exits; the query must still treat them as open."""
+    seed_cycles(sf)
+    with sf() as s:
+        s.execute(text("UPDATE position_cycle SET exits = 'null'::jsonb WHERE status = 'open'"))
+        s.commit()
+    res = client.get("/api/v1/holders/zones", params={"preset": "btc_short_hold"})
+    assert res.status_code == 200
+    r = res.json()["rows"][0]
+    assert r["status"] == "open" and r["holding_share"] == 1.0
+
+
 def test_holders_validation_and_empty_capture(client, sf):
     seed_cycles(sf)
     assert client.get("/api/v1/holders/zones", params={"preset": "x"}).status_code == 422

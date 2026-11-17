@@ -82,7 +82,7 @@ export default async function RankingsPage({ searchParams }: { searchParams: Pro
       page_size: PAGE_SIZE,
     });
   } catch (e) {
-    return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
+    return <ApiErrorState status={e instanceof ApiError ? e.status : undefined} detail={e instanceof ApiError ? e.message : undefined} />;
   }
   const pages = Math.max(1, Math.ceil(data.total / PAGE_SIZE));
 

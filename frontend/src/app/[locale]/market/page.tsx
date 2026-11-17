@@ -2,6 +2,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { AddressLink } from "@/components/AddressLink";
 import { ApiErrorState } from "@/components/ApiErrorState";
 import { LiqLadder, MarketHistoryChart, MarketTreemap, PriceLadder } from "@/components/MarketCharts";
+import { DivergencePanel } from "@/components/DivergencePanel";
 import { Badge, PageHeader, Panel, Stat, td, th } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { api, ApiError, type MarketCoin, type MarketContributor, type MarketEvent, type MarketHistoryRow, type MarketOverview, type MarketStructure, type PriceZone } from "@/lib/api";
@@ -36,7 +37,7 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
       api.marketEvents({ venue, cohort, hours, kinds: KINDS[kind], side, coin: sp.coin, limit: 150 }),
     ]);
   } catch (e) {
-    return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
+    return <ApiErrorState status={e instanceof ApiError ? e.status : undefined} detail={e instanceof ApiError ? e.message : undefined} />;
   }
   const coin = sp.coin ? coins.find((c) => c.coin === sp.coin) ?? null : null;
   let history: MarketHistoryRow[] = [];
@@ -171,9 +172,12 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
       {sp.coin ? (
         <CoinDetail coin={sp.coin} row={coin} history={history} st={st} contributors={contributors} sp={sp} q={q} locale={locale} />
       ) : (
-        <Panel title={t("historyTitle", { coin: t("allCoins") })} hint={t("historyHint")}>
-          <MarketHistoryChart rows={history} locale={locale} labels={{ longs: t("longTraders"), shorts: t("shortTraders"), net: t("netNtl"), empty: t("historyEmpty") }} />
-        </Panel>
+        <>
+          <DivergencePanel venue={venue} coin={sp.dcoin || "BTC"} query={q} />
+          <Panel title={t("historyTitle", { coin: t("allCoins") })} hint={t("historyHint")}>
+            <MarketHistoryChart rows={history} locale={locale} labels={{ longs: t("longTraders"), shorts: t("shortTraders"), net: t("netNtl"), empty: t("historyEmpty") }} />
+          </Panel>
+        </>
       )}
 
       <Panel

@@ -5,9 +5,13 @@ import { CopyButton } from "@/components/CopyButton";
 import { EquityChart } from "@/components/EquityChart";
 import { Freshness } from "@/components/Freshness";
 import { OkxTraderPanels } from "@/components/OkxTraderPanels";
+import { CycleTimeline } from "@/components/CycleTimeline";
 import { PositionCycles } from "@/components/PositionCycles";
+import { SimilarTraders } from "@/components/SimilarTraders";
+import { FollowCard, ProfileCard } from "@/components/TraderCard";
 import { TraderProfile } from "@/components/TraderProfile";
 import { REPLAY_BARS, ReplayPanel } from "@/components/ReplayPanel";
+import { Term } from "@/components/Term";
 import { TimingPanel } from "@/components/TimingPanel";
 import { AlertButton } from "@/components/AlertButton";
 import { WatchButton } from "@/components/WatchButton";
@@ -44,7 +48,7 @@ export default async function TraderPage({
         </div>
       );
     }
-    return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
+    return <ApiErrorState status={e instanceof ApiError ? e.status : undefined} detail={e instanceof ApiError ? e.message : undefined} />;
   }
   // Position cycles exist only for wallets whose fills are archived; a failure here must not break the page.
   const [positions, timing, replay]: [WalletPositions | null, WalletTiming | null, Replay | null] = await Promise.all([
@@ -76,6 +80,9 @@ export default async function TraderPage({
             <Link href={{ pathname: "/sims", query: { new: 1, leader: w.address } }} className="rounded border border-border px-2 py-0.5 text-xs text-muted hover:text-accent">
               ⧉ {t("trader.copySim")}
             </Link>
+            <Link href={{ pathname: "/compare", query: { addr: w.address } }} className="rounded border border-border px-2 py-0.5 text-xs text-muted hover:text-accent">
+              ⇄ {t("trader.compare")}
+            </Link>
             {!okx && <TierBadge tier={w.tier} />}
             {!okx && <FlagBadges flags={[...w.flags, ...w.enrichment_flags]} />}
           </div>
@@ -105,6 +112,8 @@ export default async function TraderPage({
           </div>
         </div>
       </div>
+      <ProfileCard address={w.address} search={search} />
+
       {okx ? <OkxTraderPanels okx={okx} /> : <Freshness value={d.freshness} />}
 
       {!okx && (
@@ -216,13 +225,23 @@ export default async function TraderPage({
         </Panel>
       )}
 
+      {!okx && <FollowCard address={w.address} search={search} />}
+
       <TraderProfile address={w.address} />
 
       <PositionCycles data={positions} />
 
+      {positions && positions.cycles.length >= 3 && (
+        <Panel>
+          <CycleTimeline data={positions} search={search} />
+        </Panel>
+      )}
+
       <TimingPanel data={timing} />
 
       <ReplayPanel address={w.address} data={replay} search={search} />
+
+      <SimilarTraders address={w.address} />
 
       {!okx && (
         <>
@@ -276,8 +295,12 @@ async function MetricsTable({ metrics, note }: { metrics: Metric[]; note: (n: st
         <thead>
           <tr>
             <th className={th}>{t("trader.window")}</th>
-            <th className={`${th} text-right`}>{t("trader.twr")}</th>
-            <th className={`${th} text-right`}>{t("trader.mdd")}</th>
+            <th className={`${th} text-right`}>
+              <Term k="twr">{t("trader.twr")}</Term>
+            </th>
+            <th className={`${th} text-right`}>
+              <Term k="mdd">{t("trader.mdd")}</Term>
+            </th>
             <th className={`${th} text-right`}>{t("trader.pnlCurve")}</th>
             <th className={`${th} text-right`}>{t("trader.pnlMdd")}</th>
             <th className={`${th} text-right`}>{t("trader.flows")}</th>

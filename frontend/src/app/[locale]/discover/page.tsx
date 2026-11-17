@@ -26,7 +26,7 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Pro
     const style = (styles.styles.some((s) => s.key === sp.style) ? sp.style : "steady") as StyleKey;
     board = await api.discoverBoard({ style, venue, status, sort, limit: 150 });
   } catch (e) {
-    return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
+    return <ApiErrorState status={e instanceof ApiError ? e.status : undefined} detail={e instanceof ApiError ? e.message : undefined} />;
   }
   const style = board.style;
   const meta = styles.styles.find((s) => s.key === style)!;

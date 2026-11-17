@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.api.common import num
 from app.db import get_session
-from app.market import stats, structure
+from app.market import divergence, stats, structure
 from app.market.stats import Cohort, Venue
 
 router = APIRouter(prefix="/api/v1/market", tags=["market"])
@@ -189,3 +189,12 @@ def positioning_structure(session: Session = Depends(get_session), coin: str = Q
             near["address"], near["display_name"] = names.get(near.pop("wallet_id"), (None, None))
     return {"coin": coin, "as_of": now, "positions": len(rows),
             "ref": {"px": ref, "observed_at": ref_row.observed_at}, **data}
+
+
+@router.get("/divergence")
+def smart_vs_crowd(session: Session = Depends(get_session), venue: Venue = "all",
+                   coin: str = Query("BTC", max_length=48), days: int = Query(60, ge=7, le=365)):
+    """Timing-significant traders vs the whole observed sample, per coin, now and as a daily history."""
+    return {"as_of": datetime.now(UTC), "venue": venue, "min_smart": divergence.MIN_SMART,
+            "coins": divergence.current(session, venue)[:30], "coin": coin,
+            "history": divergence.history(session, venue, coin, days)}

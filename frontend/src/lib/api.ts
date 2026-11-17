@@ -588,6 +588,7 @@ export type TimingScore = {
   sell_extreme: number | null;
   null_extreme: number | null;
   maker_share: number | null;
+  null_quantiles?: number[] | null;
 };
 
 export type TimingBoard = {
@@ -650,6 +651,8 @@ export type ZoneResult = {
     address: string;
     display_name: string | null;
     account_value: number | null;
+    okx_asset: number | null;
+    venue: string;
     tier: string | null;
     flags: string[];
     earliest_fill_at: string | null;
@@ -932,6 +935,138 @@ export type SimDashboard = {
   correlation: { ids: number[]; matrix: (number | null)[][]; min_days: number };
 };
 
+export type Person = { address: string; display_name: string | null; venue: string };
+
+export type LegHall = {
+  coin: string;
+  zone_pad: number;
+  min_notional: number;
+  legs: {
+    leg_start: string;
+    leg_end: string;
+    direction: "up" | "down";
+    leg_change: number;
+    confirmed: boolean;
+    wallets: number;
+    start_px: number | null;
+    end_px: number | null;
+    capturers: (Person & { capture_ratio: number; pnl_mark: number; max_notional: number; time_aligned: number; coverage: string })[];
+    turn: { wallets: number; rows: (Person & { opened_at: string; entry_px: number; notional: number; net: number | null })[] };
+    wrong: (Person & { pnl_mark: number; max_notional: number; time_against: number })[];
+    query: { direction: string; entry_min: number; entry_max: number; exit_min: number; exit_max: number; start: string; end: string } | null;
+  }[];
+};
+
+export type HighlightCycle = {
+  coin: string;
+  direction: "long" | "short";
+  opened_at: string;
+  closed_at: string | null;
+  entry_px: number | null;
+  exit_px: number | null;
+  max_notional: number | null;
+  holding_hours: number | null;
+  net: number;
+  scale: string;
+  move?: number;
+};
+
+export type Highlights = {
+  venue: string;
+  closed: number;
+  wins: number;
+  win_rate: number | null;
+  net: number | null;
+  median_hours: number | null;
+  long_share: number | null;
+  main_scale: string | null;
+  top_coins: { coin: string; n: number }[];
+  liquidations: number | null;
+  timing: { scale: ScaleKey; time_window: string; q_value: number; edge_shrunk: number | null; n_scored: number; p_value: number } | null;
+  styles: { style: string; status: string }[];
+  factors: Record<string, { value: number | null; n: number }>;
+  best: HighlightCycle[];
+  worst: HighlightCycle[];
+};
+
+export type FollowBacktest = {
+  supported: boolean;
+  reason?: string;
+  capital?: number;
+  since?: string;
+  until?: string;
+  covered?: boolean;
+  final?: number;
+  ret?: number;
+  mdd?: number;
+  n_points?: number;
+  median_step_hours?: number | null;
+  rows?: [string, number][];
+};
+
+export type SimilarTraders = {
+  factors: string[];
+  min_closed: number;
+  rows: (Person & { similarity: number; closest: string[]; net_pnl: number | null; n_closed: number; styles: string[] })[];
+};
+
+export type Comparison = {
+  days: number;
+  since: string;
+  traders: (Person & { size: number | null; highlights: Omit<Highlights, "venue" | "wins" | "best" | "worst">; curve: [string, number][] })[];
+  correlation: (number | null)[][];
+};
+
+export type Divergence = {
+  as_of: string;
+  venue: string;
+  min_smart: number;
+  coin: string;
+  coins: { coin: string; smart_long_share: number; crowd_long_share: number; divergence: number; smart_traders: number; crowd_traders: number; smart_net_ntl: number }[];
+  history: { day: string; smart_long_share: number; crowd_long_share: number; divergence: number; smart_traders: number; close: number | null; forward_return: number | null }[];
+};
+
+export type Sentinel = {
+  id: number;
+  name: string;
+  coin: string;
+  side: "long" | "short";
+  px_min: number;
+  px_max: number;
+  cohort: string;
+  venue: string;
+  min_notional: number;
+  recipients: string[];
+  enabled: boolean;
+  created_at: string;
+  last_checked_at: string | null;
+  last_hit_at: string | null;
+  hits: number;
+};
+
+export type Sentinels = {
+  sentinels: Sentinel[];
+  recent: (Person & { sentinel_id: number; first_at: string; avg_px: number | null; notional: number | null; found_at: string; notify_status: string })[];
+};
+
+export type Digest = {
+  settings: { enabled: boolean; recipients: string[] };
+  digest: null | {
+    day: string;
+    created_at: string;
+    emailed_at: string | null;
+    baseline: boolean;
+    watch_moves: { address: string; name: string | null; venue: string; coin: string; kind: string; side: string; notional_change: number; entry_px: number | null; event_time: string }[];
+    divergence: Divergence["coins"];
+    new_significant: (Person & { scale: string; q: number })[];
+    new_significant_total: number;
+    significant_total: number;
+    sentinel_hits: { name: string; coin: string; side: string; address: string; name_w: string | null; avg_px: number | null; notional: number | null }[];
+  };
+};
+
+export type Candles = { coin: string; interval: string; source: string | null; rows: [string, number, number, number, number][] };
+
 export const api = {
   rankings: (params: Record<string, string | number | boolean | undefined>) => get<Rankings>("/api/v1/rankings", params),
   wallet: (address: string) => get<WalletDetail>(`/api/v1/wallets/${encodeURIComponent(address)}`),
@@ -969,5 +1104,19 @@ export const api = {
     get<Replay>(`/api/v1/wallets/${encodeURIComponent(address)}/replay`, params),
   simDashboard: (period: SimPeriod) => get<SimDashboard>("/api/v1/sims/dashboard", { period }),
   sim: (id: number) => get<SimDetail>(`/api/v1/sims/${id}`),
+  legsHall: (coin: string, venue: string) => get<LegHall>("/api/v1/legs/hall", { coin, venue }),
+  highlights: (address: string) => get<Highlights>(`/api/v1/wallets/${encodeURIComponent(address)}/highlights`),
+  follow: (address: string, params: Record<string, string | number | undefined>) => get<FollowBacktest>(`/api/v1/wallets/${encodeURIComponent(address)}/follow`, params),
+  similar: (address: string) => get<SimilarTraders>(`/api/v1/discover/similar/${encodeURIComponent(address)}`),
+  compare: async (addrs: string[], days = 180) => {
+    const url = new URL("/api/v1/compare", BASE);
+    addrs.forEach((a) => url.searchParams.append("addr", a));
+    url.searchParams.set("days", String(days));
+    return get<Comparison>(url.pathname + url.search);
+  },
+  divergence: (venue: string, coin: string) => get<Divergence>("/api/v1/market/divergence", { venue, coin }),
+  sentinels: () => get<Sentinels>("/api/v1/alerts/sentinels"),
+  digest: () => get<Digest>("/api/v1/alerts/digest"),
+  candles: (coin: string, interval: string, since: string) => get<Candles>("/api/v1/candles", { coin, interval, since }),
   swingCandidates: (params: Record<string, string | number | boolean | undefined>) => get<SwingCandidates>("/api/v1/swings/candidates", params),
 };

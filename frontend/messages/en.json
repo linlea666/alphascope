@@ -21,7 +21,28 @@
     "okx": "OKX",
     "market": "Radar",
     "discover": "Discover",
-    "research": "Research"
+    "research": "Research",
+    "find": "Find",
+    "mine": "Mine",
+    "system": "System",
+    "compare": "Compare traders",
+    "legs": "Swing hall of fame",
+    "desc": {
+      "discover": "Find traders by style, each label with evidence",
+      "rankings": "Hyperliquid's official board, de-noised",
+      "okx": "OKX lead-trader boards and public position history",
+      "timing": "Skill or luck: timing scores with significance tests",
+      "compare": "Put 2–4 traders side by side",
+      "legs": "Each big move's winners, turn catchers and wrong-side holders",
+      "zones": "Who opened in a price zone and how it ended",
+      "holders": "Who bought low, sold high and held the whole move",
+      "swings": "Candidates right on both sides of BTC's macro cycle",
+      "watchlist": "Your followed traders in groups",
+      "alerts": "Position emails, price-zone sentinels, daily digest",
+      "sims": "Simulate following a trader at live prices",
+      "dataHealth": "Collection jobs, budgets and coverage",
+      "settings": "Email and live monitor settings"
+    }
   },
   "common": {
     "dataAsOf": "Data as of",
@@ -49,7 +70,11 @@
     "computed": "Computed",
     "yes": "Yes",
     "no": "No",
-    "copyFailed": "Copy failed, select the address manually"
+    "copyFailed": "Copy failed, select the address manually",
+    "apiServerError": "The server failed to answer this query",
+    "apiServerErrorHint": "Try different conditions or retry in a moment.",
+    "apiBadQuery": "Invalid query",
+    "apiBadQueryHint": "Check the prices, dates and other conditions."
   },
   "windows": {
     "day": "1D",
@@ -257,7 +282,8 @@
     "coverageTextOkx": "OKX position history: {n} positions since {from}; last synced {synced}",
     "truncatedOkx": "backfilled to 365 days only",
     "cyclesHintOkx": "From OKX's public position history: each record is a whole position (open time and average price, close time and average price, peak size, realized PnL). Adds and trims inside a position are not visible and the open average includes later adds, so OKX timing scores only count 1h and longer scales. Win rate uses realized PnL after fees and funding; brackets show the 95% confidence interval.",
-    "syncIncompleteOkx": "Position history is still being backfilled; statistics up to {date}."
+    "syncIncompleteOkx": "Position history is still being backfilled; statistics up to {date}.",
+    "compare": "Compare"
   },
   "health": {
     "title": "Data health & system status",
@@ -428,7 +454,9 @@
     "maker": "Resting share",
     "twoSidedHint": "Share of buys in the bottom 20% of the window / sells in the top 20%; then the same share under random time shifts. Both clearly above random means both sides are right.",
     "makerHint": "Share of fills that rested on the book (not crossing). Above {p} the account looks like a market maker or grid, where buying low and selling high comes with the order type.",
-    "makerBadge": "resting orders"
+    "makerBadge": "resting orders",
+    "sortContrarian": "Contrarian",
+    "contrarianNote": "Contrarian board: lowest excess location first — traders who historically bought relatively high and sold relatively low. With \"significant only\", only those worse than 95% of random shifts remain. This describes the past only; being wrong before does not mean being wrong next time. Research only — do not trade against them on this basis."
   },
   "zones": {
     "title": "Price-zone trades",
@@ -462,10 +490,49 @@
     "unrealized": "Unrealized (est.)",
     "avgExit": "Avg exit",
     "macroEdge": "Macro excess",
-    "statusOpen": "open {n}",
-    "statusClosed": "closed {n}",
-    "statusDataEnd": "data ends {n}",
-    "truncatedNote": "early fills missing"
+    "statusOpen": "{n} open",
+    "statusClosed": "{n} closed",
+    "statusDataEnd": "{n} data ends",
+    "truncatedNote": "early fills missing",
+    "clearSecond": "Remove second condition",
+    "sort": "Sort",
+    "sorts": {
+      "notional": "By notional",
+      "realized": "By realized PnL",
+      "earliest": "By earliest entry"
+    },
+    "chartTitle": "Draw a zone on the {coin} daily chart",
+    "chartHint": "Drag a box on the chart (time × price) to query it. Shaded boxes are the current conditions; dots are matching traders' first entries (bigger = more notional).",
+    "drawHint": "drag a box to search",
+    "drawFor": "Box sets",
+    "fromLegs": "From real swings",
+    "fromLegsHint": "Generated from detected macro legs: start price ±3%, from 7 days before the leg start to its midpoint",
+    "legBottom": "↑ bought the {date} low {px}",
+    "legTop": "↓ shorted the {date} top {px}",
+    "provisional": "provisional",
+    "quick": {
+      "d30": "Last 30d",
+      "d90": "Last 90d",
+      "ytd": "Year to date"
+    },
+    "querying": "Searching…",
+    "recent": "Recent",
+    "coverageRing": "Share of the archive queue whose history reaches the query start",
+    "coverageLead": "Results cover {p} of the traders in the archive queue.",
+    "hits": "{n} traders",
+    "sum": {
+      "traders": "Traders",
+      "shown": "first {n} counted",
+      "profitable": "In realized profit",
+      "notional": "Total entry notional",
+      "holding": "Still holding",
+      "holdingSub": "at least one position open"
+    },
+    "size": "Account size",
+    "okxAsset": "OKX lead assets",
+    "sim": "Simulate",
+    "simHint": "Try following this trader in a simulation",
+    "statusHint": "Counted per position cycle: one open-to-flat round trip"
   },
   "holders": {
     "title": "Swing holders",
@@ -529,7 +596,18 @@
     "captureEmpty": "No wallet passes the filters. Try a lower time-with-leg or size threshold.",
     "up": "Up",
     "down": "Down",
-    "provisional": "provisional"
+    "provisional": "provisional",
+    "tabHall": "Hall of fame",
+    "minShareExplain": "At least {p} of the position closed in the target zone (or still held there)",
+    "querying": "Searching…",
+    "sum": {
+      "qualifying": "Qualifying",
+      "holding": "Still holding",
+      "holdingSub": "price is inside the exit zone",
+      "medianMove": "Median move captured",
+      "medianDays": "Median days held"
+    },
+    "simHint": "Simulate following this trader"
   },
   "replay": {
     "title": "K-line replay",
@@ -1335,5 +1413,288 @@
     "closed": "Closes",
     "mdd": "30D DD",
     "empty": "No trader passes the gates."
+  },
+  "toast": {
+    "watched": "Followed — their fills will be archived first",
+    "unwatched": "Removed from watchlist",
+    "alertSaved": "Alert settings saved",
+    "simSaved": "Simulation settings saved",
+    "simCreated": "Simulation created; it follows every 30 seconds"
+  },
+  "legs": {
+    "title": "Swing hall of fame",
+    "subtitle": "Macro up and down legs are detected per coin. For each leg: who captured most of it, who entered at the turn, and who sat on the wrong side. Buttons open the zone and holder tools for that leg.",
+    "coin": "Coin",
+    "empty": "No macro legs detected for this coin yet (needs enough candles and archived positions).",
+    "days": "{n} days",
+    "provisional": "provisional",
+    "provisionalHint": "The last leg has not reversed enough yet; its end may still move",
+    "wallets": "{n} traders",
+    "capturers": "Captured the leg",
+    "none": "none yet",
+    "turnUp": "Bought the bottom",
+    "turnDown": "Shorted the top",
+    "wrong": "Wrong side",
+    "openHolders": "Swing holders",
+    "openZones": "Price-zone trades",
+    "openCapture": "Full capture ranking",
+    "note": "Definitions: captured = positioned with the leg ≥ 50% of the time and max notional ≥ {mn}, ranked by capture ratio; at the turn = opened the leg's side near its start (time −10%…+15%, price ±{pad}); wrong side = against the leg more than half the time, ranked by loss. Archived traders only, in hindsight."
+  },
+  "card": {
+    "replay": "replay",
+    "portrait": "Trades {coins} · mostly {scale} · median hold {hold} · long {long}",
+    "timingHint": "Best timing score that stays significant after multiple testing (q < 0.1)",
+    "timing": "Timing significant · {scale} q={q}",
+    "timingNone": "Timing not significant",
+    "closed": "{n} closed · win {w}",
+    "dd": "drawdown/profit {v}",
+    "liq": "{n} liquidations",
+    "oos": "Out-of-sample ✓",
+    "best": "Highlights (best closed positions)",
+    "noBest": "No profitable closed positions yet",
+    "worst": "Watch out (worst closed positions)",
+    "noWorst": "No losing closed positions",
+    "scope": "Scope: closed, complete position cycles, net of fees; all closed positions total {net}. Click a card to replay it on the chart."
+  },
+  "follow": {
+    "title": "If you had followed",
+    "hint": "Applies this account's time-weighted return (deposits and withdrawals removed) to your capital from a start date. Hindsight: your own copy delay, slippage and fees are not included, and it says nothing about the future.",
+    "since": "Start",
+    "capital": "Capital (USD)",
+    "run": "Calculate",
+    "insufficient": "Not enough account data in this period.",
+    "result": "{capital} from {since} would be about",
+    "mdd": "Max drawdown",
+    "series": "Follower capital",
+    "notes": "Based on {n} equity points about {step} days apart; intra-period swings are not visible.",
+    "notCovered": "Account data starts after the chosen date; computed from the earliest point."
+  },
+  "timeline": {
+    "title": "Position timeline",
+    "hint": "Each bar is one open-to-flat round trip: length = holding time, green long, red short, stronger = bigger result; dashed = still open. Click to replay.",
+    "legend": "Last {n} position cycles (6 most traded coins)"
+  },
+  "similar": {
+    "title": "Traders with a similar style",
+    "hint": "Closest by how they trade (leverage, long/short mix, holding time, win rate, drawdown, coin concentration…), not by how much they made. Only traders with {n}+ closed positions.",
+    "closest": "Closest on: {f}",
+    "closed": "{n} closed",
+    "compare": "Compare"
+  },
+  "luck": {
+    "title": "Luck or skill",
+    "you": "this trader",
+    "lead": "Actual location {loc}, better than {better} of random-time versions (p = {p}).",
+    "significant": "Significant after multiple testing.",
+    "notSignificant": "Luck cannot be ruled out yet.",
+    "pending": "The random distribution appears after the next timing run (every 3 hours).",
+    "explain": "Grey bars: the scores of the same trades shifted to random times 500 times — what the same activity achieves by luck. The further right of the grey the blue line sits, the less likely the timing is chance."
+  },
+  "compare": {
+    "title": "Compare traders",
+    "subtitle": "Two to four traders on the same metrics. Following two highly correlated traders is close to following one.",
+    "slot": "Trader {n}",
+    "placeholder": "address or okx:id",
+    "days": "Period",
+    "daysN": "Last {n} days",
+    "loading": "Loading…",
+    "go": "Compare",
+    "tip": "\"Compare\" on a trader page or \"Compare\" under similar traders fills this in.",
+    "rows": {
+      "size": "Account size",
+      "closed": "Closed positions",
+      "winRate": "Win rate",
+      "net": "Realized net PnL",
+      "pf": "Profit factor",
+      "dd": "Drawdown/profit",
+      "hold": "Median hold",
+      "long": "Long share",
+      "coins": "Main coins",
+      "liq": "Liquidations",
+      "timing": "Timing",
+      "styles": "Styles"
+    },
+    "none": "not significant",
+    "curveTitle": "Cumulative realized PnL, last {n} days",
+    "curveHint": "Net PnL of closed positions summed by close day (same rule for both venues); open positions excluded.",
+    "noCurve": "No closed positions in this period.",
+    "corrTitle": "Correlation of daily realized PnL",
+    "corrHint": "1 = move together, 0 = unrelated, negative = offset each other. Not computed with fewer than 10 shared days.",
+    "tooFew": "too few"
+  },
+  "divergence": {
+    "title": "Smart money vs the crowd",
+    "hint": "Per coin: share of long traders among timing-significant traders (blue needle) vs all observed traders (grey). The bigger the gap, the more the groups disagree. Coins held by fewer than {n} significant traders are hidden. Click a card for its history.",
+    "n": "{s} / {a} traders",
+    "empty": "No coin is held by at least {n} timing-significant traders right now.",
+    "smart": "Significant traders long share",
+    "crowd": "Everyone long share",
+    "historyTitle": "{coin}: divergence history and the next 7 days",
+    "gap": "Divergence (significant − all)",
+    "forward": "Next 7-day move",
+    "historyEmpty": "Not enough hourly snapshots yet.",
+    "caveat": "Divergence is drawn next to the later move to show the historical relation only, not as a forecast; the sample is the traders we observe, not the whole market."
+  },
+  "sentinel": {
+    "save": "Sentinel",
+    "saved": "Sentinel saved: you will get an email when new traders open in this zone",
+    "explain": "Checked every 30 minutes: from now on, any new trader opening this side inside this price zone triggers an email (follows fill archiving, so it lags the trade a little).",
+    "name": "Name",
+    "cohort": "Only",
+    "cohorts": {
+      "all": "All traders",
+      "timing": "Timing-significant traders",
+      "watchlist": "My watchlist"
+    },
+    "minNotional": "Minimum entry notional (USD)",
+    "saving": "Saving…",
+    "confirm": "Save sentinel",
+    "paused": "Paused",
+    "resumed": "Resumed",
+    "pause": "Pause",
+    "resume": "Resume",
+    "confirmDelete": "Delete this sentinel and its hits?",
+    "deleted": "Deleted",
+    "delete": "Delete",
+    "title": "Price-zone sentinels",
+    "hint": "Saved zone queries that email you when new traders open inside the zone. Create one from the top right of a price-zone result.",
+    "create": "Create on price zones",
+    "long": "Long",
+    "short": "Short",
+    "hits": "{n} traders hit",
+    "checked": "checked {t}",
+    "cols": {
+      "sentinel": "Sentinel",
+      "avgPx": "Entry price",
+      "notional": "Notional",
+      "firstAt": "First entry",
+      "email": "Email"
+    },
+    "empty": "No sentinels yet.",
+    "notify": {
+      "pending": "pending",
+      "sent": "sent",
+      "skipped": "not sent",
+      "failed": "failed"
+    }
+  },
+  "digest": {
+    "saved": "Digest settings saved",
+    "built": "Today's digest built",
+    "enable": "Email the daily digest at 00:20 UTC",
+    "recipients": "Recipients (empty = SMTP recipients)",
+    "recipientsHint": "a@x.com, b@y.com",
+    "save": "Save",
+    "buildNow": "Build today's digest now",
+    "title": "Daily digest",
+    "settingsHint": "Every day: what your watched traders did, coins where significant traders and the crowd disagree most, newly significant traders and sentinel hits. The overview shows the latest one.",
+    "last": "Latest: {day}, email: {emailed}",
+    "notEmailed": "not sent",
+    "cardTitle": "Daily digest · {day}",
+    "cardHint": "Last 24 hours, from the traders we observe.",
+    "manage": "Settings",
+    "moves": "What your watchlist did",
+    "noMoves": "No changes observed for watched traders.",
+    "gaps": "Smart money vs crowd (long share)",
+    "noGaps": "Not enough data yet.",
+    "newSig": "Newly timing-significant · {n}",
+    "baseline": "First digest: {n} traders are significant now; new ones are marked from tomorrow.",
+    "noNew": "Nobody new.",
+    "kinds": {
+      "open": "opened",
+      "increase": "added",
+      "decrease": "reduced",
+      "close": "closed",
+      "flip": "flipped"
+    }
+  },
+  "guide": {
+    "find": {
+      "title": "1. Find traders who make money",
+      "text": "Browse by style — steady compounding, trends, bottoms, tops — each label with its rules and evidence.",
+      "cta": "Style discovery"
+    },
+    "verify": {
+      "title": "2. Check it's skill, not luck",
+      "text": "Are their entries and exits far better than random? The timing board tests it against 500 random shifts.",
+      "cta": "Timing board"
+    },
+    "try": {
+      "title": "3. Try it in a simulation",
+      "text": "Copy at live prices with fees, slippage and funding — see the result before risking money.",
+      "cta": "Copy simulation"
+    }
+  },
+  "glossary": {
+    "entries": {
+      "label": "Entries",
+      "text": "Decisions that open, add to or flip into the side within the zone and period. Consecutive fills count once."
+    },
+    "realized": {
+      "label": "Realized",
+      "text": "Profit or loss of the parts already closed, after fees."
+    },
+    "unrealized": {
+      "label": "Unrealized",
+      "text": "Estimated PnL of what is still open at the latest price; it moves with the price."
+    },
+    "macroEdge": {
+      "label": "Macro excess",
+      "text": "Macro-scale timing score minus the random level. Above 0 = better than random at the macro scale."
+    },
+    "exitedShare": {
+      "label": "Exited in zone",
+      "text": "Share of the peak position closed inside the target exit zone.",
+      "example": "E.g. peak 10 BTC, 8 BTC closed at 83–87k = 80%."
+    },
+    "holdingShare": {
+      "label": "Still held",
+      "text": "For an open position, the share of the peak position still held."
+    },
+    "moveCaptured": {
+      "label": "Move captured",
+      "text": "Price move from entry to exit (or current price), signed by side.",
+      "example": "E.g. long at 63k, closed at 85k ≈ +35%."
+    },
+    "capture": {
+      "label": "Capture ratio",
+      "text": "Marked PnL during the leg ÷ (max position × leg move). 1 = the whole leg at full size, 0.3 = 30% of it."
+    },
+    "timeAligned": {
+      "label": "Time aligned",
+      "text": "Share of the leg's time spent positioned in the leg's direction."
+    },
+    "location": {
+      "label": "Location",
+      "text": "Where a trade sits in the surrounding price range: buying the low or selling the high scores 1, random trades about 0.5."
+    },
+    "edge": {
+      "label": "Excess",
+      "text": "Location minus the average of the same trades at random times, shrunk by sample size. Above 0 = better than luck."
+    },
+    "q": {
+      "label": "q-value",
+      "text": "Significance adjusted for testing many traders at once. q < 0.1 = still significant among so many."
+    },
+    "twr": {
+      "label": "TWR",
+      "text": "Time-weighted return: the real return with deposits and withdrawals removed."
+    },
+    "mdd": {
+      "label": "Max drawdown",
+      "text": "Largest fall from a peak to a later low — the worst loss a follower would have sat through."
+    },
+    "ddRatio": {
+      "label": "Drawdown/profit",
+      "text": "Max drawdown of the realized PnL curve ÷ total profit. Lower is steadier: 0.2 = gave back at most 20 per 100 made."
+    },
+    "profitFactor": {
+      "label": "Profit factor",
+      "text": "Total profit of winners ÷ total loss of losers. Above 1 makes money; 1.5+ is good."
+    },
+    "divergence": {
+      "label": "Divergence",
+      "text": "Long share among timing-significant traders minus long share among everyone observed. Positive = smart money more bullish than the crowd."
+    }
   }
 }

@@ -30,7 +30,7 @@ export default async function SwingsPage({ searchParams }: { searchParams: Promi
   try {
     [o, c] = await Promise.all([api.swings(), api.swingCandidates({ scope, sort, page, page_size: PAGE_SIZE })]);
   } catch (e) {
-    return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
+    return <ApiErrorState status={e instanceof ApiError ? e.status : undefined} detail={e instanceof ApiError ? e.message : undefined} />;
   }
   const pages = Math.max(1, Math.ceil(c.total / PAGE_SIZE));
   const firstCandle = o.candles[0]?.[0] ?? "";

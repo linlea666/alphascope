@@ -17,7 +17,7 @@ export default async function WatchlistPage({ searchParams }: { searchParams: Pr
   try {
     d = await api.watchlist();
   } catch (e) {
-    return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
+    return <ApiErrorState status={e instanceof ApiError ? e.status : undefined} detail={e instanceof ApiError ? e.message : undefined} />;
   }
   const gid = sp.g ? Number(sp.g) : null;
   const { alerted } = await getWatchContext();

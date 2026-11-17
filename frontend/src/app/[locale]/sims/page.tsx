@@ -20,7 +20,7 @@ export default async function SimsPage({ searchParams }: { searchParams: Promise
   try {
     d = await api.simDashboard(period);
   } catch (e) {
-    return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
+    return <ApiErrorState status={e instanceof ApiError ? e.status : undefined} detail={e instanceof ApiError ? e.message : undefined} />;
   }
   const pf = d.portfolio;
   const pill = (active: boolean) => `rounded border px-3 py-1 ${active ? "border-accent bg-accent text-white" : "border-border text-muted hover:text-text"}`;

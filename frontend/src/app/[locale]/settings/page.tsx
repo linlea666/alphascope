@@ -12,7 +12,7 @@ export default async function SettingsPage() {
   try {
     d = await api.settings();
   } catch (e) {
-    return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
+    return <ApiErrorState status={e instanceof ApiError ? e.status : undefined} detail={e instanceof ApiError ? e.message : undefined} />;
   }
   const st = d.live_status;
   return (

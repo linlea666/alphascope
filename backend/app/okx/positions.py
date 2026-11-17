@@ -139,7 +139,7 @@ def derive_wallet(session: Session, wallet_id: int) -> dict:
             "xp": None if still_open else r["close_avg_px"], "ms": r["max_size"], "mn": r["max_notional"],
             "nd": 1 if still_open else 2,
             "entries": json.dumps([[r["open_time"].isoformat(), float(r["open_avg_px"]), float(size)]]),
-            "exits": json.dumps(exits), "pnl": r["realized_pnl"] + r["fee"], "fees": r["fee"]})
+            "exits": json.dumps(exits or []), "pnl": r["realized_pnl"] + r["fee"], "fees": r["fee"]})
         signed = r["max_size"] if long else -r["max_size"]
         half_fee = r["fee"] / 2
         decisions.append({"w": wallet_id, "cid": cid, "coin": r["coin"], "v": DERIVE_VERSION, "kind": "open",

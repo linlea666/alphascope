@@ -116,6 +116,7 @@ def test_import_bundle_is_idempotent_and_preserves_pnl(sf, tmp_path):
         okx_total = q("SELECT round(sum(realized_pnl), 8) FROM okx_position")[0][0]
         assert q("SELECT round(sum(realized_pnl - fees), 8) FROM position_cycle WHERE version = 'okx1'")[0][0] == okx_total
         assert q("SELECT status, count(*) FROM position_cycle GROUP BY 1 ORDER BY 1") == [("closed", 2), ("open", 1)]
+        assert q("SELECT exits FROM position_cycle WHERE status = 'open'") == [([],)]  # empty array, not JSON null
         assert q("SELECT kind, side, count(*) FROM trade_decision GROUP BY 1, 2 ORDER BY 1") == [
             ("close", "sell", 2), ("open", "buy", 3)]
 

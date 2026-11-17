@@ -33,7 +33,7 @@ export default async function DataHealthPage() {
   try {
     d = await api.dataHealth();
   } catch (e) {
-    return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
+    return <ApiErrorState status={e instanceof ApiError ? e.status : undefined} detail={e instanceof ApiError ? e.message : undefined} />;
   }
   const b = d.api_budget;
   const s = d.schedule;

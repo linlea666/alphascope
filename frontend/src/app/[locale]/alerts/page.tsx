@@ -2,8 +2,10 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { AddressLink } from "@/components/AddressLink";
 import { AlertButton } from "@/components/AlertButton";
 import { ApiErrorState } from "@/components/ApiErrorState";
+import { DigestSettings, SentinelActions } from "@/components/SentinelControls";
 import { Badge, PageHeader, Panel, td, th } from "@/components/ui";
-import { api, ApiError, type AlertsOverview, type Notifications, type PositionEvents } from "@/lib/api";
+import { Link } from "@/i18n/routing";
+import { api, ApiError, type AlertsOverview, type Digest, type Notifications, type PositionEvents, type Sentinels } from "@/lib/api";
 import { fmtNum, fmtTime, fmtUsd } from "@/lib/format";
 
 export default async function AlertsPage() {
@@ -15,12 +17,92 @@ export default async function AlertsPage() {
   try {
     [subs, events, log] = await Promise.all([api.alerts(), api.alertEvents(100), api.notifications()]);
   } catch (e) {
-    return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
+    return <ApiErrorState status={e instanceof ApiError ? e.status : undefined} detail={e instanceof ApiError ? e.message : undefined} />;
   }
+  const [sentinels, digest]: [Sentinels | null, Digest | null] = await Promise.all([api.sentinels().catch(() => null), api.digest().catch(() => null)]);
+  const ts = await getTranslations("sentinel");
+  const td2 = await getTranslations("digest");
   const tone = (s: string) => (s === "sent" ? "up" : s === "failed" ? "down" : s === "pending" ? "accent" : "neutral");
   return (
     <div className="space-y-5">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
+      {sentinels && (
+        <Panel
+          title={`🔔 ${ts("title")}`}
+          hint={ts("hint")}
+          actions={
+            <Link href="/zones" className="rounded border border-accent px-3 py-1 text-xs text-accent hover:bg-accent hover:text-white">
+              {ts("create")} →
+            </Link>
+          }
+        >
+          {sentinels.sentinels.length ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {sentinels.sentinels.map((s) => (
+                  <div key={s.id} className={`rounded-lg border p-3 ${s.enabled ? "border-border" : "border-border/50 opacity-60"}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-medium">{s.name}</div>
+                        <div className="num mt-1 text-xs">
+                          <Badge tone={s.side === "long" ? "up" : "down"}>{s.side === "long" ? ts("long") : ts("short")}</Badge> {s.coin} {fmtNum(s.px_min, locale)}–{fmtNum(s.px_max, locale)}
+                        </div>
+                      </div>
+                      <SentinelActions id={s.id} enabled={s.enabled} />
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
+                      <span>{ts(`cohorts.${s.cohort}`)}</span>
+                      <span>≥ {fmtUsd(s.min_notional, locale)}</span>
+                      <span>{ts("hits", { n: s.hits })}</span>
+                      <span>{ts("checked", { t: fmtTime(s.last_checked_at, locale) })}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {sentinels.recent.length > 0 && (
+                <div className="-mx-4 -mb-4 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-panel-2">
+                      <tr>
+                        <th className={th}>{ts("cols.sentinel")}</th>
+                        <th className={th}>{t("cols.wallet")}</th>
+                        <th className={`${th} text-right`}>{ts("cols.avgPx")}</th>
+                        <th className={`${th} text-right`}>{ts("cols.notional")}</th>
+                        <th className={th}>{ts("cols.firstAt")}</th>
+                        <th className={th}>{ts("cols.email")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sentinels.recent.map((h) => (
+                        <tr key={`${h.sentinel_id}-${h.address}`} className="border-t border-border/60">
+                          <td className={`${td} text-xs text-muted`}>{sentinels.sentinels.find((s) => s.id === h.sentinel_id)?.name ?? h.sentinel_id}</td>
+                          <td className={td}>
+                            <AddressLink address={h.address} name={h.display_name} />
+                          </td>
+                          <td className={`${td} num text-right`}>{fmtNum(h.avg_px, locale, 1)}</td>
+                          <td className={`${td} num text-right`}>{fmtUsd(h.notional, locale)}</td>
+                          <td className={`${td} num text-xs text-muted`}>{fmtTime(h.first_at, locale)}</td>
+                          <td className={td}>
+                            <Badge tone={tone(h.notify_status)}>{ts.has(`notify.${h.notify_status}`) ? ts(`notify.${h.notify_status}`) : h.notify_status}</Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="py-6 text-center text-sm text-muted">{ts("empty")}</p>
+          )}
+        </Panel>
+      )}
+      {digest && (
+        <Panel title={`📰 ${td2("title")}`} hint={td2("settingsHint")}>
+          <DigestSettings enabled={digest.settings.enabled} recipients={digest.settings.recipients} />
+          {digest.digest && <p className="mt-3 text-xs text-muted">{td2("last", { day: digest.digest.day, emailed: digest.digest.emailed_at ? fmtTime(digest.digest.emailed_at, locale) : td2("notEmailed") })}</p>}
+        </Panel>
+      )}
       <Panel title={t("subs")}>
         {subs.subscriptions.length ? (
           <div className="-mx-4 -my-4 overflow-x-auto">

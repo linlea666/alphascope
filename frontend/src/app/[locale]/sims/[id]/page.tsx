@@ -22,7 +22,7 @@ export default async function SimPage({ params }: { params: Promise<{ id: string
     d = await api.sim(Number(id));
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) notFound();
-    return <ApiErrorState detail={e instanceof ApiError ? e.message : undefined} />;
+    return <ApiErrorState status={e instanceof ApiError ? e.status : undefined} detail={e instanceof ApiError ? e.message : undefined} />;
   }
   const s = d.summary;
   const a = d.analytics;
