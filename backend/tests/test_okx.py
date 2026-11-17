@@ -118,3 +118,137 @@ def test_import_bundle_is_idempotent_and_preserves_pnl(sf, tmp_path):
         assert q("SELECT status, count(*) FROM position_cycle GROUP BY 1 ORDER BY 1") == [("closed", 2), ("open", 1)]
         assert q("SELECT kind, side, count(*) FROM trade_decision GROUP BY 1, 2 ORDER BY 1") == [
             ("close", "sell", 2), ("open", "buy", 3)]
+
+
+# --- O2: leaderboard crawl and history sync against a mocked OKX API ---
+
+import asyncio  # noqa: E402
+from datetime import UTC, datetime, timedelta  # noqa: E402
+
+import httpx  # noqa: E402
+
+from app.config import Settings  # noqa: E402
+from app.okx.client import OkxClient  # noqa: E402
+from app.okx.leaderboard import run_window  # noqa: E402
+from app.okx.sync import sync_history  # noqa: E402
+from app.sources.hl_client import WeightBucket  # noqa: E402
+
+NOW = datetime(2026, 11, 17, 1, 0, tzinfo=UTC)  # 09:00 in Asia/Shanghai
+
+
+def _client(handler) -> OkxClient:
+    return OkxClient("https://okx.test", 600, transport=httpx.MockTransport(handler), bucket=WeightBucket(10_000),
+                     max_retries=0)
+
+
+def _board(ids, version="v1", size=2, page=1):
+    total = len(ids)
+    rows = ids[(page - 1) * size: page * size]
+    return {"code": "0", "data": {"dataVersion": version, "pages": -(-total // size), "total": total, "ranks": [
+        {"authorId": i, "nickName": f"n{i}", "asset": "1000", "pnl": "10", "pnlRatio": "0.1", "winRate": "0.6",
+         "maxRetreat": "0.2", "rates": [{"statTime": "261116", "value": "0.1"}]} for i in rows]}}
+
+
+def _board_handler(ids, versions=None):
+    calls = []
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        page = int(req.url.params["page"])
+        calls.append(page)
+        version = (versions or {}).get(len(calls), "v1")
+        return httpx.Response(200, json=_board(ids, version, int(req.url.params["size"]), page))
+    return handler, calls
+
+
+def _crawl(sf, ids, now, versions=None):
+    handler, calls = _board_handler(ids, versions)
+
+    async def go():
+        async with _client(handler) as c:
+            return await run_window(sf, c, "7d", 2, "Asia/Shanghai", now=now)
+    return asyncio.run(go()), calls
+
+
+def test_daily_crawl_presence_streaks_and_restart(sf):
+    r, calls = _crawl(sf, ["1000001", "1000002", "1000003"], NOW)
+    assert r == {"window": "7d", "full": True, "total": 3, "members": 3, "new": 3, "absent": 0}
+    assert calls == [1, 2, 1]  # two pages + the final check of page one
+    # next day: one trader left, one new; a republish during the crawl restarts it
+    r, calls = _crawl(sf, ["1000002", "1000003", "1000004"], NOW + timedelta(days=1), versions={2: "v2"})
+    assert r["new"] == 1 and r["absent"] == 1 and calls == [1, 2, 1, 2, 1]
+    with sf() as s:
+        rows = {r[0]: tuple(r[1:]) for r in s.execute(text("""
+            SELECT w.venue_uid, p.seen_days, p.streak, p.currently_seen FROM okx_presence p
+            JOIN wallet w ON w.id = p.wallet_id""")).all()}
+        assert rows == {"1000001": (1, 0, False), "1000002": (2, 2, True), "1000003": (2, 2, True),
+                        "1000004": (1, 1, True)}
+        assert s.execute(text("SELECT history_status, pool_status, priority, asset FROM okx_trader LIMIT 1")).one() == \
+            ("partial", "active", 1, D(1000))
+        assert s.execute(text("SELECT status, count(*) FROM okx_leaderboard_run GROUP BY 1")).all() == [("complete", 2)]
+        assert s.execute(text("SELECT win_rate, max_drawdown FROM okx_leaderboard_row LIMIT 1")).one() == \
+            (D("0.6"), D("0.2"))
+
+
+def test_crawl_rejects_inconsistent_pages(sf):
+    def handler(req):
+        page = int(req.url.params["page"])
+        body = _board(["1000001", "1000002", "1000003"], size=2, page=page)
+        if page == 2:
+            body["data"]["ranks"] = body["data"]["ranks"] * 2  # 2 rows where 1 is expected
+        return httpx.Response(200, json=body)
+
+    async def go():
+        async with _client(handler) as c:
+            return await run_window(sf, c, "7d", 2, "Asia/Shanghai", now=NOW)
+    with pytest.raises(Exception, match="rows, expected"):
+        asyncio.run(go())
+    with sf() as s:
+        assert s.execute(text("SELECT status FROM okx_leaderboard_run")).scalar_one() == "failed"
+        assert s.execute(text("SELECT count(*) FROM wallet")).scalar_one() == 0
+
+
+def _pos(pid: int, t_ms: int) -> dict:
+    return {**LINEAR, "posId": str(pid), "cTime": str(t_ms - 3_600_000), "uTime": str(t_ms)}
+
+
+def test_history_backfill_increment_and_backoff(sf):
+    _crawl(sf, ["1000001"], NOW)
+    with sf() as s:
+        s.execute(text("UPDATE wallet SET handle = 'H1'"))
+        s.commit()
+    end = int(NOW.timestamp() * 1000)
+    day = 86_400_000
+    book = [_pos(i, end - i * day) for i in range(1, 251)]  # one closed position a day, newest first
+    seen_after = []
+
+    def handler(req):
+        after = req.url.params.get("after")
+        seen_after.append(after)
+        rows = [p for p in book if after is None or int(p["uTime"]) < int(after)]
+        return httpx.Response(200, json={"code": "0", "data": rows[:int(req.url.params["limit"])]})
+
+    settings = Settings(okx_history_max_pages=30)
+
+    async def go(h, now=NOW):
+        async with _client(h) as c:
+            return await sync_history(sf, settings, c, now=now)
+    r = asyncio.run(go(handler))
+    assert r == {"traders": 1, "stored": 250, "errors": 0, "completed": 1}
+    with sf() as s:
+        t = s.execute(text("SELECT history_status, n_positions FROM okx_trader")).one()
+        assert tuple(t) == ("source_complete", 250)  # fewer than 365 days exist: the source ran out
+        assert s.execute(text("SELECT count(*) FROM position_cycle WHERE version = 'okx1'")).scalar_one() == 250
+    # an hour later two new positions closed; the increment reads only the top page
+    book[:0] = [_pos(1001, end + 2 * 3_600_000), _pos(1000, end + 3_600_000)]
+    seen_after.clear()
+    r = asyncio.run(go(handler, NOW + timedelta(hours=1, minutes=1)))
+    assert r["stored"] == 100 and seen_after[0] is None
+    with sf() as s:
+        assert s.execute(text("SELECT n_positions FROM okx_trader")).scalar_one() == 252
+    # errors back off without losing the state
+    r = asyncio.run(go(lambda req: httpx.Response(500), NOW + timedelta(hours=3)))
+    assert r["errors"] == 1
+    with sf() as s:
+        st = s.execute(text("SELECT history_status, failure_count, retry_after > :t FROM okx_trader"),
+                       {"t": NOW + timedelta(hours=3)}).one()
+        assert tuple(st) == ("source_complete", 1, True)

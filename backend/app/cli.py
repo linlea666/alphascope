@@ -23,7 +23,10 @@ from app.ingest.leaderboard_ingest import LeaderboardInput, ingest_leaderboard
 from app.ingest.market_ingest import record_candles
 from app.ingest.portfolio_ingest import enrich_batch
 from app.ingest.runs import mark_abandoned_runs
+from app.okx.client import OkxClient
 from app.okx.legacy_import import derive_all, export_sqlite, import_bundle
+from app.okx.leaderboard import ensure_daily, run_window
+from app.okx.sync import refresh_assets, refresh_instruments, resolve_profiles, sync_history
 from app.research.positions import rebuild_stale
 from app.research.reconcile import reconcile
 from app.research.timing import run_timing
@@ -60,6 +63,11 @@ def main() -> None:
     oi.add_argument("--no-derive", action="store_true")
     od = sub.add_parser("okx-derive", help="rebuild OKX cycles and decisions from stored positions")
     od.add_argument("--stale", action="store_true", help="only traders with new positions since the last derive")
+    ob = sub.add_parser("okx-board", help="crawl an OKX leaderboard now (default: today's daily boards if due)")
+    ob.add_argument("--window", choices=["7d", "30d", "90d", "365d"])
+    oh = sub.add_parser("okx-history", help="sync OKX position history for due traders")
+    oh.add_argument("--limit", type=int)
+    sub.add_parser("okx-upkeep", help="resolve OKX profiles, refresh assets and contract specs")
     args = p.parse_args()
     if args.cmd == "okx-export":  # needs no database
         print(json.dumps(export_sqlite(args.sqlite, args.out), indent=2))
@@ -90,6 +98,8 @@ def main() -> None:
         result = import_bundle(sf, args.bundle, derive=not args.no_derive)
     elif args.cmd == "okx-derive":
         result = derive_all(sf, only_stale=args.stale)
+    elif args.cmd in ("okx-board", "okx-history", "okx-upkeep"):
+        result = asyncio.run(_okx(args, settings, sf))
     elif args.cmd == "enrich":
         result = asyncio.run(enrich_batch(sf, settings, store, args.limit, args.address))
     else:
@@ -97,6 +107,25 @@ def main() -> None:
             result = recompute_tiers(s, datetime.now(UTC))
             s.commit()
     print(json.dumps(result, indent=2, default=str))
+
+
+async def _okx(args, settings, sf) -> dict:
+    async with OkxClient(settings.okx_base_url, settings.okx_requests_per_minute, settings.okx_timeout_seconds,
+                         settings.okx_max_retries) as c:
+        if args.cmd == "okx-board":
+            if args.window:
+                from app import settings_store
+                with sf() as s:
+                    tz = settings_store.get(s, "live").get("timezone") or "Asia/Shanghai"
+                result = await run_window(sf, c, args.window, settings.okx_page_size, tz)
+            else:
+                result = await ensure_daily(sf, settings, c)
+        elif args.cmd == "okx-history":
+            result = await sync_history(sf, settings, c, args.limit)
+        else:
+            result = {"profiles": await resolve_profiles(sf, c), "assets": await refresh_assets(sf, c),
+                      "instruments": await refresh_instruments(sf, c)}
+        return {**result, "requests": c.usage.as_dict()}
 
 
 if __name__ == "__main__":

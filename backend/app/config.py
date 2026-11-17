@@ -63,6 +63,19 @@ class Settings(BaseSettings):
     # Fernet key for secrets stored in app_setting (SMTP password); created with mode 600 on first use.
     secret_key_path: Path = BACKEND_DIR.parent / "data" / "secret.key"
 
+    # OKX copy-trading source (docs/11): public priapi endpoints, a request budget separate from Hyperliquid.
+    okx_base_url: str = "https://www.okx.com"
+    okx_requests_per_minute: int = 120  # worker share; measured: ~180/min from the server without throttling
+    okx_live_requests_per_minute: int = 60  # live monitor share (position-current polling)
+    okx_timeout_seconds: float = 20.0
+    okx_max_retries: int = 4
+    okx_page_size: int = 50  # leaderboard page size (OKX accepts up to 50)
+    okx_daily_hour_local: float = 8.5  # daily 7d crawl after 08:30 in live.timezone (Asia/Shanghai by default)
+    okx_extra_window_pages: int = 2  # 30d / 90d / 365d boards: first pages only (top 100 each)
+    okx_history_batch: int = 60  # traders per history run
+    okx_history_max_pages: int = 30  # pages of 100 positions per trader per run
+    okx_history_target_days: int = 365
+
     enrich_batch_size: int = 200
     enrich_interval_minutes: int = 10
     portfolio_refresh_days: int = 7

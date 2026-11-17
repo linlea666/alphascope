@@ -93,16 +93,16 @@ class WeightBucket:
             self.tokens -= weight
 
 
-_shared: dict[float, WeightBucket] = {}
+_shared: dict[tuple[str, float], WeightBucket] = {}
 _shared_lock = threading.Lock()
 
 
-def shared_bucket(per_minute: float) -> WeightBucket:
-    """One bucket per process (per budget), shared by every job that calls Hyperliquid."""
+def shared_bucket(per_minute: float, name: str = "hyperliquid") -> WeightBucket:
+    """One bucket per process and budget, shared by every job that calls the same API."""
     with _shared_lock:
-        if per_minute not in _shared:
-            _shared[per_minute] = WeightBucket(per_minute)
-        return _shared[per_minute]
+        if (name, per_minute) not in _shared:
+            _shared[(name, per_minute)] = WeightBucket(per_minute)
+        return _shared[(name, per_minute)]
 
 
 @dataclass
