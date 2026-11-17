@@ -2,13 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { BarChart, LineChart, TreemapChart } from "echarts/charts";
-import { DataZoomComponent, GridComponent, LegendComponent, MarkLineComponent, TooltipComponent } from "echarts/components";
+import { DataZoomComponent, GridComponent, LegendComponent, MarkAreaComponent, MarkLineComponent, TooltipComponent } from "echarts/components";
 import * as echarts from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
 import { useRouter } from "@/i18n/routing";
-import type { MarketCoin, MarketHistoryRow, MarketLiquidations } from "@/lib/api";
+import type { LiqSide, MarketCoin, MarketHistoryRow, MarketLiquidations, PriceBin, PriceZone } from "@/lib/api";
 
-echarts.use([TreemapChart, LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, MarkLineComponent, CanvasRenderer]);
+echarts.use([TreemapChart, LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent, DataZoomComponent, MarkLineComponent, MarkAreaComponent, CanvasRenderer]);
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -163,4 +163,87 @@ export function LiqHistogram({ data, locale, labels }: { data: MarketLiquidation
   );
   const placed = data.bins.some((b) => b.long_ntl || b.short_ntl);
   return placed ? <div ref={ref} className="h-[520px] w-full" /> : <p className="py-10 text-center text-sm text-muted">{labels.empty}</p>;
+}
+
+/** Notional by price band, longs to the left and shorts to the right, zones shaded, the reference price dashed.
+ *  Used for both entry prices and venue-reported liquidation prices (each with its own price range). */
+export function PriceLadder({ long, short, longZones, shortZones, refPx, locale, labels, height = 520 }: { long: PriceBin[]; short: PriceBin[]; longZones: PriceZone[]; shortZones: PriceZone[]; refPx: number; locale: string; labels: { longs: string; shorts: string; price: string; zone: string; empty: string }; height?: number }) {
+  const ref = useChart(
+    (chart) => {
+      const text = cssVar("--muted");
+      const border = cssVar("--border");
+      const usd = new Intl.NumberFormat(locale, { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 });
+      const px = new Intl.NumberFormat(locale, { maximumFractionDigits: refPx >= 100 ? 0 : refPx >= 1 ? 3 : 6 });
+      const cats = long.map((b) => px.format((b.lo + b.hi) / 2)); // category axes grow upwards: high prices on top
+      const idx = (p: number) => Math.max(0, Math.min(long.length - 1, long.findIndex((b) => b.lo <= p && p < b.hi)));
+      const refIdx = long.findIndex((b) => b.lo <= refPx && refPx < b.hi);
+      const area = (zones: PriceZone[], color: string) =>
+        zones.map((z) => [
+          { yAxis: idx(z.lo), itemStyle: { color: blend(color, cssVar("--panel"), 0.18) }, label: { show: true, position: "insideLeft", color: text, fontSize: 10, formatter: `${labels.zone} ${Math.round(z.share * 100)}%` } },
+          { yAxis: idx(z.hi - 1e-9) },
+        ]);
+      chart.setOption({
+        animation: false,
+        grid: { left: 72, right: 24, top: 28, bottom: 24 },
+        legend: { top: 0, textStyle: { color: text } },
+        tooltip: {
+          trigger: "axis",
+          axisPointer: { type: "shadow" },
+          backgroundColor: cssVar("--panel"),
+          borderColor: border,
+          textStyle: { color: cssVar("--text") },
+          valueFormatter: (v: number) => usd.format(Math.abs(v)),
+        },
+        xAxis: { type: "value", axisLabel: { color: text, formatter: (v: number) => usd.format(Math.abs(v)) }, splitLine: { lineStyle: { color: border } } },
+        yAxis: { type: "category", data: cats, axisLabel: { color: text, fontSize: 10 }, axisLine: { lineStyle: { color: border } } },
+        series: [
+          {
+            name: labels.longs,
+            type: "bar",
+            stack: "x",
+            data: long.map((b) => -b.notional),
+            itemStyle: { color: cssVar("--up") },
+            markArea: { silent: true, data: area(longZones, cssVar("--up")) },
+            markLine: refIdx >= 0 ? { symbol: "none", label: { formatter: `${labels.price} ${px.format(refPx)}`, color: text }, lineStyle: { color: cssVar("--accent"), type: "dashed" }, data: [{ yAxis: refIdx }] } : undefined,
+          },
+          { name: labels.shorts, type: "bar", stack: "x", data: short.map((b) => b.notional), itemStyle: { color: cssVar("--down") }, markArea: { silent: true, data: area(shortZones, cssVar("--down")) } },
+        ],
+      });
+    },
+    [long, short, longZones, shortZones, refPx, locale],
+  );
+  const any = long.some((b) => b.notional) || short.some((b) => b.notional);
+  return any ? <div ref={ref} className="w-full" style={{ height }} /> : <p className="py-10 text-center text-sm text-muted">{labels.empty}</p>;
+}
+
+/** Cumulative notional whose venue-reported liquidation price a move of x% would reach (longs down, shorts up). */
+export function LiqLadder({ long, short, locale, labels }: { long: LiqSide["ladder"]; short: LiqSide["ladder"]; locale: string; labels: { longs: string; shorts: string; empty: string } }) {
+  const ref = useChart(
+    (chart) => {
+      const text = cssVar("--muted");
+      const border = cssVar("--border");
+      const usd = new Intl.NumberFormat(locale, { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 1 });
+      const steps = [...[...long].reverse(), ...short];
+      chart.setOption({
+        animation: false,
+        grid: { left: 64, right: 16, top: 16, bottom: 28 },
+        tooltip: {
+          trigger: "axis",
+          backgroundColor: cssVar("--panel"),
+          borderColor: border,
+          textStyle: { color: cssVar("--text") },
+          formatter: (ps: { dataIndex: number }[]) => {
+            const s = steps[ps[0].dataIndex];
+            return `${s.move > 0 ? "+" : ""}${s.move}%<br/>${s.move < 0 ? labels.longs : labels.shorts}: ${usd.format(s.notional)} · ${s.positions}`;
+          },
+        },
+        xAxis: { type: "category", data: steps.map((s) => `${s.move > 0 ? "+" : ""}${s.move}%`), axisLabel: { color: text }, axisLine: { lineStyle: { color: border } } },
+        yAxis: { type: "value", axisLabel: { color: text, formatter: (v: number) => usd.format(v) }, splitLine: { lineStyle: { color: border } } },
+        series: [{ type: "bar", data: steps.map((s) => ({ value: s.notional, itemStyle: { color: cssVar(s.move < 0 ? "--up" : "--down") } })) }],
+      });
+    },
+    [long, short, locale],
+  );
+  const any = [...long, ...short].some((s) => s.notional);
+  return any ? <div ref={ref} className="h-[220px] w-full" /> : <p className="py-8 text-center text-sm text-muted">{labels.empty}</p>;
 }

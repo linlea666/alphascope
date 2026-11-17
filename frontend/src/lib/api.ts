@@ -154,6 +154,8 @@ export type MarketCoin = MarketSideStats & {
   opens_1h: number;
   opens_4h: number;
   opens_24h: number;
+  near_long_liq_pct: number | null;
+  near_short_liq_pct: number | null;
 };
 export type MarketContributor = {
   address: string;
@@ -197,6 +199,45 @@ export type MarketEvent = {
   upl: number | null;
 };
 export type MarketHistoryRow = { bucket_ts: string; observed: number; long_traders: number; short_traders: number; long_ntl: number; short_ntl: number; lev20_long_ntl: number; lev20_short_ntl: number; opens: number; closes: number };
+export type PriceBin = { lo: number; hi: number; notional: number; positions: number };
+export type PriceZone = { lo: number; hi: number; notional: number; share: number; positions: number; avg_px: number; avg_lev: number | null; distance: number; in_profit?: boolean };
+export type EntrySide = {
+  positions: number;
+  notional: number;
+  avg_entry: number | null;
+  avg_distance: number | null;
+  median_entry: number | null;
+  profit_share: number | null;
+  underwater_share: number | null;
+  top5_share: number | null;
+  bins: PriceBin[];
+  zones: PriceZone[];
+  outside: { positions: number; notional: number };
+};
+export type LiqSide = {
+  positions: number;
+  notional: number;
+  known_share: number | null;
+  cross_share: number | null;
+  without_liq: { positions: number; notional: number };
+  crossed: { positions: number; notional: number };
+  beyond_notional: number;
+  bins: PriceBin[];
+  zones: PriceZone[];
+  outside: { positions: number; notional: number };
+  nearest: { address: string | null; display_name: string | null; px: number; distance: number; notional: number; leverage: number | null; mode: string | null } | null;
+  nearest_cluster: { lo: number; hi: number; notional: number; positions: number; distance: number } | null;
+  ladder: { move: number; notional: number; positions: number }[];
+};
+export type MarketStructure = {
+  coin: string;
+  as_of: string;
+  positions: number;
+  ref: { px: number; observed_at: string } | null;
+  entries?: { long: EntrySide; short: EntrySide };
+  liquidations?: { long: LiqSide; short: LiqSide; min_leverage: number };
+};
+
 export type MarketLiquidations = {
   coin: string;
   mark_px: number | null;
@@ -914,6 +955,7 @@ export const api = {
   marketContributors: (params: Record<string, string | number | undefined>) => get<{ rows: MarketContributor[] }>("/api/v1/market/contributors", params),
   marketEvents: (params: Record<string, string | number | undefined>) => get<{ as_of: string; rows: MarketEvent[] }>("/api/v1/market/events", params),
   marketHistory: (params: Record<string, string | number | undefined>) => get<{ rows: MarketHistoryRow[] }>("/api/v1/market/history", params),
+  marketStructure: (params: Record<string, string | number | undefined>) => get<MarketStructure>("/api/v1/market/structure", params),
   marketLiquidations: (params: Record<string, string | number | undefined>) => get<MarketLiquidations>("/api/v1/market/liquidations", params),
   discoverStyles: (venue: string) => get<DiscoverStyles>("/api/v1/discover/styles", { venue }),
   discoverBoard: (params: Record<string, string | number | undefined>) => get<DiscoverBoard>("/api/v1/discover", params),

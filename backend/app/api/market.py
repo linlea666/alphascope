@@ -10,11 +10,11 @@ from sqlalchemy.orm import Session
 
 from app.api.common import num
 from app.db import get_session
-from app.market import stats
+from app.market import stats, structure
 from app.market.stats import Cohort, Venue
 
 router = APIRouter(prefix="/api/v1/market", tags=["market"])
-NUMERIC = ("long_ntl", "short_ntl", "lev10_long_ntl", "lev10_short_ntl", "lev20_long_ntl", "lev20_short_ntl",
+NUMERIC = ("near_long_liq_pct", "near_short_liq_pct", "long_ntl", "short_ntl", "lev10_long_ntl", "lev10_short_ntl", "lev20_long_ntl", "lev20_short_ntl",
            "liq_known_ntl", "mark_px", "median_leverage", "szi", "notional_usd", "entry_px", "liq_px", "upl",
            "account_value", "notional_change", "szi_before", "szi_after", "gross_notional")
 
@@ -53,10 +53,18 @@ def coins(session: Session = Depends(get_session), venue: Venue = "all", cohort:
 @router.get("/contributors")
 def contributors(session: Session = Depends(get_session), coin: str = Query(..., max_length=48),
                  side: Literal["long", "short", "all"] = "all", venue: Venue = "all", cohort: Cohort = "all",
-                 min_lev: int = Query(0, ge=0, le=200), limit: int = Query(200, ge=1, le=1000)):
-    """The traders and positions behind a coin's numbers (same freshness and cohort rules as the aggregates)."""
+                 min_lev: int = Query(0, ge=0, le=200), limit: int = Query(200, ge=1, le=1000),
+                 entry_min: float | None = None, entry_max: float | None = None,
+                 liq_min: float | None = None, liq_max: float | None = None):
+    """The traders and positions behind a coin's numbers (same freshness and cohort rules as the aggregates);
+    entry / liquidation price ranges drill into a zone of the positioning structure."""
     now = datetime.now(UTC)
     side_sql = {"long": "AND f.szi > 0", "short": "AND f.szi < 0", "all": ""}[side]
+    for col, lo, hi in (("entry_px", entry_min, entry_max), ("liq_px", liq_min, liq_max)):
+        if lo is not None:
+            side_sql += f" AND f.{col} >= {float(lo)!r}"
+        if hi is not None:
+            side_sql += f" AND f.{col} < {float(hi)!r}"
     rows = session.execute(text(f"""
         WITH {stats.fresh_cte(venue, cohort, min_lev)}
         SELECT w.address, w.display_name, f.venue, f.szi, f.notional_usd, f.mark_px, f.entry_px, f.leverage,
@@ -149,3 +157,35 @@ def liquidations(session: Session = Depends(get_session), coin: str = Query("BTC
             b["cross_ntl"] += ntl
     return {"coin": coin, "as_of": now, "mark_px": mark, "span_pct": span_pct, "bins": out, "without_liq": without,
             "outside": outside, "positions": len(rows)}
+
+
+@router.get("/structure")
+def positioning_structure(session: Session = Depends(get_session), coin: str = Query("BTC", max_length=48),
+                          venue: Venue = "all", cohort: Cohort = "all", min_lev: int = Query(0, ge=0, le=200),
+                          entry_span: float = Query(40, gt=1, le=90), liq_span: float = Query(30, gt=1, le=90),
+                          bins: int = Query(60, ge=10, le=200)):
+    """Entry and liquidation structure of one coin: zones, cost basis, profit vs underwater, nearest liquidations
+    and the liquidation ladder. The leverage filter applies to the liquidation side only."""
+    now = datetime.now(UTC)
+    rows = session.execute(text(f"""
+        WITH {stats.fresh_cte(venue, cohort)}
+        SELECT wallet_id, szi, notional_usd, entry_px, liq_px, leverage, margin_mode, mark_px, observed_at
+        FROM fresh WHERE coin = :coin ORDER BY observed_at DESC"""), {"now": now, "coin": coin}).all()
+    ref_row = next((r for r in rows if r.mark_px), None)
+    if ref_row is None:
+        return {"coin": coin, "as_of": now, "ref": None, "positions": 0}
+    ref = float(ref_row.mark_px)
+    data = structure.build([structure.Row(r.wallet_id, 1 if r.szi > 0 else -1, float(r.notional_usd),
+                                          float(r.entry_px) if r.entry_px else None,
+                                          float(r.liq_px) if r.liq_px else None, r.leverage, r.margin_mode)
+                            for r in rows], ref, entry_span / 100, liq_span / 100, bins, min_lev)
+    ids = [s["nearest"]["wallet_id"] for s in data["liquidations"].values()
+           if isinstance(s, dict) and s.get("nearest")]
+    names = {r.id: (r.address, r.display_name) for r in session.execute(text(
+        "SELECT id, address, display_name FROM wallet WHERE id = ANY(:ids)"), {"ids": ids}).all()}
+    for side in ("long", "short"):
+        near = data["liquidations"][side]["nearest"]
+        if near:
+            near["address"], near["display_name"] = names.get(near.pop("wallet_id"), (None, None))
+    return {"coin": coin, "as_of": now, "positions": len(rows),
+            "ref": {"px": ref, "observed_at": ref_row.observed_at}, **data}

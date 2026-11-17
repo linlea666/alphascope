@@ -65,7 +65,10 @@ def coin_rows(s: Session, venue: str, cohort: str, now: datetime, min_traders: i
     rows = s.execute(text(f"""
         WITH {fresh_cte(venue, cohort)}
         SELECT coin, count(*) AS traders, {COIN_COLUMNS}, avg(mark_px) AS mark_px,
-               percentile_cont(0.5) WITHIN GROUP (ORDER BY leverage) AS median_leverage
+               percentile_cont(0.5) WITHIN GROUP (ORDER BY leverage) AS median_leverage,
+               min((mark_px - liq_px) / mark_px) FILTER (WHERE szi > 0 AND liq_px > 0 AND liq_px < mark_px)
+                 AS near_long_liq_pct,
+               min((liq_px - mark_px) / mark_px) FILTER (WHERE szi < 0 AND liq_px > mark_px) AS near_short_liq_pct
         FROM fresh GROUP BY coin HAVING count(*) >= :min ORDER BY sum(notional_usd) DESC"""),
         {"now": now, "min": min_traders}).mappings().all()
     return [dict(r) for r in rows]
