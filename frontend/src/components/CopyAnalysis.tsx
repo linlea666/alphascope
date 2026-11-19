@@ -110,9 +110,9 @@ export async function CopyabilityCard({ address }: { address: string }) {
             <tbody>
               {c.backtests.map((b) => (
                 <tr key={b.window_days} className="border-t border-border/60">
-                  <td className={td}>{t("bt.days", { n: b.window_days })}</td>
-                  <td className={`${td} num text-right ${signClass(b.ret)}`}>{fmtPct(b.ret, locale, 1)}</td>
-                  <td className={`${td} num text-right text-down`}>{fmtPct(b.mdd, locale, 1)}</td>
+                  <td className={td}>{t("bt.days", { n: b.window_days })}{b.trades === 0 && <small className="block text-muted">{t("noExecutions")}</small>}</td>
+                  <td className={`${td} num text-right ${signClass(b.ret)}`}>{b.trades ? fmtPct(b.ret, locale, 1) : "—"}</td>
+                  <td className={`${td} num text-right text-down`}>{b.trades ? fmtPct(b.mdd, locale, 1) : "—"}</td>
                   <td className={`${td} num text-right ${signClass(b.leader_ret)}`}>{b.leader_ret === null ? "—" : fmtPct(b.leader_ret, locale, 1)}</td>
                   <td className={`${td} num text-right`}>
                     {b.trades}
@@ -124,6 +124,27 @@ export async function CopyabilityCard({ address }: { address: string }) {
             </tbody>
           </table>
         </div>
+      )}
+      {!!c.replay_audit?.length && (
+        <details className="mt-5 border-t border-border pt-3 text-xs">
+          <summary className="cursor-pointer">{t("audit.title", { n: c.replay_audit.length })}</summary>
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full">
+              <thead><tr>
+                <th className={th}>{t("audit.cutoff")}</th><th className={th}>{t("bt.window")}</th>
+                <th className={th}>{t("audit.previous")}</th><th className={th}>{t("audit.replayed")}</th>
+              </tr></thead>
+              <tbody>{c.replay_audit.map(({ window_days, source_cutoff, version, outcome }) => (
+                <tr className="border-t border-border/60" key={`${source_cutoff}-${window_days}-${version}`}>
+                  <td className={td}><time dateTime={source_cutoff}>{fmtTime(source_cutoff, locale)}</time></td>
+                  <td className={td}>{t("bt.days", { n: window_days })}</td>
+                  <td className={td}>{outcome.previous_trades > 0 ? t("audit.fills", { n: outcome.previous_trades, ret: pct(outcome.previous_ret, 2) }) : t("noExecutions")}</td>
+                  <td className={td}>{outcome.trades === undefined ? t("audit.unavailable") : outcome.trades > 0 ? t("audit.fills", { n: outcome.trades, ret: pct(outcome.ret, 2) }) : t("noExecutions")}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </details>
       )}
     </Panel>
   );
@@ -205,6 +226,8 @@ export async function BacktestCard({ address, search }: { address: string; searc
           <p className="py-4 text-center text-sm text-muted">{t("idle")}</p>
         ) : !r.ok ? (
           <p className="py-4 text-center text-sm text-muted">{t(`reasons.${r.reason ?? "error"}`)}</p>
+        ) : r.trades === 0 ? (
+          <p className="py-4 text-center text-sm text-muted">{t("noExecutions", { n: r.n_decisions ?? 0 })}</p>
         ) : (
           <>
             <div className="mb-3 flex flex-wrap items-baseline gap-x-6 gap-y-1">

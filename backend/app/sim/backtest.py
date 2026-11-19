@@ -397,6 +397,7 @@ def run(inputs: dict, prices: PriceBook, p: BacktestParams, since: datetime, unt
         "ok": True, "version": BACKTEST_VERSION, "basis": "okx_whole_position_approximation" if approx else "archived_venue_replay",
         "approx_equity": approx, "equity_source": inputs.get("equity_source"), "stopped": stopped,
         "capped_share": capped / sized if sized else None,
+        "execution_status": "executed" if trades else "no_executions",
         "capital": p.capital, "final": final, "ret": ret, "pnl": final - p.capital, "mdd": mdd,
         "trades": trades, "liquidations": liquidations, "costs": float(costs), "n_decisions": len(decisions),
         "leader_ret": leader_ret,

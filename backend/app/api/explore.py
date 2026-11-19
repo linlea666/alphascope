@@ -312,7 +312,7 @@ def wallet_backtest(address: str, session: Session = Depends(get_session), days:
     if not r.get("ok"):
         return r
     stored = session.execute(text("""SELECT delay_curve FROM copy_backtest WHERE wallet_id = :w AND window_days = 30
-                                     AND params_key = 'default-v2'"""), {"w": w["id"]}).scalar()
+                                     AND params_key = 'default-v2' AND trades > 0"""), {"w": w["id"]}).scalar()
     return {**r, "delay_curve": r.get("delay_curve") or stored, "delay_curve_source": "live" if r.get("delay_curve")
             else ("nightly_30d" if stored else None)}
 
@@ -340,7 +340,8 @@ def wallet_copyability(address: str, session: Session = Depends(get_session)):
     nums = ("ret", "pnl", "mdd", "leader_ret", "retention", "costs")
     return {"score": {**dict(score), "score": num(score["score"])} if score else None,
             "health": dict(h) if h else None, "replay_audit":[dict(r) for r in audit],
-            "backtests": [{**dict(b), **{k: num(b[k]) for k in nums}} for b in bts]}
+            "backtests": [{**dict(b), **{k: num(b[k]) for k in nums},
+                           "execution_status": "executed" if b["trades"] else "no_executions"} for b in bts]}
 
 
 @router.get("/copy-board")
@@ -357,13 +358,15 @@ def copy_board(session: Session = Depends(get_session), window: int = Query(30, 
         SELECT w.address, w.display_name, w.venue, b.ret, b.pnl, b.mdd, b.leader_ret, b.retention, b.trades,
                b.liquidations, b.costs, b.approx_equity, b.curve, b.computed_at,
                (SELECT d.delay_curve FROM copy_backtest d WHERE d.wallet_id = b.wallet_id AND d.window_days = 30
-                  AND d.params_key = b.params_key) AS delay_curve,
+                  AND d.params_key = b.params_key AND d.trades > 0) AS delay_curve,
                s.score, s.grade, s.status AS score_status, h.status AS health
         FROM copy_backtest b JOIN wallet w ON w.id = b.wallet_id
         LEFT JOIN copy_score s ON s.wallet_id = b.wallet_id LEFT JOIN trader_health h ON h.wallet_id = b.wallet_id
         WHERE b.window_days = :win AND b.params_key = 'default-v2' AND b.trades >= :mt{venue_clause(venue)}
-        ORDER BY {order} LIMIT :n"""), {"win": window, "mt": min_trades, "n": limit}).mappings().all()
-    computed = session.execute(text("SELECT max(computed_at) FROM copy_backtest")).scalar()
+        ORDER BY {order} LIMIT :n"""), {"win": window, "mt": max(1, min_trades), "n": limit}).mappings().all()
+    computed = session.execute(text(
+        "SELECT max(computed_at) FROM copy_backtest WHERE params_key = 'default-v2' AND window_days = :win AND trades > 0"
+    ), {"win": window}).scalar()
     nums = ("ret", "pnl", "mdd", "leader_ret", "retention", "costs", "score")
     return {"window": window, "sort": sort, "computed_at": computed,
             "rows": [{**dict(r), **{k: num(r[k]) for k in nums}} for r in rows]}

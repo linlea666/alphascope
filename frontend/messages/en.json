@@ -1907,6 +1907,15 @@
       "costs": "Costs",
       "days": "{n} days",
       "liq": "{n} liquidated"
+    },
+    "noExecutions": "No simulated fills",
+    "audit": {
+      "title": "Historical replay audit ({n})",
+      "cutoff": "Original cutoff",
+      "previous": "Original return and fills",
+      "replayed": "Recomputed return and fills",
+      "fills": "{ret} · {n} fills",
+      "unavailable": "Replay unavailable"
     }
   },
   "backtest": {
@@ -1953,7 +1962,8 @@
     },
     "capped": "{p} of the time their ratio exceeded max leverage and was capped: the result reflects the cap more than their sizing.",
     "prices": "Fill precision: {res} candles.",
-    "notes": "Liquidation checked hourly at the high / low; funding not modelled; OKX records whole positions only. Hindsight, not a forecast."
+    "notes": "Liquidation checked hourly at the high / low; funding not modelled; OKX records whole positions only. Hindsight, not a forecast.",
+    "noExecutions": "This window contains {n} trader decisions and no simulated fills by the cutoff under these settings. Windows without fills are excluded from copy-return scoring."
   },
   "behavior": {
     "title": "Behaviour fingerprint",

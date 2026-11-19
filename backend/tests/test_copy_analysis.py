@@ -134,10 +134,29 @@ def test_backtest_ignores_later_equity_and_unfinished_aggregate(sf):
         s.execute(text("UPDATE equity_point SET fetched_at=:t"), {"t": T0+timedelta(hours=1)})
         s.commit()
         result = backtest(s,wid,BacktestParams(days=30,delay_seconds=0),now=NOW)
-        assert result["trades"] == 0
+        assert result["trades"] == 0 and result["execution_status"] == "no_executions"
         s.execute(text("UPDATE trade_decision SET ended_at=:t,n_fills=2"),{"t":NOW+timedelta(seconds=5)})
         s.commit()
         assert backtest(s,wid,BacktestParams(days=30),now=NOW)["reason"]=="no_decisions"
+
+
+def test_empty_replay_is_visible_but_excluded_from_scores_and_board(sf, client):  # noqa: F811
+    from app.factors.copy_run import score_wallet
+
+    wid = seed(sf, [])
+    with sf.begin() as s:
+        s.execute(text("""INSERT INTO factor_value (wallet_id, factor, time_window, version, value, n, as_of)
+            VALUES (:w, 'n_closed', 'all', 'test', 99, 99, :t)"""), {"w": wid, "t": NOW})
+        s.execute(text("""INSERT INTO copy_backtest (wallet_id,window_days,params_key,computed_at,capital,ret,
+            pnl,mdd,trades,liquidations,costs,n_decisions,approx_equity,curve)
+            VALUES (:w,90,'default-v2',:t,10000,0,0,0,0,0,0,12,false,'[]')"""), {"w": wid, "t": NOW})
+        assert score_wallet(s, wid, NOW)["status"] == "insufficient"
+    record = client.get(f"/api/v1/wallets/{ADDR}/copyability").json()["backtests"][0]
+    assert record["trades"] == 0 and record["execution_status"] == "no_executions"
+    assert client.get("/api/v1/copy-board", params={"window":90,"min_trades":0}).json()["rows"] == []
+    with sf.begin() as s:
+        s.execute(text("UPDATE copy_backtest SET trades=2 WHERE wallet_id=:w"), {"w": wid})
+        assert score_wallet(s, wid, NOW)["status"] == "scored"  # an executed break-even window is valid
 
 
 def test_backtest_never_executes_future_bar_or_delayed_decision(sf):

@@ -1136,6 +1136,9 @@ export type Backtest = {
 
 export type ScorePart = { key: string; points: number; max: number; [k: string]: unknown };
 export type Copyability = {
+  replay_audit?: { window_days: number; source_cutoff: string; version: string; outcome: {
+    previous_ret: number | null; previous_trades: number; ret?: number; trades?: number; status: string;
+  } }[];
   score: { status: "scored" | "insufficient"; score: number | null; grade: string | null; components: ScorePart[]; computed_at: string } | null;
   health: { status: HealthStatus; prev_status: HealthStatus | null; signals: { key: string; recent: number | null; prior: number | null }[]; changed_at: string | null; computed_at: string } | null;
   backtests: { window_days: number; ret: number; pnl: number; mdd: number; leader_ret: number | null; retention: number | null; trades: number; liquidations: number; costs: number; approx_equity: boolean; computed_at: string }[];

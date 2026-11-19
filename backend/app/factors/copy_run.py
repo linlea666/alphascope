@@ -72,9 +72,11 @@ def score_wallet(s: Session, wid: int, now: datetime) -> dict:
         {"w": wid, "v": TIMING_VERSION}).first()
     verified = bool(s.execute(text("""SELECT 1 FROM style_tag WHERE wallet_id = :w AND status = 'verified'
                                       AND style <> 'high_risk'"""), {"w": wid}).first())
-    bts = {d: dict(r) for d, r in ((r["window_days"], r) for r in s.execute(text("""
-        SELECT window_days, ret, mdd, delay_curve FROM copy_backtest WHERE wallet_id = :w AND params_key = :k"""),
-        {"w": wid, "k": PARAMS_KEY}).mappings().all())}
+    rows = s.execute(text("""
+        SELECT window_days, ret, mdd, delay_curve FROM copy_backtest
+        WHERE wallet_id = :w AND params_key = :k AND trades > 0"""),
+        {"w": wid, "k": PARAMS_KEY}).mappings()
+    bts = {row["window_days"]: dict(row) for row in rows}
     for b in bts.values():
         b["ret"], b["mdd"] = float(b["ret"]), float(b["mdd"] or 0)
     res = copyability.score(f, float(t.q_value) if t else None, float(t.edge_shrunk) if t and t.edge_shrunk is not None
@@ -156,7 +158,7 @@ def run_copy_analysis(sf: sessionmaker[Session], now: datetime | None = None, li
                     r = backtest(s, wid, BacktestParams(days=days), now=now, prices=prices,
                                  delays=DELAYS if days == 30 else ())
                     _store_backtest(s, wid, days, r, now)
-                    ok += bool(r.get("ok")) and days == 30
+                    ok += days == 30 and r.get("trades", 0) > 0
                 s.commit()
             except Exception:  # noqa: BLE001 - one trader's bad data must not stop the batch
                 s.rollback()
