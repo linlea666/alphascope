@@ -21,6 +21,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from tempfile import TemporaryFile
 
 import numpy as np
 from sqlalchemy import text
@@ -40,6 +41,9 @@ CURVE_POINTS = 120
 
 def _minute(t: datetime) -> int:
     return int(t.timestamp() // 60)
+
+
+RESIDENT_PRICE_BYTES=128*1024**2
 
 
 class PriceBook:
@@ -67,7 +71,8 @@ class PriceBook:
 
     def _load(self, coin: str) -> None:
         if coin in self.fine:
-            self.cache_sizes.move_to_end(coin)
+            if coin in self.cache_sizes:
+                self.cache_sizes.move_to_end(coin)
             return
         self.fine[coin] = ("", 0, np.empty(0), np.empty(0), np.empty(0))
         self.extremes[coin]=(np.empty(0),np.empty(0))
@@ -90,9 +95,24 @@ class PriceBook:
         self.hourly[coin] = (h[:, 0], h[:, 2], h[:, 3], h[:, 4]) if len(h) else (np.empty(0),) * 4
 
         self.cache_sizes[coin] = 40*(len(self.fine[coin][2])+len(h))
-        while len(self.cache_sizes)>1 and sum(self.cache_sizes.values())>128*1024**2:
+        while self.cache_sizes and sum(self.cache_sizes.values())>RESIDENT_PRICE_BYTES:
             evicted,_=self.cache_sizes.popitem(last=False)
-            del self.fine[evicted], self.hourly[evicted], self.extremes[evicted]
+            self._spill(evicted)
+
+    def _spill(self,coin:str) -> None:
+        """File-backed prices remain available to every subsequent trader without repeating the DB scan.
+        TemporaryFile unlinks on close and the mapping lives as long as its price arrays.
+        """
+        interval,step,ts,opens,closes=self.fine[coin]
+        if not len(ts):
+            return
+        hi,lo=self.extremes[coin]
+        with TemporaryFile() as tmp:
+            bars=np.memmap(tmp,dtype=float,mode="w+",shape=(5,len(ts)))
+            for col,values in zip(bars,(ts,opens,hi,lo,closes)):
+                col[:]=values
+        self.fine[coin]=(interval,step,bars[0],bars[1],bars[4])
+        self.extremes[coin]=(bars[2],bars[3])
 
     def exposed_hour(self,coin,hour_minute,changed_at):
         """Only completed bars entirely after the position change can contribute an intrahour extreme."""
@@ -220,11 +240,13 @@ def run(inputs: dict, prices: PriceBook, p: BacktestParams, since: datetime, unt
             return Decimal(str(eq_pts[i][1])) if i >= 0 else None
         return Decimal(str(inputs["asset"]))
 
+    lev_times={coin:[point[0] for point in xs] for coin,xs in inputs["levs"].items()}
+
     def leader_lev_at(coin: str, t: datetime) -> int | None:
         xs = inputs["levs"].get(coin)
         if not xs:
             return None
-        i = bisect_right([x[0] for x in xs], t) - 1
+        i = bisect_right(lev_times[coin], t) - 1
         return xs[i][1] if i >= 0 else None
 
     ep = p.engine()

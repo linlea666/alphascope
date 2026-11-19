@@ -453,3 +453,56 @@ def review_factor(sid: int, body: FactorReview, s: Session = Depends(get_session
     s.add(item)
     s.commit()
     return {"id": item.id}
+
+
+@router.get("/events/{eid}/sources")
+def sources(
+    eid: int,
+    coin: str,
+    venue: Literal["hyperliquid", "okx"],
+    hours: int = 72,
+    mode: Mode = "retrospective",
+    as_of: AwareDatetime | None = None,
+    wallet: str | None = Query(None, max_length=128),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    s: Session = Depends(get_session),
+):
+    cutoff = asof(as_of)
+    event = get_event(s, eid, cutoff)
+    if hours not in WINDOWS:
+        raise HTTPException(422, "unsupported window")
+    if mode == "as_observed":
+        cutoff = min(cutoff, event.start_at)
+    args = dict(
+        c=symbol(coin),
+        a=event.start_at - timedelta(hours=hours),
+        b=event.start_at,
+        t=cutoff,
+        w=wallet,
+        offset=offset,
+        n=limit + 1,
+    )
+    if venue == "hyperliquid":
+        query = """SELECT w.address, f.tid::text reference,f.time event_time,r.fetched_at known_at,
+                 f.sz quantity,f.px price,f.side,f.start_position,r.id archive_id,r.sha256
+                 FROM fill f JOIN wallet w ON w.id=f.wallet_id JOIN raw_object r ON r.id=f.raw_object_id
+                 WHERE f.coin=:c AND f.time>=:a AND f.time<:b AND r.fetched_at<=:t
+                 AND (CAST(:w AS text) IS NULL OR w.address=:w) ORDER BY f.time DESC,f.wallet_id,f.tid"""
+    else:
+        query = """SELECT w.address,p.pos_id reference,p.open_time event_time,p.fetched_at known_at,p.max_size quantity,
+                 p.open_avg_px price,p.direction side,p.close_type,p.liquidated FROM okx_position p
+                 JOIN wallet w ON w.id=p.wallet_id WHERE p.coin=:c AND p.open_time>=:a AND p.open_time<:b
+                 AND p.fetched_at<=:t AND (CAST(:w AS text) IS NULL OR w.address=:w)
+                 ORDER BY p.open_time DESC,p.wallet_id,p.pos_id"""
+    rows = s.execute(text(query + " OFFSET :offset LIMIT :n"), args).mappings().all()
+    return {
+        "rows": [dict(r) for r in rows[:limit]],
+        "has_more": len(rows) > limit,
+        "cutoff": cutoff,
+        "event": event_info(event),
+        "coin": coin,
+        "venue": venue,
+        "hours": hours,
+        "mode": mode,
+    }

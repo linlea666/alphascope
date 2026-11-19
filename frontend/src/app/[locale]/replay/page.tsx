@@ -30,6 +30,18 @@ function FlowPanel({
   frozen?: boolean;
 }) {
   const f = p.flow;
+  const source = (venue: string, wallet?: string) => ({
+    pathname: "/replay",
+    query: {
+      coin: p.coin,
+      event: p.event.id,
+      source: venue,
+      hours: p.hours,
+      mode: p.mode,
+      vintage: p.vintage,
+      wallet,
+    },
+  });
   const components = [
     ["long_add", zh ? "新增多仓" : "Long adds"],
     ["long_cut", zh ? "多仓减少" : "Long reductions"],
@@ -114,13 +126,21 @@ function FlowPanel({
                   <td className={td}>
                     <Link
                       className="text-accent"
-                      href={{ pathname: `/trader/${r.address}`, query: { coin: p.coin } }}
+                      href={{
+                        pathname: `/trader/${r.address}`,
+                        query: { rc: p.coin, re: p.event.start_at },
+                        hash: "replay",
+                      }}
                     >
                       {r.address.slice(0, 9)}…{r.address.slice(-4)}
                     </Link>
                   </td>
                   <td className={td}>{numeric(r.net)}</td>
-                  <td className={td}>{r.fills}</td>
+                  <td className={td}>
+                    <Link className="text-accent" href={source("hyperliquid", r.address)}>
+                      {r.fills}
+                    </Link>
+                  </td>
                   <td className={td}>{r.liquidation_fills}</td>
                 </tr>
               ))}
@@ -128,6 +148,10 @@ function FlowPanel({
           </table>
         </div>
       </details>
+      <div className="mt-2 flex gap-4 text-xs text-accent">
+        <Link href={source("hyperliquid")}>{zh ? "HL 逐笔来源" : "HL fill records"}</Link>
+        <Link href={source("okx")}>{zh ? "OKX 整仓来源" : "OKX position records"}</Link>
+      </div>
       {!frozen && (
         <PublishReport
           body={{ event_id: p.event.id, coin: p.coin, hours: p.hours, mode: p.mode, vintage: p.vintage }}
@@ -198,6 +222,7 @@ async function Events({
   zh: boolean;
   locale: string;
 }) {
+  if (q.source === "okx" || q.source === "hyperliquid") return <Sources coin={coin} q={q} zh={zh} />;
   if (q.report && /^\d+$/.test(q.report)) {
     const saved = await research.report(Number(q.report), coin).catch(() => null);
     if (!saved) return <Panel>{zh ? "此币种下找不到该报告" : "Report unavailable for this coin"}</Panel>;
@@ -529,7 +554,14 @@ async function Live({ coin, q, zh }: { coin: string; q: Query; zh: boolean }) {
               )}
               {f.accounts.map((a) => (
                 <p key={a.address} className="text-xs leading-6">
-                  <Link className="text-accent" href={{ pathname: `/trader/${a.address}`, query: { coin } }}>
+                  <Link
+                    className="text-accent"
+                    href={{
+                      pathname: `/trader/${a.address}`,
+                      query: { rc: coin, re: f.available_at },
+                      hash: "replay",
+                    }}
+                  >
                     {a.address}
                   </Link>{" "}
                   · {a.cohort} · {numeric(a.liq_px)} · {utc(a.observed_at)}
@@ -575,7 +607,7 @@ async function Live({ coin, q, zh }: { coin: string; q: Query; zh: boolean }) {
                   <Link
                     className="mr-2 text-accent"
                     key={a.address}
-                    href={{ pathname: `/trader/${a.address}`, query: { coin } }}
+                    href={{ pathname: `/trader/${a.address}`, query: { rc: coin, re: n.at }, hash: "replay" }}
                   >
                     {a.address.slice(0, 10)}…
                   </Link>
@@ -724,5 +756,114 @@ async function Forward({ coin, zh }: { coin: string; zh: boolean }) {
         )}
       </Panel>
     </>
+  );
+}
+
+async function Sources({ coin, q, zh }: { coin: string; q: Query; zh: boolean }) {
+  const venue = q.source === "okx" ? "okx" : "hyperliquid",
+    offset = Math.max(0, Number.parseInt(q.offset ?? "0") || 0);
+  const info = await research
+    .sources(Number(q.event), {
+      coin,
+      venue,
+      offset,
+      hours: Number(q.hours ?? 72),
+      mode: q.mode === "as_observed" ? "as_observed" : "retrospective",
+      as_of: q.vintage ?? "",
+      wallet: q.wallet,
+    })
+    .catch(() => null);
+  if (!info) return <Panel>{zh ? "该窗口的来源不可用" : "Evidence unavailable for this window"}</Panel>;
+  const page = (n: number) => ({ pathname: "/replay", query: { ...q, coin, offset: n } });
+  return (
+    <Panel title={title(info.event, zh)} hint={`${coin} · ${venue} · ${utc(info.cutoff)}`}>
+      <p className="text-xs text-muted">
+        {venue === "okx"
+          ? zh
+            ? "数量为整仓峰值，价格为平均开仓价"
+            : "Quantity is peak position size. Price is average entry."
+          : zh
+            ? "数量与价格来自逐笔成交"
+            : "Sizes and prices refer to individual fills."}
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              {[
+                zh ? "来源编号" : "Source ID",
+                "UTC",
+                zh ? "采集 UTC" : "Collected UTC",
+                zh ? "账户" : "Trader",
+                zh ? "方向" : "Side",
+                zh ? "币数" : "Units",
+                zh ? "价格" : "Price",
+              ].map((k) => (
+                <th className={th} key={k}>
+                  {k}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {info.rows.map((r) => (
+              <tr key={r.address + r.reference}>
+                <td className={td}>
+                  <details>
+                    <summary>{r.reference}</summary>
+                    {r.sha256 && (
+                      <small className="break-all">
+                        #{r.archive_id} · SHA256 {r.sha256}
+                      </small>
+                    )}
+                  </details>
+                </td>
+                <td className={td}>{utc(r.event_time)}</td>
+                <td className={td}>{utc(r.known_at)}</td>
+                <td className={td}>
+                  <Link
+                    className="text-accent"
+                    href={{
+                      pathname: `/trader/${r.address}`,
+                      query: { rc: coin, re: r.event_time },
+                      hash: "replay",
+                    }}
+                  >
+                    {r.address.slice(0, 14)}
+                  </Link>
+                </td>
+                <td className={td}>{r.side}</td>
+                <td className={td}>{numeric(r.quantity, 6)}</td>
+                <td className={td}>{numeric(r.price)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {!info.rows.length && (
+        <p className="text-sm text-muted">
+          {zh ? "此截止时间没有可用的来源记录" : "No source records available at this cutoff"}
+        </p>
+      )}
+      <div className="mt-3 flex gap-3 text-accent">
+        {offset > 0 && <Link href={page(Math.max(0, offset - 50))}>{zh ? "上一页" : "Previous"}</Link>}
+        {info.has_more && <Link href={page(offset + 50)}>{zh ? "下一页" : "Next"}</Link>}
+        <Link
+          href={{
+            pathname: "/replay",
+            query: {
+              coin: info.event.coin,
+              event: info.event.id,
+              sync: coin,
+              hours: q.hours,
+              mode: q.mode,
+              vintage: q.vintage,
+            },
+          }}
+        >
+          {zh ? "返回回放" : "Back to replay"}
+        </Link>
+      </div>
+    </Panel>
   );
 }

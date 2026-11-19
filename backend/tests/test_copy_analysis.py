@@ -171,3 +171,17 @@ def test_legacy_replay_preserves_newer_cache_and_records_original_cutoff(sf):
         assert float(s.scalar(text("SELECT ret FROM copy_backtest WHERE params_key='default-v2'")))==pytest.approx(.9)
         outcome=s.scalar(text("SELECT outcome FROM copy_replay_audit"))
         assert outcome["status"]=="recalculated" and outcome["ret"]!=outcome["previous_ret"]
+
+
+def test_spilled_price_arrays_keep_the_original_source_without_reloading(sf,monkeypatch):
+    import importlib
+    bt=importlib.import_module("app.sim.backtest")
+    monkeypatch.setattr(bt,"RESIDENT_PRICE_BYTES",1)
+    seed(sf,[],bars=[(T0,100),(T0+timedelta(minutes=1),101)])
+    with sf() as s:
+        prices=bt.PriceBook(s,T0,NOW)
+        assert prices.price("BTC",T0)==100
+        def unexpected(*args): raise AssertionError("reloaded evicted price series")
+        monkeypatch.setattr(prices,"_bars",unexpected)
+        assert prices.price("BTC",T0+timedelta(minutes=2))==101
+        assert prices.hour("BTC",bt._minute(T0))==(101,100,101)

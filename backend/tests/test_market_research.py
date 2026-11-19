@@ -21,7 +21,7 @@ def wallet(s):
     )
 
 
-def test_flip_reversal_cutoff_missing_and_coin_isolation(sf):
+def test_flip_reversal_cutoff_missing_and_coin_isolation(sf, client):
     with sf.begin() as s:
         wid = wallet(s)
         rid = s.scalar(
@@ -51,6 +51,17 @@ def test_flip_reversal_cutoff_missing_and_coin_isolation(sf):
         assert f["without_largest"] == 0 and f["top1_share"] == 1
         assert summarize(wallet_flows(s, "ETH", T, 1, vintage))["net"] == 9
         assert summarize(wallet_flows(s, "BTC", T - timedelta(hours=1), 1, vintage))["net"] is None
+
+    with sf.begin() as s:
+        add_event(s, "btc-evidence", "BTC", T, T + timedelta(hours=2), 10, 11, "c", "manual", "evidence")
+    eid = client.get("/api/v1/research/events?coin=BTC").json()["events"][0]["id"]
+    url = f"/api/v1/research/events/{eid}/sources"
+    for coin, count in [("BTC", 3), ("ETH", 1)]:
+        params = {"venue": "hyperliquid", "coin": coin, "hours": 1}
+        result = client.get(url, params=params).json()
+        assert len(result["rows"]) == count and result["rows"][0]["sha256"] == "test"
+        assert not client.get(url, params={**params, "mode": "as_observed"}).json()["rows"]
+        assert not client.get(url, params={**params, "wallet": "unknown"}).json()["rows"]
 
 
 def test_catalog_uses_independent_price_history_and_is_idempotent(sf, client):

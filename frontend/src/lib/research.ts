@@ -191,6 +191,35 @@ export type Archive = {
   }[];
 };
 export const research = {
+  sources: (
+    id: number,
+    params: {
+      coin: string;
+      venue: string;
+      hours: number;
+      as_of: string;
+      mode: string;
+      offset: number;
+      wallet?: string;
+    },
+  ) =>
+    get<{
+      event: EventDef;
+      cutoff: string;
+      has_more: boolean;
+      rows: {
+        reference: string;
+        event_time: string;
+        known_at: string;
+        address: string;
+        side: string;
+        price: number;
+        quantity: number;
+        archive_id?: number;
+        sha256?: string;
+        start_position?: number | null;
+      }[];
+    }>(`/api/v1/research/events/${id}/sources`, params),
   report: (id: number, coin: string) =>
     get<{ published_at: string; source_version: string; detail: Detail }>(`/api/v1/research/reports/${id}`, {
       coin,
