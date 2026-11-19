@@ -148,3 +148,26 @@ def test_backtest_never_executes_future_bar_or_delayed_decision(sf):
             r=backtest(s,wid,BacktestParams(days=30,delay_seconds=delay),now=NOW)
             assert r["trades"]==0
             assert all(datetime.fromisoformat(ts)<=NOW for ts,_ in r["curve"])
+
+
+def test_intrahour_low_before_entry_does_not_liquidate_new_position(sf):
+    entry=T0+timedelta(minutes=40)
+    wid=seed(sf,[(entry,80000,0,10)],equity=10000,hours=[(T0,80000,60000,80000)])
+    with sf() as s:
+        result=backtest(s,wid,BacktestParams(days=30,delay_seconds=0),now=NOW)
+    assert result["ok"] and result["liquidations"]==0
+
+
+def test_legacy_replay_preserves_newer_cache_and_records_original_cutoff(sf):
+    from app.factors.copy_run import replay_copy_history
+    wid=seed(sf,[(T0,80000,0,1),(T0+timedelta(days=1),81000,1,0)],bars=[(T0+timedelta(minutes=1),80000),(T0+timedelta(days=1,minutes=1),81000)])
+    with sf.begin() as s:
+        for key,stamp in [("default",NOW),("default-v2",NOW+timedelta(hours=1))]:
+            s.execute(text("""INSERT INTO copy_backtest(wallet_id,window_days,params_key,computed_at,capital,ret,pnl,mdd,trades,liquidations,costs,n_decisions,approx_equity,curve)
+                VALUES(:w,30,:k,:t,10000,.9,9000,0,2,0,0,2,false,'[]')"""),dict(w=wid,k=key,t=stamp))
+    assert replay_copy_history(sf)["legacy_windows"]==1
+    assert replay_copy_history(sf)["legacy_windows"]==0
+    with sf() as s:
+        assert float(s.scalar(text("SELECT ret FROM copy_backtest WHERE params_key='default-v2'")))==pytest.approx(.9)
+        outcome=s.scalar(text("SELECT outcome FROM copy_replay_audit"))
+        assert outcome["status"]=="recalculated" and outcome["ret"]!=outcome["previous_ret"]

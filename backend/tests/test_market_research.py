@@ -166,3 +166,134 @@ def test_forecast_settlement_calibration_and_no_future_training(sf, client):
     assert probabilities(prices, cutoff, 1) == probabilities(
         {**prices, cutoff + timedelta(hours=1): 9999999}, cutoff, 1
     )
+
+
+def test_eligible_review_is_scoped_to_latest_evaluation(sf, client):
+    from app.models import ResearchEvaluation, ResearchExperiment
+
+    with sf.begin() as s:
+        register(s, "ETH")
+        study = s.scalar(select(ResearchExperiment).limit(1))
+        evaluation = ResearchEvaluation(experiment_id=study.id, cutoff=T, result={"review_eligible": False})
+        s.add(evaluation)
+    url = f"/api/v1/research/experiments/{study.id}/reviews"
+    body = {"evaluation_id": evaluation.id, "rationale": "held-out sample too small", "decision": "approve"}
+    assert client.post(url, json=body).status_code == 422
+    rejected = client.post(url, json={**body, "decision": "reject"}).json()
+    assert client.post(url, json={**body, "decision": "reject"}).json() == rejected
+    with sf.begin() as s:
+        later = ResearchEvaluation(
+            experiment_id=study.id, cutoff=T + timedelta(days=30), result={"review_eligible": True}
+        )
+        s.add(later)
+    assert client.post(url, json=body).status_code == 409
+    assert (
+        client.post(
+            url, json={**body, "evaluation_id": later.id, "rationale": "verified held-out evidence"}
+        ).status_code
+        == 201
+    )
+    assert client.get("/api/v1/research/archive?coin=BTC").json()["studies"] == []
+
+
+def test_single_venue_outage_does_not_delay_healthy_markets():
+    import asyncio
+    from types import SimpleNamespace
+    from app.research.context import collect_context
+
+    gate = None
+
+    class HL:
+        async def info(self, request):
+            if request["type"] == "metaAndAssetCtxs":
+                return SimpleNamespace(
+                    data=[{"universe": [{"name": "BTC"}, {"name": "ETH"}]}, [{"markPx": "12"}, {"markPx": "34"}]]
+                )
+            if request["coin"] == "ETH":
+                await gate.wait()
+                raise TimeoutError
+            return SimpleNamespace(data={"levels": [[{"px": "99", "sz": "1"}], [{"px": "101", "sz": "2"}]]})
+
+    class OKX:
+        async def get(self, path, params):
+            return []
+
+    async def check():
+        nonlocal gate
+        gate = asyncio.Event()
+        ready = []
+        async for coin, venue, ctx, _ in collect_context(HL(), OKX(), ("BTC", "ETH")):
+            ready.append((coin, venue))
+            if (coin, venue) == ("BTC", "hyperliquid"):
+                assert ("ETH", "hyperliquid") not in ready and ctx["fields"]["mark"] == 12
+                gate.set()
+            if (coin, venue) == ("ETH", "hyperliquid"):
+                assert "depth" in ctx["missing"] and ctx["fields"]["mark"] == 34
+        assert len(ready) == 4
+
+    asyncio.run(asyncio.wait_for(check(), timeout=3))
+
+
+def test_candle_publication_requires_closed_bar_and_preserves_first_confirmation(sf):
+    from app.ingest.market_ingest import store_candles
+    from app.research.forward import history
+
+    row = dict(source="hyperliquid", coin="BTC", interval="1h", t=T, o=10, h=11, l=9, c=10, v=1, n=1)
+    with sf.begin() as s:
+        store_candles(s, [{**row, "f": T + timedelta(minutes=30)}])
+        assert not history(s, "BTC", T + timedelta(hours=2))
+        store_candles(s, [{**row, "f": T + timedelta(minutes=60)}])
+        store_candles(s, [{**row, "f": T + timedelta(minutes=95)}])
+        assert history(s, "BTC", T + timedelta(minutes=61)) == {T + timedelta(hours=1): 10.0}
+
+
+def test_long_breadth_excludes_short_cover_and_holdouts_are_forward():
+    import math
+    from types import SimpleNamespace
+    from app.research.frames import changes
+    from app.research.forward import paired_test, prior_risk, treatment
+
+    before = [{"wallet_id": i, "address": str(i), "szi": -4 if i < 3 else 1} for i in range(4)]
+    after = [{**r, "szi": r["szi"] + 2} for r in before]
+    delta = changes(after, before)
+    assert delta["buy_breadth"] == 1 and delta["long_add_breadth"] == 0.25
+    assert treatment("broad_long", {"delta": delta}) is False
+    samples = []
+    for i in range(120):
+        at = T + timedelta(days=i * 2)
+        samples.append(
+            SimpleNamespace(
+                issued_at=at,
+                evidence={
+                    "vol_24h": 0.01,
+                    "momentum_4h": 0.01,
+                    "divergence": 1 if i % 2 else -1,
+                    "btc_beta_pre": 2,
+                    "delta": {},
+                },
+                outcome={"ret": 0.04 if i % 2 else 0.02, "observed_at": (at + timedelta(days=1)).isoformat()},
+            )
+        )
+    btc = {r.issued_at: 0.01 for r in samples}
+    result = paired_test(samples, "eth_specialist", btc)
+    assert (result["look"], result["pairs"], result["tested_pairs"]) == (1, 60, 30)
+    assert result["effect"] == pytest.approx(0.02)
+    assert result["folds"][0]["train_pairs"] == 30
+    asset = {T + timedelta(hours=i): math.exp(0.002 * (i % 7)) for i in range(96)}
+    market = {k: math.sqrt(v) for k, v in asset.items()}
+    risk = prior_risk(asset, market, max(asset))
+    assert risk["btc_beta_pre"] == pytest.approx(2) and risk["vol_24h"] > 0
+
+
+def test_daily_review_opposite_coins_and_unavailable_venue(sf):
+    from app.research.frames import daily_review
+
+    now = datetime.now(UTC)
+    with sf.begin() as s:
+        for coin, size in [("ETH", 20), ("BTC", -8)]:
+            fid = capture(s, coin, "okx", now, {"fields": {"mark": 10}, "missing": []})
+            frame = s.get(ResearchFrame, fid)
+            frame.metrics = {**frame.metrics, "windows": {"24": {"common_n": 10, "net_units": size}}}
+    with sf() as s:
+        review = daily_review(s, ["BTC", "ETH"], datetime.now(UTC))
+    assert review["comparison"] == {"okx": "opposite", "hyperliquid": "insufficient"}

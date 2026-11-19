@@ -9,7 +9,8 @@ from datetime import UTC, datetime
 from app.models import IngestRun, ResearchFrame
 from app.research.context import collect_context
 from app.research.forward import evaluate, issue, register, settle
-from app.research.frames import VENUES, capture
+from app.research.frames import capture
+from app.ingest.market_ingest import store_candles
 from app.research.replay import refresh_events
 
 log = logging.getLogger(__name__)
@@ -44,26 +45,25 @@ def tracked(sf, kind, function):
 
 
 async def market_research(sf, settings, hl, okx):
-    contexts = await collect_context(hl, okx, settings.research_coins)
     failures, publications = [], 0
-    for coin in settings.research_coins:
-        for venue in VENUES:
-            try:
-                with sf.begin() as s:
-                    s.connection(execution_options={"isolation_level": "REPEATABLE READ"})
-                    fid = capture(s, coin, venue, datetime.now(UTC), contexts[coin, venue])
-                if fid:
-                    publications += 1
-                with sf.begin() as s:
-                    register(s, coin)
-                    if venue == "hyperliquid" and fid:
-                        issue(s, s.get(ResearchFrame, fid), datetime.now(UTC))
-                    settle(s, coin, datetime.now(UTC))
-                if contexts[coin, venue]["missing"]:
-                    failures.append(f"{coin}/{venue}: " + ",".join(contexts[coin, venue]["missing"]))
-            except Exception as exc:
-                failures.append(f"{coin}/{venue}: {type(exc).__name__}")
-                log.exception("market research for %s/%s", coin, venue)
+    async for coin, venue, context, candles in collect_context(hl, okx, settings.research_coins):
+        try:
+            with sf.begin() as s:
+                s.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+                store_candles(s, candles)
+                fid = capture(s, coin, venue, datetime.now(UTC), context)
+            if fid:
+                publications += 1
+            with sf.begin() as s:
+                register(s, coin)
+                if venue == "hyperliquid" and fid:
+                    issue(s, s.get(ResearchFrame, fid), datetime.now(UTC))
+                settle(s, coin, datetime.now(UTC))
+            if context["missing"]:
+                failures.append(f"{coin}/{venue}: " + ",".join(context["missing"]))
+        except Exception as exc:
+            failures.append(f"{coin}/{venue}: {type(exc).__name__}")
+            log.exception("market research for %s/%s", coin, venue)
     return {"status": "partial" if failures else "success", "frames": publications, "gaps": failures}
 
 

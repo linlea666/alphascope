@@ -137,3 +137,66 @@ export function EventEditor({ coin, parent, zh }: { coin: string; parent?: numbe
     </details>
   );
 }
+
+export function FactorReviewForm({
+  study,
+  evaluation,
+  eligible,
+  zh,
+}: {
+  study: number;
+  evaluation: number;
+  eligible: boolean;
+  zh: boolean;
+}) {
+  const router = useRouter();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  async function submit(form: FormData) {
+    setSaving(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/bff/research/experiments/${study}/reviews`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-alphascope": "1" },
+        body: JSON.stringify({
+          evaluation_id: evaluation,
+          decision: form.get("decision"),
+          rationale: form.get("reason"),
+        }),
+      });
+      if (!response.ok) throw new Error((await response.json()).detail || String(response.status));
+      router.refresh();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <details className="mt-1 text-xs">
+      <summary className="text-accent">{zh ? "审核此版本" : "Review this version"}</summary>
+      <form action={submit} className="mt-2 flex flex-wrap gap-2">
+        <select aria-label={zh ? "决定" : "Decision"} className="bg-panel-2" name="decision">
+          {eligible && (
+            <option value="approve">{zh ? "纳入该币种正式观察" : "Approve for this asset"}</option>
+          )}
+          <option value="reject">{zh ? "拒绝" : "Reject"}</option>
+          <option value="withdraw">{zh ? "撤回" : "Withdraw"}</option>
+        </select>
+        <input
+          required
+          maxLength={2000}
+          className="bg-panel-2"
+          name="reason"
+          aria-label={zh ? "审核理由" : "Rationale"}
+          placeholder={zh ? "审核理由" : "Rationale"}
+        />
+        <button disabled={saving} className="text-accent">
+          {zh ? "保存审核" : "Save review"}
+        </button>
+        {error && <span role="alert">{error}</span>}
+      </form>
+    </details>
+  );
+}

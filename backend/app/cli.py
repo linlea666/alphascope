@@ -58,6 +58,7 @@ def main() -> None:
     rc.add_argument("--limit", type=int, default=5)
     tm = sub.add_parser("timing", help="recompute pivots, decision timing and timing scores")
     tm.add_argument("--venue", choices=["hyperliquid", "okx"], default="hyperliquid")
+    sub.add_parser("replay-copy-history", help="recompute legacy cached backtests at their original cutoffs")
     sub.add_parser("styles", help="recompute factors and style labels")
     ox = sub.add_parser("okx-export", help="export the old OKX collector's SQLite database to a JSONL bundle")
     ox.add_argument("--sqlite", type=Path, required=True)
@@ -98,6 +99,9 @@ def main() -> None:
         result = run_timing(sf, venue=args.venue)
     elif args.cmd == "reconcile":
         result = asyncio.run(reconcile(sf, settings, store, args.limit))
+    elif args.cmd == "replay-copy-history":
+        from app.factors.copy_run import replay_copy_history
+        result=replay_copy_history(sf)
     elif args.cmd == "styles":
         result = run_styles(sf)
     elif args.cmd == "okx-import":

@@ -39,7 +39,13 @@ def store_candles(session: Session, rows: list[dict]) -> int:
         INSERT INTO market_candle (source, coin, interval, t, o, h, l, c, v, n, fetched_at)
         VALUES (:source, :coin, :interval, :t, :o, :h, :l, :c, :v, :n, :f)
         ON CONFLICT (source, coin, interval, t) DO UPDATE SET o = EXCLUDED.o, h = EXCLUDED.h, l = EXCLUDED.l,
-          c = EXCLUDED.c, v = EXCLUDED.v, n = EXCLUDED.n, fetched_at = EXCLUDED.fetched_at"""), rows)
+          c = EXCLUDED.c, v = EXCLUDED.v, n = EXCLUDED.n, fetched_at = EXCLUDED.fetched_at
+        WHERE EXCLUDED.fetched_at >= market_candle.fetched_at AND (
+          (market_candle.o,market_candle.h,market_candle.l,market_candle.c,market_candle.v,market_candle.n)
+            IS DISTINCT FROM (EXCLUDED.o,EXCLUDED.h,EXCLUDED.l,EXCLUDED.c,EXCLUDED.v,EXCLUDED.n)
+          OR (market_candle.fetched_at < market_candle.t + CAST(:duration AS interval)
+              AND EXCLUDED.fetched_at >= market_candle.t + CAST(:duration AS interval)))"""),
+        [{**r, "duration": timedelta(milliseconds=INTERVAL_MS[r["interval"]])} for r in rows])
     return len(rows)
 
 

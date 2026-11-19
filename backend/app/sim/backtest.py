@@ -17,6 +17,7 @@ backtest and a live simulation with the same parameters follow the same rules. D
 """
 
 from bisect import bisect_right
+from collections import OrderedDict
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -48,27 +49,33 @@ class PriceBook:
     def __init__(self, session: Session, since: datetime, until: datetime):
         self.s, self.since, self.until = session, since - timedelta(days=1), until
         self.fine: dict[str, tuple[str, int, np.ndarray, np.ndarray, np.ndarray]] = {}
+        self.extremes: dict[str, tuple[np.ndarray,np.ndarray]] = {}
+        self.cache_sizes: OrderedDict[str,int] = OrderedDict()
         self.hourly: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = {}
 
     def _bars(self, coin: str, interval: str) -> np.ndarray:
         """(minute, open, high, low, close) rows, one per bar; the first source in SOURCES wins a bar."""
-        rows = self.s.execute(text("""
+        query = text("""
             SELECT DISTINCT ON (t) t, o, h, l, c FROM market_candle
             WHERE coin = :coin AND interval = :iv AND source = ANY(:src) AND t BETWEEN :a AND :b
-            ORDER BY t, array_position(CAST(:src AS text[]), source::text)"""),
-            {"coin": coin, "iv": interval, "src": list(SOURCES), "a": self.since, "b": self.until}).all()
-        if not rows:
-            return np.empty((0, 5))
-        return np.array([(t.timestamp() // 60, o, h, lo, c) for t, o, h, lo, c in rows], dtype=float)
+            ORDER BY t, array_position(CAST(:src AS text[]), source::text)""").execution_options(yield_per=2048)
+        chunks=[]
+        with self.s.execute(query,{"coin":coin,"iv":interval,"src":list(SOURCES),"a":self.since,"b":self.until}) as rows:
+            for part in rows.partitions(2048):
+                chunks.append(np.array([(t.timestamp()//60,o,h,low,c) for t,o,h,low,c in part],dtype=float))
+        return np.concatenate(chunks) if chunks else np.empty((0,5))
 
     def _load(self, coin: str) -> None:
         if coin in self.fine:
+            self.cache_sizes.move_to_end(coin)
             return
         self.fine[coin] = ("", 0, np.empty(0), np.empty(0), np.empty(0))
+        self.extremes[coin]=(np.empty(0),np.empty(0))
         for interval, step in FINE:
             b = self._bars(coin, interval)
             if len(b) >= 2:
                 self.fine[coin] = (interval, step, b[:, 0], b[:, 1], b[:, 4])
+                self.extremes[coin]=b[:,2],b[:,3]
                 break
         h = self._bars(coin, "1h")
         if not len(h):
@@ -77,9 +84,30 @@ class PriceBook:
                 hours = ts - ts % 60
                 keys, idx = np.unique(hours, return_index=True)
                 ends = np.append(idx[1:], len(ts))
-                h = np.array([(k, closes[a], closes[a:e].max(), closes[a:e].min(), closes[e - 1])
+                hi,lo=self.extremes[coin]
+                h = np.array([(k, opens[a], hi[a:e].max(), lo[a:e].min(), closes[e - 1])
                               for k, a, e in zip(keys, idx, ends)])
         self.hourly[coin] = (h[:, 0], h[:, 2], h[:, 3], h[:, 4]) if len(h) else (np.empty(0),) * 4
+
+        self.cache_sizes[coin] = 40*(len(self.fine[coin][2])+len(h))
+        while len(self.cache_sizes)>1 and sum(self.cache_sizes.values())>128*1024**2:
+            evicted,_=self.cache_sizes.popitem(last=False)
+            del self.fine[evicted], self.hourly[evicted], self.extremes[evicted]
+
+    def exposed_hour(self,coin,hour_minute,changed_at):
+        """Only completed bars entirely after the position change can contribute an intrahour extreme."""
+        full=self.hour(coin,hour_minute)
+        start=changed_at.timestamp()/60
+        if start<=hour_minute:
+            return full
+        _,step,ts,_,closes=self.fine[coin]
+        hi,lo=self.extremes[coin]
+        a,b=np.searchsorted(ts,start),np.searchsorted(ts,hour_minute+60-step,side="right")
+        if a<b:
+            return float(hi[a:b].max()),float(lo[a:b].min()),float(closes[b-1])
+        if full:
+            return (full[2],)*3
+        return None
 
     def resolution(self, coin: str) -> str:
         self._load(coin)
@@ -205,6 +233,7 @@ def run(inputs: dict, prices: PriceBook, p: BacktestParams, since: datetime, unt
     cash = Decimal(str(p.capital))
     positions: dict[str, tuple[Decimal, Decimal]] = {}
     meta: dict[str, dict] = {}
+    changed_at: dict[str, datetime] = {}
     leader: dict[str, Decimal] = {}
     baseline: dict[str, int] = {}  # leader positions open at the window start (or after our liquidation)
     first_seen: set[str] = set()
@@ -275,7 +304,7 @@ def run(inputs: dict, prices: PriceBook, p: BacktestParams, since: datetime, unt
             hm = _minute(at) - 60
             worst, close = {}, {}
             for c, (z, _) in positions.items():
-                bar = prices.hour(c, hm)
+                bar = prices.exposed_hour(c, hm,changed_at[c])
                 if bar:
                     hi, lo, cl = bar
                     worst[c], close[c] = Decimal(str(lo if z > 0 else hi)), Decimal(str(cl))
@@ -333,6 +362,7 @@ def run(inputs: dict, prices: PriceBook, p: BacktestParams, since: datetime, unt
         orders = {c: q for c, q in plan_orders(ep, targets, current, mids).items() if c == coin}
         for c, q in orders.items():
             trade(c, q, mids[c], at_lev=lev_now.get(c))
+            changed_at[c]=at
         record(at, mids)
     end_mids = marks(until)
     if stopped is None:

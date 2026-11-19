@@ -335,9 +335,11 @@ def wallet_copyability(address: str, session: Session = Depends(get_session)):
         SELECT window_days, ret, pnl, mdd, leader_ret, retention, trades, liquidations, costs, approx_equity, computed_at
         FROM copy_backtest WHERE wallet_id = :w AND params_key = 'default-v2' ORDER BY window_days"""),
         {"w": w["id"]}).mappings().all()
+    audit=session.execute(text("""SELECT window_days,source_cutoff,version,outcome,published_at FROM copy_replay_audit
+        WHERE wallet_id=:w ORDER BY source_cutoff DESC,window_days"""),{"w":w["id"]}).mappings()
     nums = ("ret", "pnl", "mdd", "leader_ret", "retention", "costs")
     return {"score": {**dict(score), "score": num(score["score"])} if score else None,
-            "health": dict(h) if h else None,
+            "health": dict(h) if h else None, "replay_audit":[dict(r) for r in audit],
             "backtests": [{**dict(b), **{k: num(b[k]) for k in nums}} for b in bts]}
 
 

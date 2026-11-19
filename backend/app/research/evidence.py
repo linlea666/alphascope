@@ -11,7 +11,7 @@ from app.research.replay import event_info, summarize, wallet_flows
 
 
 def unit_vector(flow):
-    if not flow["fills"] or flow["wallets"] < 3 or flow["net"] is None or flow["top1_share"] is None:
+    if not flow["fills"] or len(flow["contributors"]) < 3 or flow["net"] is None or flow["top1_share"] is None:
         return None
     keys = ("long_add", "long_cut", "short_add", "short_cut")
     gross = sum(flow[k] for k in keys)

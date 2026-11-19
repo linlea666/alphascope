@@ -79,6 +79,9 @@ export type Frame = {
     divergence: number | null;
     smart: Group;
     control: Group;
+    nearest_distance?: number | null;
+    distance_in_hourly_sigma?: number | null;
+    high_leverage_share?: number | null;
     delta: { common_n: number; net_units: number | null };
     zone_followup?: {
       side: string;
@@ -112,7 +115,14 @@ export type Notice = {
   kind: string;
   watching: boolean;
   outcome: { status: string; ret?: number } | null;
-  evidence: { rank: number; n: number; history_n: number };
+  evidence: {
+    rank: number;
+    n: number;
+    history_n: number;
+    value: number;
+    contributors: { address: string }[];
+    counterevidence: { largest_share: number | null; common_n: number };
+  };
 };
 export type Summary = {
   coin: string;
@@ -127,13 +137,28 @@ export type Summary = {
     missing_hours: number | null;
   }[];
 };
-type Evaluation = { cutoff: string; result: { status: string; pairs: number; q: number } };
+type Evaluation = {
+  id: number;
+  cutoff: string;
+  result: { status: string; pairs: number; q: number; tested_pairs?: number; review_eligible?: boolean };
+};
 type Forecast = {
   id: number;
   horizon: number;
   issued_at: string;
   due_at: string;
-  evidence: { p: number[]; baseline: number[] };
+  model: string;
+  cutoff: string;
+  frame_id: number;
+  evidence: {
+    p: number[];
+    baseline: number[];
+    train_n: number;
+    analog_n: number;
+    momentum_4h: number;
+    band: number;
+    reviewed_factors?: { hypothesis: string; review: number; treatment: boolean | null }[];
+  };
   outcome: { status: string; ret?: number } | null;
 };
 export type Archive = {
@@ -146,9 +171,17 @@ export type Archive = {
     predicted: number;
     observed: number;
   }[];
-  studies: { id: number; hypothesis: string; registered_at: string; runs: Evaluation[] }[];
+  studies: {
+    id: number;
+    version: number;
+    review: { decision: string; rationale: string } | null;
+    hypothesis: string;
+    registered_at: string;
+    runs: Evaluation[];
+  }[];
   forecasts: Forecast[];
   scores: {
+    model: string;
     horizon: number;
     n: number;
     brier: number;
@@ -200,3 +233,17 @@ export const numeric = (n: number | null | undefined, decimals = 2) =>
 export const percent = (n: number | null | undefined) => (n == null ? "—" : numeric(n * 100) + "%");
 export const utc = (value: string | null | undefined) =>
   value ? value.replace("T", " ").slice(0, 16) + " UTC" : "—";
+
+export function noticeLabel(kind: string, zh: boolean) {
+  const labels: Record<string, [string, string]> = {
+    long_share: ["做多人数占比", "Long trader share"],
+    divergence: ["专项群体分歧", "Specialist divergence"],
+    top5_share: ["头部账户集中度", "Top five concentration"],
+    high_leverage_share: ["高杠杆金额占比", "High-leverage share"],
+    nearest_distance: ["最近强平距离", "Nearest liquidation distance"],
+    hourly_volatility: ["小时波动率", "Hourly volatility"],
+    depth: ["盘口可见深度", "Visible depth"],
+    net_change: ["固定账户净变化", "Common-holder net change"],
+  };
+  return labels[kind]?.[zh ? 0 : 1] ?? kind;
+}

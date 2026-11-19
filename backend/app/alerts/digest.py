@@ -13,7 +13,7 @@ from app.alerts.mailer import send
 from app.market import divergence
 from app.config import get_settings
 from fastapi.encoders import jsonable_encoder
-from app.research.frames import notice_rows
+from app.research.frames import notice_rows, daily_review
 from app.traders import trader_label
 
 OWNER = "default"
@@ -58,6 +58,7 @@ def build(session: Session, now: datetime) -> dict:
         {"o": OWNER, "s": since}).mappings().all()
     num = lambda v: None if v is None else float(v)  # noqa: E731
     return {
+        "market_review":daily_review(session,get_settings().research_coins,now),
         "major_markets": {coin: jsonable_encoder(notice_rows(session,coin,now,since)) for coin in get_settings().research_coins},
         "generated_at": now.isoformat(), "since": since.isoformat(),
         "watch_moves": [{**dict(m), "notional_change": num(m["notional_change"]), "entry_px": num(m["entry_px"]),
@@ -109,6 +110,17 @@ def compose(day: date, p: dict, public_url: str) -> tuple[str, str]:
             lines.append(f"· #{n['id']} {n['venue']} {n['kind']} · 历史分位 {e['rank']:.0%} · {e['n']} 个账户")
         if not notices:
             lines.append("· 本期没有已登记异动")
+    review=p.get("market_review",{})
+    for coin, data in review.get("markets",{}).items():
+        for venue, frame in data["venues"].items():
+            d=frame["change"] or {}
+            if d.get("net_units") is not None:
+                lines.append(f"· {coin} {venue} 24h 共持仓 {d['common_n']} 个账户，净变化 {d['net_units']:+,.2f} {coin}；证据 #{frame['frame']}")
+        for score in data["outcomes"]:
+            lines.append(f"· {coin} {score['horizon']}h 到期 {score['n']} 条，Brier {score['brier']:.3f}，基准 {score['baseline']:.3f}")
+    verdict={"opposite":"方向相反","aligned":"同向","flat":"至少一侧净变化为零","insufficient":"等待两个币种的 24h 共同持仓样本"}
+    for venue,v in review.get("comparison",{}).items():
+        lines.append(f"· {venue} BTC / ETH 固定持仓账户方向：{verdict[v]}")
     if public_url:
         lines += ["", f"网页：{public_url.rstrip('/')}/zh"]
     lines += ["", "只来自我们观测的样本；历史关系不代表未来，不构成交易建议。"]

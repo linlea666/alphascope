@@ -1,6 +1,6 @@
 import { getLocale } from "next-intl/server";
 import { Link } from "@/i18n/routing";
-import { research, numeric, percent, utc } from "@/lib/research";
+import { research, noticeLabel, numeric, percent, utc } from "@/lib/research";
 import { Panel } from "./ui";
 
 export async function ResearchSummary({ health = false }: { health?: boolean }) {
@@ -64,7 +64,7 @@ export async function ResearchSummary({ health = false }: { health?: boolean }) 
                   }}
                   className="text-xs text-accent"
                 >
-                  {zh ? "最新异动" : "Latest observation"} · {s.notices[0].kind} ·{" "}
+                  {zh ? "最新异动" : "Latest observation"} · {noticeLabel(s.notices[0].kind, zh)} ·{" "}
                   {percent(s.notices[0].evidence.rank)} →
                 </Link>
               ) : (

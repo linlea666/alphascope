@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server";
  *  Writes require the request to come from this site (Origin matches Host) and carry a custom header, which a
  *  cross-site form or fetch cannot send without a CORS preflight that this route never approves. */
 const BASE = process.env.API_BASE_URL ?? "http://localhost:8000";
-const ALLOWED = [/^research\/(events|reports)$/, /^research\/notices\/\d+\/watch$/, /^watch(\/|$)/, /^alerts(\/|$)/, /^sims(\/|$)/, /^settings(\/|$)/];
+const ALLOWED = [/^research\/experiments\/\d+\/reviews$/, /^research\/(events|reports)$/, /^research\/notices\/\d+\/watch$/, /^watch(\/|$)/, /^alerts(\/|$)/, /^sims(\/|$)/, /^settings(\/|$)/];
 // read-only data the browser may refresh in place (e.g. re-sorting a table without reloading the page)
 const READ_ONLY = [/^market(\/|$)/];
 

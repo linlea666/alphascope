@@ -22,6 +22,7 @@ from app.models import (
     ResearchFrame,
     ResearchNotice,
     ResearchReport,
+    ResearchReview,
 )
 from app.research.frames import VENUES, coverage, notice_rows
 from app.research.replay import WINDOWS, catalog, details, event_info, summarize
@@ -285,10 +286,10 @@ def archive(coin: str = "BTC", s: Session = Depends(get_session)):
         .limit(120)
     ).all()
     scores = s.execute(
-        text("""SELECT horizon,count(*) n,avg((outcome->>'p_brier')::float) brier,
+        text("""SELECT model,horizon,count(*) n,avg((outcome->>'p_brier')::float) brier,
         avg((outcome->>'baseline_brier')::float) base_brier,avg((outcome->>'p_log_loss')::float) log_loss,
         avg((outcome->>'baseline_log_loss')::float) base_log_loss FROM research_forecast
-        WHERE coin=:coin AND outcome->>'status'='settled' GROUP BY horizon ORDER BY horizon"""),
+        WHERE coin=:coin AND outcome->>'status'='settled' GROUP BY model,horizon ORDER BY model,horizon"""),
         {"coin": coin},
     ).mappings()
     calibration = (
@@ -314,6 +315,13 @@ def archive(coin: str = "BTC", s: Session = Depends(get_session)):
         "studies": [
             {
                 "id": st.id,
+                "version": st.version,
+                "review": s.scalar(
+                    select(ResearchReview)
+                    .where(ResearchReview.experiment_id == st.id)
+                    .order_by(ResearchReview.id.desc())
+                    .limit(1)
+                ),
                 "hypothesis": st.hypothesis,
                 "specification": st.specification,
                 "registered_at": st.registered_at,
@@ -405,3 +413,43 @@ def report(rid: int, coin: str, s: Session = Depends(get_session)):
     if r is None or r.coin != symbol(coin):
         raise HTTPException(404, "report unavailable for this coin")
     return {"id": rid, "published_at": r.published_at, "source_version": r.source_version, "detail": r.payload}
+
+
+class FactorReview(BaseModel):
+    evaluation_id: int
+    decision: Literal["approve", "reject", "withdraw"]
+    rationale: str = Field(min_length=1, max_length=2000)
+
+
+@router.post("/experiments/{sid}/reviews", status_code=201)
+def review_factor(sid: int, body: FactorReview, s: Session = Depends(get_session)):
+    from app.research.forward import STUDY_VERSION
+
+    study = s.scalar(select(ResearchExperiment).where(ResearchExperiment.id == sid).with_for_update())
+    latest = s.scalar(
+        select(ResearchEvaluation)
+        .where(ResearchEvaluation.experiment_id == sid)
+        .order_by(ResearchEvaluation.cutoff.desc())
+        .limit(1)
+    )
+    if not study or not latest:
+        raise HTTPException(404, "experiment has no published evaluation")
+    if latest.id != body.evaluation_id:
+        raise HTTPException(409, "review requires the latest evaluation")
+    if body.decision == "approve" and (study.version != STUDY_VERSION or not latest.result.get("review_eligible")):
+        raise HTTPException(422, "insufficient prospective validation")
+    reason = body.rationale.strip()
+    if not reason:
+        raise HTTPException(422, "review rationale is required")
+    prior = s.scalar(
+        select(ResearchReview)
+        .where(ResearchReview.experiment_id == sid)
+        .order_by(ResearchReview.id.desc())
+        .limit(1)
+    )
+    if prior and (prior.evaluation_id, prior.decision, prior.rationale) == (latest.id, body.decision, reason):
+        return {"id": prior.id}
+    item = ResearchReview(experiment_id=sid, evaluation_id=latest.id, decision=body.decision, rationale=reason)
+    s.add(item)
+    s.commit()
+    return {"id": item.id}

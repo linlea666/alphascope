@@ -90,11 +90,15 @@ def changes(current, prior):
     adds = [max(r["szi"], 0) - max(before[r["wallet_id"]], 0) for r, _ in deltas]
     shorts = [max(-r["szi"], 0) - max(-before[r["wallet_id"]], 0) for r, _ in deltas]
     gross = sum(abs(x) for x in ds)
+    long_adds = [max(x, 0) for x in adds]
+    total_adds = sum(long_adds)
     return {
         "common_n": len(ds),
         "net_units": sum(ds) if ds else None,
         "long_change": sum(adds) if ds else None,
         "short_change": sum(shorts) if ds else None,
+        "long_add_breadth": sum(x > 0 for x in adds) / len(ds) if ds else None,
+        "long_add_top1_share": max(long_adds) / total_adds if total_adds else None,
         "buy_breadth": sum(x > 0 for x in ds) / len(ds) if ds else None,
         "largest_share": max(map(abs, ds)) / gross if gross else None,
         "contributors": [
@@ -272,12 +276,36 @@ def capture(s, coin, venue, now, context):
         for k, stat in m["ranks"].items():
             rank = stat["rank"]
             if rank is not None and (rank >= 0.95 or rank <= 0.05):
+                contributors = []
+                if k == "net_change":
+                    contributors = m["delta"]["contributors"]
+                elif k not in ("depth", "hourly_volatility"):
+                    eligible = accounts
+                    if k == "divergence":
+                        matched = {a["matched_to"] for a in accounts if "matched_to" in a}
+                        eligible = [a for a in accounts if "matched_to" in a or a["wallet_id"] in matched]
+                    elif k == "high_leverage_share":
+                        eligible = [a for a in accounts if (a["leverage"] or 0) >= 20]
+                    if k == "nearest_distance":
+                        eligible = sorted(
+                            (a for a in accounts if a["liq_px"] and ref and (a["liq_px"] - ref) * a["szi"] < 0),
+                            key=lambda a: abs(a["liq_px"] / ref - 1),
+                        )
+                    else:
+                        eligible = sorted(eligible, key=lambda a: -a["notional_usd"])
+                    contributors = [
+                        {
+                            key: a.get(key)
+                            for key in ("address", "szi", "notional_usd", "leverage", "liq_px", "cohort")
+                        }
+                        for a in eligible[:10]
+                    ]
                 evidence = {
                     "rank": rank,
                     "history_n": stat["n"],
                     "value": m[k],
                     "cohort": "matched" if k == "divergence" else "all",
-                    "contributors": m["delta"]["contributors"],
+                    "contributors": contributors,
                     "reference_px": ref,
                     "n": len(accounts),
                     "counterevidence": {
@@ -315,7 +343,7 @@ def zone_followup(s, prior, now):
     params = dict(v=venue, c=coin, a=start, b=now, iv=iv, step=step)
     bars = s.execute(
         text("""SELECT t,h,l,c FROM market_candle WHERE source=:v AND coin=:c AND interval=:iv
-        AND t>=:a AND t+make_interval(mins=>:step)<=:b AND fetched_at<=:b ORDER BY t"""),
+        AND t>=:a AND t+make_interval(mins=>:step)<=fetched_at AND fetched_at<=:b ORDER BY t"""),
         params,
     ).all()
     result = []
@@ -399,3 +427,62 @@ def notice_rows(s, coin, cutoff, since):
             }
         )
     return out
+
+
+def daily_review(session, coins, now):
+    """One read cutoff for today's sample, yesterday's matured predictions and the cross-asset comparison."""
+    since = now - timedelta(days=1)
+    result = {}
+    for coin in coins:
+        by_venue = {}
+        for venue in VENUES:
+            r = session.execute(
+                select(ResearchFrame.id, ResearchFrame.metrics, ResearchFrame.context, ResearchFrame.available_at)
+                .where(
+                    ResearchFrame.coin == coin,
+                    ResearchFrame.venue == venue,
+                    ResearchFrame.available_at.between(now - timedelta(hours=2), now),
+                )
+                .order_by(ResearchFrame.available_at.desc())
+                .limit(1)
+            ).first()
+            if not r:
+                continue
+            change = (r.metrics.get("windows") or {}).get("24")
+            by_venue[venue] = {
+                "frame": r.id,
+                "at": r.available_at,
+                "holders": r.metrics["n"],
+                "funding": r.context["fields"].get("funding"),
+                "long_share": r.metrics["long_share"],
+                "specialist_gap": r.metrics["divergence"],
+                "change": change,
+            }
+        settled = session.execute(
+            text("""
+            SELECT horizon,count(*) n,avg((outcome->>'p_brier')::float) brier,
+                avg((outcome->>'baseline_brier')::float) baseline
+            FROM research_forecast WHERE coin=:c AND outcome->>'status'='settled'
+            AND (outcome->>'evaluated_at')::timestamptz BETWEEN :a AND :b GROUP BY horizon ORDER BY horizon
+        """),
+            dict(c=coin, a=since, b=now),
+        ).mappings()
+        result[coin] = {"venues": by_venue, "outcomes": [dict(r) for r in settled]}
+    comparison = {}
+    for venue in VENUES:
+        directions = []
+        for coin in ("BTC", "ETH"):
+            d = result.get(coin, {}).get("venues", {}).get(venue, {}).get("change") or {}
+            net = d.get("net_units")
+            if net is not None and d.get("common_n", 0) > 0:
+                directions.append(1 if net > 0 else -1 if net < 0 else 0)
+        comparison[venue] = (
+            "insufficient"
+            if len(directions) < 2
+            else "opposite"
+            if directions[0] * directions[1] < 0
+            else "flat"
+            if 0 in directions
+            else "aligned"
+        )
+    return jsonable_encoder({"markets": result, "comparison": comparison})

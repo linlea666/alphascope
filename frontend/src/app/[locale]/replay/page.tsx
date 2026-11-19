@@ -1,9 +1,9 @@
 import { getLocale } from "next-intl/server";
 import { Link } from "@/i18n/routing";
 import { LinesChart } from "@/components/LinesChart";
-import { NoticeWatch, PublishReport, EventEditor } from "@/components/ResearchActions";
+import { FactorReviewForm, NoticeWatch, PublishReport, EventEditor } from "@/components/ResearchActions";
 import { PageHeader, Panel, Stat, td, th } from "@/components/ui";
-import { research, numeric, percent, utc, type Detail, type EventDef } from "@/lib/research";
+import { noticeLabel, research, numeric, percent, utc, type Detail, type EventDef } from "@/lib/research";
 
 type Query = Record<string, string | undefined>;
 const control = "rounded border border-border bg-panel-2 px-2 py-1 text-sm";
@@ -343,9 +343,11 @@ async function Live({ coin, q, zh }: { coin: string; q: Query; zh: boolean }) {
   const venue = q.venue === "okx" ? "okx" : "hyperliquid";
   const [s, history] = await Promise.all([research.summary(coin), research.timeline(coin, venue)]);
   const last = s.frames.find((f) => f.venue === venue);
-  const selected = history.rows.find((f) => f.id === Number(q.frame)) ?? history.rows.at(-1);
+  const requested = Number(q.frame);
+  const selected = Number.isSafeInteger(requested) && requested > 0 ? { id: requested } : history.rows.at(-1);
   const offset = Math.max(0, Number.parseInt(q.offset || "0", 10) || 0);
-  const f = selected ? await research.frame(selected.id, coin, offset) : null;
+  const found = selected ? await research.frame(selected.id, coin, offset).catch(() => null) : null;
+  const f = found?.venue === venue ? found : null;
   const link = (venue: string, id?: number, offset?: number) => ({
     pathname: "/replay",
     query: { coin, venue, tab: "live", frame: id, offset },
@@ -388,6 +390,15 @@ async function Live({ coin, q, zh }: { coin: string; q: Query; zh: boolean }) {
               />
               <Stat label="OI" value={numeric(f.context.fields.oi)} sub={f.context.oi_unit} />
               <Stat label={zh ? "资金费率" : "Funding"} value={percent(f.context.fields.funding)} />
+              <Stat
+                label={zh ? "最近强平距离" : "Nearest liquidation distance"}
+                value={percent(f.metrics.nearest_distance)}
+                sub={numeric(f.metrics.distance_in_hourly_sigma) + " σ"}
+              />
+              <Stat
+                label={zh ? "≥20× 杠杆金额占比" : "Notional at ≥20× leverage"}
+                value={percent(f.metrics.high_leverage_share)}
+              />
               <Stat
                 label={zh ? "标记价 / 基差" : "Mark / basis"}
                 value={numeric(f.context.fields.mark)}
@@ -540,7 +551,7 @@ async function Live({ coin, q, zh }: { coin: string; q: Query; zh: boolean }) {
               className="flex flex-wrap items-center justify-between gap-2 border-b border-border py-2 text-sm"
             >
               <Link href={link(venue, n.frame_id)} className="text-accent">
-                #{n.id} · {n.kind}
+                #{n.id} · {noticeLabel(n.kind, zh)}
               </Link>
               <span>
                 {utc(n.at)} · {percent(n.evidence.rank)} · n={n.evidence.n}
@@ -550,6 +561,26 @@ async function Live({ coin, q, zh }: { coin: string; q: Query; zh: boolean }) {
                   ? percent(n.outcome.ret)
                   : (n.outcome?.status ?? (zh ? "跟踪中" : "Tracking"))}
               </span>
+              <details className="w-full text-xs">
+                <summary className="text-accent">
+                  {zh ? "样本、贡献与反向证据" : "Sample, contributors and counterevidence"}
+                </summary>
+                <p>
+                  {zh ? "历史小时数" : "Reference hours"} {n.evidence.history_n} · {zh ? "观测值" : "Value"}{" "}
+                  {numeric(n.evidence.value, 5)} · {zh ? "最大净变动占比" : "Largest net change share"}{" "}
+                  {percent(n.evidence.counterevidence.largest_share)} · {zh ? "两次均持仓" : "Common holders"}{" "}
+                  {n.evidence.counterevidence.common_n}
+                </p>
+                {n.evidence.contributors.map((a) => (
+                  <Link
+                    className="mr-2 text-accent"
+                    key={a.address}
+                    href={{ pathname: `/trader/${a.address}`, query: { coin } }}
+                  >
+                    {a.address.slice(0, 10)}…
+                  </Link>
+                ))}
+              </details>
               <NoticeWatch id={n.id} watching={n.watching} zh={zh} />
             </div>
           ))}
@@ -578,12 +609,27 @@ async function Forward({ coin, zh }: { coin: string; zh: boolean }) {
       >
         {data.studies.map((st) => (
           <div key={st.id} className="border-b border-border py-2">
-            <b>{names[st.hypothesis] ?? st.hypothesis}</b>
+            <b>
+              {names[st.hypothesis] ?? st.hypothesis} · v{st.version}
+            </b>
             <p className="text-xs text-muted">
               {utc(st.registered_at)} ·{" "}
               {st.runs[0]?.result.status ?? (zh ? "等待前瞻观测" : "Awaiting forward observations")} ·{" "}
               {zh ? "配对数" : "Pairs"} {st.runs[0]?.result.pairs ?? 0} · q {numeric(st.runs[0]?.result.q)}
             </p>
+            {st.review && (
+              <p className="text-xs">
+                {st.review.decision} · {st.review.rationale}
+              </p>
+            )}
+            {st.runs[0] && (
+              <FactorReviewForm
+                study={st.id}
+                evaluation={st.runs[0].id}
+                eligible={!!st.runs[0].result.review_eligible}
+                zh={zh}
+              />
+            )}
           </div>
         ))}
       </Panel>
@@ -596,9 +642,9 @@ async function Forward({ coin, zh }: { coin: string; zh: boolean }) {
         }
       >
         {data.scores.map((s) => (
-          <p key={s.horizon} className="mb-2 text-xs">
-            {s.horizon}h · n={s.n} · Brier {numeric(s.brier, 4)} / {numeric(s.base_brier, 4)} · Log Loss{" "}
-            {numeric(s.log_loss, 4)} / {numeric(s.base_log_loss, 4)}
+          <p key={s.model + s.horizon} className="mb-2 text-xs">
+            {s.model} ·{s.horizon}h · n={s.n} · Brier {numeric(s.brier, 4)} / {numeric(s.base_brier, 4)} · Log
+            Loss {numeric(s.log_loss, 4)} / {numeric(s.base_log_loss, 4)}
           </p>
         ))}
         {data.calibration.length > 0 && (
@@ -634,7 +680,31 @@ async function Forward({ coin, zh }: { coin: string; zh: boolean }) {
                 <tr key={r.id}>
                   <td className={td}>{utc(r.issued_at)}</td>
                   <td className={td}>{r.horizon}h</td>
-                  <td className={td}>{r.evidence.p.map(percent).join(" / ")}</td>
+                  <td className={td}>
+                    <details>
+                      <summary>{r.evidence.p.map(percent).join(" / ")}</summary>
+                      <p className="text-xs text-muted">
+                        {r.model} · {utc(r.cutoff)} · {zh ? "基准" : "Baseline"}{" "}
+                        {r.evidence.baseline.map(percent).join(" / ")} · n={r.evidence.analog_n}/
+                        {r.evidence.train_n} · Δ4h {percent(r.evidence.momentum_4h)} · ±
+                        {percent(r.evidence.band)}
+                      </p>
+                      <Link
+                        className="text-xs text-accent"
+                        href={{
+                          pathname: "/replay",
+                          query: { coin, tab: "live", venue: "hyperliquid", frame: r.frame_id },
+                        }}
+                      >
+                        {zh ? "当时的群体与清算证据" : "Frozen cohort and liquidation evidence"} #{r.frame_id}
+                      </Link>
+                      {r.evidence.reviewed_factors?.map((f) => (
+                        <p className="text-xs" key={f.review}>
+                          {f.hypothesis} · {f.treatment === null ? "—" : String(f.treatment)} · #{f.review}
+                        </p>
+                      ))}
+                    </details>
+                  </td>
                   <td className={td}>
                     {r.outcome?.status === "settled"
                       ? percent(r.outcome.ret)

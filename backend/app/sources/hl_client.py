@@ -54,10 +54,10 @@ class WeightBucket:
     its own asyncio loop, and they must all draw from one per-process budget (see shared_bucket).
     """
 
-    def __init__(self, per_minute: float, clock=time.monotonic):
-        self.capacity = per_minute
+    def __init__(self, per_minute: float, clock=time.monotonic, *, burst: float | None = None):
+        self.capacity = max(per_minute, burst or 0)
         self.rate = per_minute / 60.0
-        self.tokens = per_minute
+        self.tokens = self.capacity
         self.clock = clock
         self.updated = clock()
         self._lock = threading.Lock()

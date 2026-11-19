@@ -1284,3 +1284,24 @@ class ResearchReport(Base):
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
     payload: Mapped[dict] = mapped_column(JSONB)
     __table_args__ = (UniqueConstraint("event_id", "coin", "hours", "mode", "vintage", "source_version"),)
+
+
+class ResearchReview(Base):
+    __tablename__ = "research_review"
+    id: Mapped[int] = mapped_column(BigInteger,primary_key=True)
+    evaluation_id: Mapped[int] = mapped_column(ForeignKey("research_evaluation.id"))
+    experiment_id: Mapped[int] = mapped_column(ForeignKey("research_experiment.id"))
+    decision: Mapped[str] = mapped_column(String(16))
+    rationale: Mapped[str] = mapped_column(Text)
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),server_default=func.clock_timestamp())
+    __table_args__ = (Index("ix_research_review_experiment","experiment_id","reviewed_at"),)
+
+
+class CopyReplayAudit(Base):
+    __tablename__ = "copy_replay_audit"
+    wallet_id: Mapped[int] = mapped_column(ForeignKey("wallet.id"),primary_key=True)
+    window_days: Mapped[int] = mapped_column(Integer,primary_key=True)
+    source_cutoff: Mapped[datetime] = mapped_column(DateTime(timezone=True),primary_key=True)
+    version: Mapped[str] = mapped_column(String(32),primary_key=True)
+    outcome: Mapped[dict] = mapped_column(JSONB)
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),server_default=func.clock_timestamp())

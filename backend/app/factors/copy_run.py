@@ -43,8 +43,8 @@ def candidate_pool(session: Session, now: datetime, limit: int = POOL_LIMIT) -> 
 
 def _store_backtest(s: Session, wid: int, days: int, r: dict, now: datetime) -> None:
     if not r.get("ok"):
-        s.execute(text("DELETE FROM copy_backtest WHERE wallet_id = :w AND window_days = :d AND params_key = :k"),
-                  {"w": wid, "d": days, "k": PARAMS_KEY})
+        s.execute(text("DELETE FROM copy_backtest WHERE wallet_id = :w AND window_days = :d AND params_key = :k AND computed_at<=:t"),
+                  {"w": wid, "d": days, "k": PARAMS_KEY,"t":now})
         return
     s.execute(text("""
         INSERT INTO copy_backtest (wallet_id, window_days, params_key, computed_at, capital, ret, pnl, mdd, leader_ret,
@@ -55,7 +55,8 @@ def _store_backtest(s: Session, wid: int, days: int, r: dict, now: datetime) -> 
           capital = EXCLUDED.capital, ret = EXCLUDED.ret, pnl = EXCLUDED.pnl, mdd = EXCLUDED.mdd,
           leader_ret = EXCLUDED.leader_ret, retention = EXCLUDED.retention, trades = EXCLUDED.trades,
           liquidations = EXCLUDED.liquidations, costs = EXCLUDED.costs, n_decisions = EXCLUDED.n_decisions,
-          approx_equity = EXCLUDED.approx_equity, delay_curve = EXCLUDED.delay_curve, curve = EXCLUDED.curve"""),
+          approx_equity = EXCLUDED.approx_equity, delay_curve = EXCLUDED.delay_curve, curve = EXCLUDED.curve
+        WHERE copy_backtest.computed_at<=EXCLUDED.computed_at"""),
         {"w": wid, "d": days, "k": PARAMS_KEY, "t": now, "cap": r["capital"], "ret": r["ret"], "pnl": r["pnl"],
          "mdd": r["mdd"], "lr": r["leader_ret"], "rt": r["retention"], "tr": r["trades"], "liq": r["liquidations"],
          "costs": r["costs"], "n": r["n_decisions"], "ap": r["approx_equity"],
@@ -170,3 +171,33 @@ def run_copy_analysis(sf: sessionmaker[Session], now: datetime | None = None, li
         mail = notify_changes(s, now, sender)
         s.commit()
     return {"pool": len(pool), "backtested_30d": ok, "scored": scored, "health": statuses, "email": mail}
+
+def replay_copy_history(sf):
+    """Reprice legacy backtests at their original cutoffs. Newer scheduled runs keep precedence."""
+    with sf() as s:
+        rows=s.execute(text("""
+            SELECT a.wallet_id,a.window_days,a.computed_at,a.ret,a.trades FROM copy_backtest a
+            LEFT JOIN copy_replay_audit b ON b.wallet_id=a.wallet_id AND b.window_days=a.window_days AND b.source_cutoff=a.computed_at AND b.version=:version
+            WHERE a.params_key='default' AND b.wallet_id IS NULL
+            ORDER BY a.wallet_id,a.window_days
+        """),{"version":PARAMS_KEY}).all()
+        if rows:
+            prices=PriceBook(s,min(r.computed_at-timedelta(days=r.window_days) for r in rows),max(r.computed_at for r in rows))
+        counts={}
+        for wid,days,cutoff,old_ret,old_trades in rows:
+            result=backtest(s,wid,BacktestParams(days=days),now=cutoff,prices=prices,delays=DELAYS if days==30 else ())
+            _store_backtest(s,wid,days,result,cutoff)
+            flag="recalculated" if result.get("ok") else result.get("reason","unavailable")
+            outcome={"status":flag,"previous_ret":float(old_ret) if old_ret is not None else None,"previous_trades":old_trades,
+                     **{k:result[k] for k in ("ret","trades","basis","approx_equity","n_decisions","equity_source") if k in result}}
+            s.execute(text("""INSERT INTO copy_replay_audit(wallet_id,window_days,source_cutoff,version,outcome)
+                      VALUES(:w,:d,:t,:v,CAST(:o AS jsonb)) ON CONFLICT DO NOTHING"""),
+                      {"w":wid,"d":days,"t":cutoff,"v":PARAMS_KEY,"o":json.dumps(outcome)})
+            counts[flag]=counts.get(flag,0)+1
+            s.commit()
+        wallets=s.scalars(text("SELECT wallet_id FROM copy_score UNION SELECT DISTINCT wallet_id FROM copy_backtest")).all()
+        now=datetime.now(UTC)
+        for wid in wallets:
+            score_wallet(s,wid,now)
+        s.commit()
+    return {"legacy_windows":len(rows),"outcomes":counts,"scores_recomputed":len(wallets)}

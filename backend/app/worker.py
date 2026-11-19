@@ -124,7 +124,11 @@ def main() -> None:
         r = asyncio.run(go())
         log.info("okx candles: coins=%s bars=%s complete=%s", r["coins"], r["bars"], r["complete"])
 
-    radar_bucket = WeightBucket(settings.hl_market_weight_per_minute)
+    # A continuous stream of weight-2 wallet polls can otherwise starve the weight-20 market context request.
+    research_rate = min(30.0, settings.hl_market_weight_per_minute * .1)
+    radar_rate = settings.hl_market_weight_per_minute - research_rate
+    research_bucket = WeightBucket(research_rate, burst=24)
+    radar_bucket = WeightBucket(radar_rate, burst=2)
 
     def market_watch_job() -> None:
         with sf() as s:
@@ -138,7 +142,7 @@ def main() -> None:
                                              settings.hl_timeout_seconds, settings.hl_max_retries,
                                              bucket=radar_bucket) as c:
                 # what the budget allows per run (2 weight per wallet, 10% kept for allMids and retries)
-                limit = int(settings.market_sweep_interval_minutes * settings.hl_market_weight_per_minute / 2 * 0.9)
+                limit = int(settings.market_sweep_interval_minutes * radar_rate / 2 * 0.9)
                 return await sweep_hyperliquid(sf, c, limit=limit), c.usage.weight
         r, w = asyncio.run(go())
         log.info("market hl: due=%s ok=%s failed=%s events=%s weight=%s", r["due"], r["ok"], r["failed"],
@@ -165,7 +169,7 @@ def main() -> None:
         async def collect():
             async with HyperliquidInfoClient(settings.hl_info_url, settings.hl_market_weight_per_minute,
                                              settings.hl_timeout_seconds, settings.hl_max_retries,
-                                             bucket=radar_bucket) as hl, okx_client() as okx:
+                                             bucket=research_bucket) as hl, okx_client() as okx:
                 return await market_research(sf, settings, hl, okx)
         tracked(sf, "research_frames", lambda: asyncio.run(collect()))
 
