@@ -1,3 +1,4 @@
+import { ResearchSummary } from "@/components/ResearchSummary";
 import { getLocale, getTranslations } from "next-intl/server";
 import { AddressLink } from "@/components/AddressLink";
 import { ApiErrorState } from "@/components/ApiErrorState";
@@ -38,6 +39,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
         <Freshness value={data.freshness} />
       </PageHeader>
 
+      <ResearchSummary />
       <StartGuide />
 
       <DigestCard />

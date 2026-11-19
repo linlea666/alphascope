@@ -53,6 +53,10 @@ export async function DigestCard() {
         </Link>
       }
     >
+      {g.major_markets && <div className="mb-3 flex flex-wrap gap-4">{Object.entries(g.major_markets).map(([coin, notices]) =>
+        <Link key={coin} className="text-xs text-accent" href={{pathname:"/replay",query:{coin,tab:"live",venue:notices[0]?.venue,frame:notices[0]?.frame_id}}}>
+          {coin} · {notices[0] ? `#${notices[0].id} ${notices[0].kind}` : "—"} →
+        </Link>)}</div>}
       <div className="grid gap-5 md:grid-cols-3">
         <div>
           <h3 className="mb-2 text-xs font-medium text-muted">{t("moves")}</h3>

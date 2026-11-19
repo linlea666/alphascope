@@ -18,7 +18,7 @@ export async function Nav() {
     },
     {
       label: t("research"),
-      items: [item("/legs", "legs"), item("/zones", "zones"), item("/holders", "holders"), item("/swings", "swings")],
+      items: [item("/replay", "replayLab"), item("/legs", "legs"), item("/zones", "zones"), item("/holders", "holders"), item("/swings", "swings")],
     },
     { label: t("mine"), items: [item("/watchlist", "watchlist"), item("/alerts", "alerts"), item("/sims", "sims")] },
     { label: t("system"), items: [item("/data-health", "dataHealth"), item("/settings", "settings")] },

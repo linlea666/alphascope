@@ -22,7 +22,7 @@ def seed(sf, decisions, equity=100_000, bars=(), hours=()):
             {"a": ADDR, "e": equity}).scalar_one()
         for ts in (NOW - timedelta(days=40), NOW):
             s.execute(text("""INSERT INTO equity_point (wallet_id, series, ts, account_value, pnl, fetched_at)
-                VALUES (:w, 'allTime', :t, :e, 0, now())"""), {"w": wid, "t": ts, "e": equity})
+                VALUES (:w, 'allTime', :t, :e, 0, :t)"""), {"w": wid, "t": ts, "e": equity})
         for t, px, before, after in decisions:
             kind = "open" if before == 0 else "close" if after == 0 else "add"
             s.execute(text("""INSERT INTO trade_decision (wallet_id, coin, version, kind, side, started_at, ended_at,
@@ -126,3 +126,25 @@ def test_batch_and_board(sf, client):  # noqa: F811
     c = client.get(f"/api/v1/wallets/{ADDR}/copyability").json()
     assert c["score"]["status"] == "insufficient" and [b["window_days"] for b in c["backtests"]] == [7, 30, 90]
     assert client.get(f"/api/v1/wallets/{ADDR}/behavior").status_code == 200
+
+
+def test_backtest_ignores_later_equity_and_unfinished_aggregate(sf):
+    wid = seed(sf, [(T0, 80000, 0, 1)])
+    with sf() as s:
+        s.execute(text("UPDATE equity_point SET fetched_at=:t"), {"t": T0+timedelta(hours=1)})
+        s.commit()
+        result = backtest(s,wid,BacktestParams(days=30,delay_seconds=0),now=NOW)
+        assert result["trades"] == 0
+        s.execute(text("UPDATE trade_decision SET ended_at=:t,n_fills=2"),{"t":NOW+timedelta(seconds=5)})
+        s.commit()
+        assert backtest(s,wid,BacktestParams(days=30),now=NOW)["reason"]=="no_decisions"
+
+
+def test_backtest_never_executes_future_bar_or_delayed_decision(sf):
+    t = NOW-timedelta(seconds=15)
+    wid=seed(sf,[(t,100,0,1)], bars=[(NOW-timedelta(minutes=2),90),(NOW+timedelta(minutes=1),110)])
+    with sf() as s:
+        for delay in (10,30):
+            r=backtest(s,wid,BacktestParams(days=30,delay_seconds=delay),now=NOW)
+            assert r["trades"]==0
+            assert all(datetime.fromisoformat(ts)<=NOW for ts,_ in r["curve"])

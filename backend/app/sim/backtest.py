@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 from app.quant.returns import Point, index_path
 from app.sim.engine import ZERO, Params, _sign, coin_leverage, fill, isolated_liq_px, maintenance, plan_orders, target_sizes
 
+BACKTEST_VERSION = "replay-v2"
 DELAYS = (0, 30, 300, 1800, 7200)  # seconds: instant, 30 s, 5 min, 30 min, 2 h
 FINE = (("1m", 1), ("5m", 5), ("15m", 15), ("1h", 60))
 SOURCES = ("binance_um", "okx", "hyperliquid")
@@ -45,7 +46,7 @@ class PriceBook:
     nightly batch over hundreds of traders."""
 
     def __init__(self, session: Session, since: datetime, until: datetime):
-        self.s, self.since, self.until = session, since - timedelta(days=1), until + timedelta(days=1)
+        self.s, self.since, self.until = session, since - timedelta(days=1), until
         self.fine: dict[str, tuple[str, int, np.ndarray, np.ndarray, np.ndarray]] = {}
         self.hourly: dict[str, tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]] = {}
 
@@ -84,18 +85,25 @@ class PriceBook:
         self._load(coin)
         return self.fine[coin][0]
 
+    def execution(self, coin: str, due: datetime) -> tuple[datetime, float] | None:
+        """First tradable bar open at or after the delay. Carry its actual timestamp into the replay."""
+        self._load(coin)
+        _, step, ts, opens, _ = self.fine[coin]
+        minute = due.timestamp() / 60
+        i = int(np.searchsorted(ts, minute))
+        if i == len(ts) or ts[i] - minute > 2 * step:
+            return None
+        return datetime.fromtimestamp(float(ts[i]) * 60, UTC), float(opens[i])
+
     def price(self, coin: str, at: datetime) -> float | None:
-        """Open of the first bar starting at or after `at` (within two bars), else the last close before it."""
+        """Mark using only the open or completed close visible at this instant."""
         self._load(coin)
         _, step, ts, opens, closes = self.fine[coin]
-        if not len(ts):
+        minute = at.timestamp() / 60
+        i = int(np.searchsorted(ts, minute, side="right")) - 1
+        if i < 0 or minute - ts[i] > 360:
             return None
-        m = at.timestamp() / 60
-        i = int(np.searchsorted(ts, m, side="left"))
-        if i < len(ts) and ts[i] - m <= 2 * step:
-            return float(opens[i])
-        j = int(np.searchsorted(ts, m, side="right")) - 1
-        return float(closes[j]) if j >= 0 and m - ts[j] <= 6 * 60 else None
+        return float(closes[i] if ts[i] + step <= minute else opens[i])
 
     def hour(self, coin: str, hour_minute: int) -> tuple[float, float, float] | None:
         self._load(coin)
@@ -129,18 +137,24 @@ def load_inputs(session: Session, wallet_id: int, since: datetime, until: dateti
                                             ORDER BY u.business_date DESC LIMIT 1))
         FROM wallet w LEFT JOIN okx_trader t ON t.wallet_id = w.id WHERE w.id = :w"""), {"w": wallet_id}).one()
     decisions = session.execute(text("""
-        SELECT coin, started_at, vwap, pos_before, pos_after FROM trade_decision
-        WHERE wallet_id = :w AND started_at >= :a AND started_at < :b ORDER BY started_at, id LIMIT :n"""),
+        SELECT coin, started_at, ended_at, n_fills, vwap, pos_before, pos_after FROM trade_decision
+        WHERE wallet_id = :w AND ended_at >= :a AND ended_at < :b ORDER BY ended_at, id LIMIT :n"""),
         {"w": wallet_id, "a": since, "b": until, "n": MAX_DECISIONS + 1}).all()
     equity: list[tuple[datetime, float]] = []
     if venue == "hyperliquid":
-        pts: dict[datetime, float] = {}
-        for series in ("allTime", "month"):
-            for ts, av in session.execute(text("""
-                SELECT ts, account_value FROM equity_point WHERE wallet_id = :w AND series = :s AND ts <= :b
-                ORDER BY ts"""), {"w": wallet_id, "s": series, "b": until}).all():
-                pts[ts] = float(av)
-        equity = sorted(pts.items())
+        rows = session.execute(text("""
+            SELECT ts, greatest(ts, fetched_at) AS known, account_value FROM equity_point
+            WHERE wallet_id=:w AND series IN ('allTime','month') AND ts<=:b AND fetched_at<=:b
+            UNION ALL
+            SELECT fetched_at, fetched_at, account_value FROM account_snapshot WHERE wallet_id=:w AND fetched_at<=:b
+            ORDER BY 2,1"""), {"w": wallet_id, "b": until})
+        latest_source = None
+        by_publication = {}
+        for ts, known, av in rows:
+            if latest_source is None or ts >= latest_source:
+                by_publication[known] = float(av)
+                latest_source = ts
+        equity = list(by_publication.items())
     levs: dict[str, list[tuple[datetime, int]]] = {}
     if venue == "okx":
         for coin, t, lever in session.execute(text("""
@@ -175,7 +189,7 @@ def run(inputs: dict, prices: PriceBook, p: BacktestParams, since: datetime, unt
     def leader_equity(t: datetime) -> Decimal | None:
         if eq_pts:
             i = bisect_right(eq_times, t) - 1
-            return Decimal(str(eq_pts[max(i, 0)][1]))
+            return Decimal(str(eq_pts[i][1])) if i >= 0 else None
         return Decimal(str(inputs["asset"]))
 
     def leader_lev_at(coin: str, t: datetime) -> int | None:
@@ -183,7 +197,7 @@ def run(inputs: dict, prices: PriceBook, p: BacktestParams, since: datetime, unt
         if not xs:
             return None
         i = bisect_right([x[0] for x in xs], t) - 1
-        return xs[max(i, 0)][1]
+        return xs[i][1] if i >= 0 else None
 
     ep = p.engine()
     isolated = p.leverage_mode == "leader"
@@ -238,14 +252,22 @@ def run(inputs: dict, prices: PriceBook, p: BacktestParams, since: datetime, unt
 
     # events: decisions (acted on after the delay) and hourly liquidation checks
     delay = timedelta(seconds=p.delay_seconds)
-    events: list[tuple[datetime, int, object]] = [(d.started_at + delay, 1, d) for d in decisions]
+    events = []
+    for decision in decisions:
+        due = decision.ended_at + delay
+        if due > until:
+            continue
+        at_own_fill = not p.delay_seconds and inputs["venue"] == "hyperliquid" and decision.n_fills == 1
+        quote = (due, decision.vwap) if at_own_fill else prices.execution(decision.coin, due)
+        if quote and quote[0] <= until:
+            events.append((quote[0], 1, (decision, quote[1], at_own_fill)))
     h = since.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
     while h <= until:
         events.append((h, 0, None))
         h += timedelta(hours=1)
     events.sort(key=lambda e: (e[0], e[1]))
     for at, kind, d in events:
-        if at > until + delay:
+        if at > until:
             break
         if kind == 0:  # hourly: worst price of the past hour against liquidation
             if not positions:
@@ -275,6 +297,7 @@ def run(inputs: dict, prices: PriceBook, p: BacktestParams, since: datetime, unt
                     break
             record(at, {**marks(at), **close})
             continue
+        d, quote_px, own_px = d
         coin = d.coin
         if coin not in first_seen:
             first_seen.add(coin)
@@ -285,13 +308,8 @@ def run(inputs: dict, prices: PriceBook, p: BacktestParams, since: datetime, unt
             baseline.pop(coin)
         if coin in baseline:
             continue
-        own_px = p.delay_seconds == 0 and inputs["venue"] == "hyperliquid"
-        if own_px:
-            px = Decimal(str(d.vwap))
-        else:
-            v = prices.price(coin, at)
-            px = Decimal(str(v)) if v else None
-        if px is None or px <= 0:
+        px = Decimal(str(quote_px))
+        if px <= 0:
             continue
         resolution.setdefault(coin, "decision" if own_px else prices.resolution(coin))
         mids = marks(at, {coin: px})
@@ -303,8 +321,8 @@ def run(inputs: dict, prices: PriceBook, p: BacktestParams, since: datetime, unt
         equity = cash + sum(z * (mids.get(c, e) - e) for c, (z, e) in positions.items())
         followed = {c for c, z in leader.items() if z != 0 and c not in baseline}
         current = {c: z for c, (z, _) in positions.items()}
-        lev_now = {c: leader_lev_at(c, d.started_at) for c in followed}
-        leq = leader_equity(d.started_at)
+        lev_now = {c: leader_lev_at(c, d.ended_at) for c in followed}
+        leq = leader_equity(d.ended_at)
         if leq and leq > 0 and followed:
             sized += 1
             gross = sum(abs(leader[c]) * mids[c] for c in followed if c in mids)
@@ -324,7 +342,8 @@ def run(inputs: dict, prices: PriceBook, p: BacktestParams, since: datetime, unt
     ret = final / p.capital - 1
     step = max(1, len(curve) // CURVE_POINTS)
     return {
-        "ok": True, "approx_equity": approx, "equity_source": inputs.get("equity_source"), "stopped": stopped,
+        "ok": True, "version": BACKTEST_VERSION, "basis": "okx_whole_position_approximation" if approx else "archived_venue_replay",
+        "approx_equity": approx, "equity_source": inputs.get("equity_source"), "stopped": stopped,
         "capped_share": capped / sized if sized else None,
         "capital": p.capital, "final": final, "ret": ret, "pnl": final - p.capital, "mdd": mdd,
         "trades": trades, "liquidations": liquidations, "costs": float(costs), "n_decisions": len(decisions),

@@ -11,6 +11,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from app import settings_store
 from app.alerts.mailer import send
 from app.market import divergence
+from app.config import get_settings
+from fastapi.encoders import jsonable_encoder
+from app.research.frames import notice_rows
 from app.traders import trader_label
 
 OWNER = "default"
@@ -55,6 +58,7 @@ def build(session: Session, now: datetime) -> dict:
         {"o": OWNER, "s": since}).mappings().all()
     num = lambda v: None if v is None else float(v)  # noqa: E731
     return {
+        "major_markets": {coin: jsonable_encoder(notice_rows(session,coin,now,since)) for coin in get_settings().research_coins},
         "generated_at": now.isoformat(), "since": since.isoformat(),
         "watch_moves": [{**dict(m), "notional_change": num(m["notional_change"]), "entry_px": num(m["entry_px"]),
                          "event_time": m["event_time"].isoformat()} for m in moves],
@@ -98,6 +102,13 @@ def compose(day: date, p: dict, public_url: str) -> tuple[str, str]:
         lines += ["", "【价位哨兵命中】"]
         for h in p["sentinel_hits"][:5]:
             lines.append(f"· {h['name']}：{trader_label(h['name_w'], h['address'])} 均价 {h['avg_px'] or 0:,.1f}")
+    for coin, notices in p.get("major_markets", {}).items():
+        lines += ["", f"【{coin} · 市场行为】"]
+        for n in notices[:3]:
+            e = n["evidence"]
+            lines.append(f"· #{n['id']} {n['venue']} {n['kind']} · 历史分位 {e['rank']:.0%} · {e['n']} 个账户")
+        if not notices:
+            lines.append("· 本期没有已登记异动")
     if public_url:
         lines += ["", f"网页：{public_url.rstrip('/')}/zh"]
     lines += ["", "只来自我们观测的样本；历史关系不代表未来，不构成交易建议。"]

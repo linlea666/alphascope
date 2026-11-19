@@ -9,7 +9,7 @@ export class ApiError extends Error {
   }
 }
 
-async function get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
+export async function get<T>(path: string, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
   const url = new URL(path, BASE);
   for (const [k, v] of Object.entries(params ?? {})) {
     if (v !== undefined && v !== "") url.searchParams.set(k, String(v));
@@ -436,6 +436,7 @@ export type Run = {
 };
 
 export type DataHealth = {
+  style_window:{expected:number;succeeded:number;first_observation:string|null;missing:string[]|null};
   freshness: Freshness;
   okx: {
     runs: { business_date: string; time_window: string; status: string; source: string; expected_total: number | null; unique_count: number; new_traders: number; started_at: string; completed_at: string | null; error: string | null }[];
@@ -447,7 +448,7 @@ export type DataHealth = {
   };
   market_data: { source: string; coin: string; m1: number; first_t: string; last_t: string }[];
   symbols: { coin: string; symbol: string | null; status: string; median_ratio: number | null; basis_p95_bps: number | null; n_samples: number; checked_at: string; notes: string | null }[];
-  latest_success: { kind: string; status: string; started_at: string; finished_at: string | null }[];
+  latest_success: { process_peak_mib?:number|null; kind: string; status: string; started_at: string; finished_at: string | null }[];
   runs: Run[];
   tables: Record<string, number>;
   raw_archive: { source: string; n: number; bytes: number }[];
@@ -1095,6 +1096,7 @@ export type Digest = {
     created_at: string;
     emailed_at: string | null;
     baseline: boolean;
+    major_markets?:Record<string,{id:number;venue:string;frame_id:number;kind:string;evidence:{rank:number}}[]>;
     watch_moves: { address: string; name: string | null; venue: string; coin: string; kind: string; side: string; notional_change: number; entry_px: number | null; event_time: string }[];
     divergence: Divergence["coins"];
     new_significant: (Person & { scale: string; q: number })[];

@@ -2,6 +2,8 @@
 
 import json
 import logging
+from itertools import groupby
+from operator import itemgetter
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text
@@ -76,74 +78,89 @@ def load_extras(s: Session, cut: datetime, now: datetime) -> dict[int, dict[str,
     return out
 
 
+def _score_wallet(wid, cs, ex, now, cut, d90, factor_rows, tags, counts):
+    f_all, meta = compute(cs, ex["all"], now)
+    f_90, _ = compute([c for c in cs if c.closed_at > d90], ex["90d"], now)
+    f_pre, meta_pre = compute([c for c in cs if c.closed_at <= cut], ex["pre"], cut)
+    for window, f in (("all", f_all), ("90d", f_90)):
+        for k, (v, n) in f.items():
+            factor_rows.append((wid, k, window, FACTOR_VERSION, v, n, now))
+    for st in STYLES:
+        ev = evaluate(st, f_all)
+        if ev["status"] in ("none", "insufficient"):
+            continue
+        oos = None
+        status = ev["status"]
+        if st.forward and not st.risk_flag:
+            pre = evaluate(st, f_pre, as_of_cut=True)
+            if pre["status"] == "candidate":
+                oos = forward_check(st, cs, cut, meta_pre.get("top_coin"))
+                if oos["passed"] and status == "candidate":
+                    status = "verified"
+            else:
+                oos = {"cut": cut.isoformat(), "tested": False, "pre_status": pre["status"]}
+        elif not st.risk_flag:
+            oos = {"tested": False, "reason": "not_point_in_time"}
+        evidence = ev["evidence"] + ([{"meta": "top_coin", "value": meta.get("top_coin")}]
+                                     if st.key == "specialist" else [])
+        tags.append({"w": wid, "st": st.key, "v": STYLE_VERSION, "status": status, "conf": ev["confidence"],
+                     "score": ev["score"], "n": ev["n"], "ev": json.dumps(evidence, default=str),
+                     "oos": json.dumps(oos, default=str) if oos else None, "now": now})
+        counts.setdefault(st.key, {}).setdefault(status, 0)
+        counts[st.key][status] += 1
+
+
+def _stage(s, factors, tags):
+    pg = s.connection().connection.driver_connection
+    if factors:
+        with pg.cursor() as cur, cur.copy("COPY next_factor (wallet_id, factor, time_window, version, value, n, as_of) FROM STDIN") as copy:
+            for row in factors:
+                copy.write_row(row)
+        factors.clear()
+    if tags:
+        s.execute(text("""
+            INSERT INTO next_style (wallet_id, style, version, status, confidence, score, n, evidence, oos, computed_at)
+            VALUES (:w, :st, :v, :status, :conf, :score, :n, CAST(:ev AS jsonb), CAST(:oos AS jsonb), :now)"""), tags)
+        tags.clear()
+
+
 def run_styles(sf: sessionmaker[Session], now: datetime | None = None) -> dict:
     now = now or datetime.now(UTC)
-    cut = oos_cut(now)
-    d90 = now - timedelta(days=90)
+    cut, d90 = oos_cut(now), now - timedelta(days=90)
+    counts, by_venue = {}, {}
+    traders = n_factors = n_tags = 0
+    factors, tags = [], []
     with sf() as s:
+        s.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"))
+        if not s.scalar(text("SELECT pg_try_advisory_xact_lock(8173021)")):
+            return {"traders": 0, "tags": 0, "status": "already_running"}
         extras = load_extras(s, cut, now)
         venues = dict(s.execute(text("SELECT id, venue FROM wallet WHERE id = ANY(:ids)"),
                                 {"ids": list(extras)}).all())
-        rows = s.execute(text("""
+        s.execute(text("CREATE TEMP TABLE next_factor (LIKE factor_value) ON COMMIT DROP"))
+        s.execute(text("CREATE TEMP TABLE next_style (LIKE style_tag) ON COMMIT DROP"))
+        query = text("""
             SELECT wallet_id, coin, direction, opened_at, closed_at, scale, max_notional, realized_pnl - fees,
                    holding_hours
             FROM position_cycle WHERE closed_at IS NOT NULL AND status <> 'open' AND complete
-            ORDER BY wallet_id, closed_at""")).yield_per(20000)
-        by_wallet: dict[int, list[Cyc]] = {}
-        for wid, coin, d, o, c, scale, ntl, net, h in rows:
-            by_wallet.setdefault(wid, []).append(Cyc(coin, d, o, c, scale, float(ntl or 0), float(net or 0),
-                                                     float(h or 0)))
-    factor_rows: list[tuple] = []
-    tags: list[dict] = []
-    counts: dict[str, dict[str, int]] = {}
-    for wid, cs in by_wallet.items():
-        ex = extras.get(wid) or {"all": Extras(), "90d": Extras(), "pre": Extras()}
-        f_all, meta = compute(cs, ex["all"], now)
-        f_90, _ = compute([c for c in cs if c.closed_at > d90], ex["90d"], now)
-        f_pre, meta_pre = compute([c for c in cs if c.closed_at <= cut], ex["pre"], cut)
-        for window, f in (("all", f_all), ("90d", f_90)):
-            for k, (v, n) in f.items():
-                factor_rows.append((wid, k, window, FACTOR_VERSION, v, n, now))
-        for st in STYLES:
-            ev = evaluate(st, f_all)
-            if ev["status"] in ("none", "insufficient"):
-                continue
-            oos = None
-            status = ev["status"]
-            if st.forward and not st.risk_flag:
-                pre = evaluate(st, f_pre, as_of_cut=True)
-                if pre["status"] == "candidate":
-                    oos = forward_check(st, cs, cut, meta_pre.get("top_coin"))
-                    if oos["passed"] and status == "candidate":
-                        status = "verified"
-                else:
-                    oos = {"cut": cut.isoformat(), "tested": False, "pre_status": pre["status"]}
-            elif not st.risk_flag:
-                oos = {"tested": False, "reason": "not_point_in_time"}
-            evidence = ev["evidence"] + ([{"meta": "top_coin", "value": meta.get("top_coin")}]
-                                         if st.key == "specialist" else [])
-            tags.append({"w": wid, "st": st.key, "v": STYLE_VERSION, "status": status, "conf": ev["confidence"],
-                         "score": ev["score"], "n": ev["n"], "ev": json.dumps(evidence, default=str),
-                         "oos": json.dumps(oos, default=str) if oos else None, "now": now})
-            counts.setdefault(st.key, {}).setdefault(status, 0)
-            counts[st.key][status] += 1
-    with sf() as s:
-        s.execute(text("DELETE FROM factor_value"))
-        s.execute(text("DELETE FROM style_tag"))
-        pg = s.connection().connection.driver_connection
-        with pg.cursor() as cur, cur.copy("COPY factor_value (wallet_id, factor, time_window, version, value, n, as_of) "
-                                          "FROM STDIN") as copy:
-            for r in factor_rows:
-                copy.write_row(r)
-        if tags:
-            s.execute(text("""
-                INSERT INTO style_tag (wallet_id, style, version, status, confidence, score, n, evidence, oos,
-                                       computed_at)
-                VALUES (:w, :st, :v, :status, :conf, :score, :n, CAST(:ev AS jsonb), CAST(:oos AS jsonb), :now)"""),
-                tags)
+            ORDER BY wallet_id, closed_at, id""").execution_options(yield_per=2048)
+        with s.execute(query) as rows:
+            for wid, group in groupby(rows, key=itemgetter(0)):
+                cycles = [Cyc(coin, side, opened, closed, scale, float(ntl or 0), float(net or 0), float(hours or 0))
+                          for _, coin, side, opened, closed, scale, ntl, net, hours in group]
+                _score_wallet(wid, cycles, extras[wid], now, cut, d90, factors, tags, counts)
+                traders += 1
+                venue = venues[wid]
+                by_venue[venue] = by_venue.get(venue, 0) + 1
+                if len(factors) >= 4096:
+                    n_factors += len(factors)
+                    n_tags += len(tags)
+                    _stage(s, factors, tags)
+        n_factors += len(factors)
+        n_tags += len(tags)
+        _stage(s, factors, tags)
+        for target, stage in (("factor_value", "next_factor"), ("style_tag", "next_style")):
+            s.execute(text(f"DELETE FROM {target}"))
+            s.execute(text(f"INSERT INTO {target} SELECT * FROM {stage}"))
         s.commit()
-    by_venue: dict[str, int] = {}
-    for wid in by_wallet:
-        by_venue[venues.get(wid, "?")] = by_venue.get(venues.get(wid, "?"), 0) + 1
-    return {"traders": len(by_wallet), "by_venue": by_venue, "factors": len(factor_rows), "tags": len(tags),
-            "styles": counts}
+    return {"traders": traders, "by_venue": by_venue, "factors": n_factors, "tags": n_tags, "styles": counts}

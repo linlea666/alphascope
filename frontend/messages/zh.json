@@ -4,6 +4,7 @@
     "description": "基于真实链上数据的 Hyperliquid 交易员研究平台：分层采集、资金流调整收益、证据分级。"
   },
   "nav": {
+    "replayLab": "行情回放实验室",
     "overview": "情报总览",
     "rankings": "智能排行榜",
     "dataHealth": "数据健康",
@@ -28,6 +29,7 @@
     "compare": "交易员对比",
     "legs": "波段名人堂",
     "desc": {
+      "replayLab": "比较 BTC、ETH 事件、资金构成与前瞻结果",
       "discover": "按风格找人：稳健、趋势、抄底、摸顶……每个标签都有证据",
       "rankings": "Hyperliquid 官方榜单，去噪后再看",
       "okx": "OKX 带单排行榜与公开历史仓位",
@@ -1859,7 +1861,7 @@
       "7200": "2 小时"
     },
     "approx": "净值近似",
-    "approxHint": "OKX 没有历史净值，用当前带单资产代替，比例可能有偏差",
+    "approxHint": "OKX 事后近似回放使用当前带单资产及整仓峰值规模，无法验证当时可复制的仓位比例。",
     "onCapital": "1 万本金 {pnl}",
     "trades": "{n} 笔",
     "liq": "强平 {n}",

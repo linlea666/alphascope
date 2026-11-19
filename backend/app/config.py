@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     leaderboard_snapshot_hours: int = 6
 
     # Candles are recorded from now on (the API keeps only the latest 5000 per interval).
+    research_coins: tuple[str, ...] = ("BTC", "ETH")
     market_coins: str = "BTC,ETH,SOL,HYPE"
     market_intervals: str = "1d,4h,1h,15m,1m"
     market_interval_minutes: int = 60

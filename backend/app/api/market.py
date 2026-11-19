@@ -134,13 +134,16 @@ def events(session: Session = Depends(get_session), hours: int = Query(24, ge=1,
 
 @router.get("/history")
 def history(session: Session = Depends(get_session), coin: str = Query("*", max_length=48), venue: Venue = "all",
-            cohort: Cohort = "all", days: int = Query(7, ge=1, le=90)):
+            cohort: Cohort = "all", days: int = Query(7, ge=1, le=90), as_of: datetime | None = None):
+    if as_of is not None and (as_of.tzinfo is None or as_of > datetime.now(UTC)):
+        raise HTTPException(422, "as_of must be a timezone-aware historical timestamp")
     rows = session.execute(text("""
-        SELECT bucket_ts, observed, long_traders, short_traders, long_ntl, short_ntl, lev20_long_ntl,
+        SELECT bucket_ts, available_at, observed, long_traders, short_traders, long_ntl, short_ntl, lev20_long_ntl,
                lev20_short_ntl, opens, closes
         FROM market_snapshot WHERE coin = :coin AND venue = :v AND cohort = :c AND bucket_ts > :since
+          AND (CAST(:cutoff AS timestamptz) IS NULL OR available_at<=:cutoff)
         ORDER BY bucket_ts"""), {"coin": coin, "v": venue, "c": cohort,
-                                 "since": datetime.now(UTC) - timedelta(days=days)}).mappings().all()
+                                 "since": (as_of or datetime.now(UTC)) - timedelta(days=days), "cutoff":as_of}).mappings().all()
     return {"coin": coin, "rows": [_clean(dict(r)) for r in rows]}
 
 

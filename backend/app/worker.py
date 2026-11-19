@@ -26,6 +26,7 @@ from app.okx.candles import sync_candles
 from app.okx.client import OkxClient
 from app.okx.leaderboard import ensure_daily
 from app.okx.sync import refresh_assets, refresh_instruments, resolve_profiles, sync_history
+from app.research.jobs import market_research, research_daily, tracked
 from app.research.positions import rebuild_stale
 from app.research.timing import run_timing
 from app.research.swings import run_swings
@@ -151,7 +152,7 @@ def main() -> None:
         log.info("market okx: due=%s ok=%s failed=%s events=%s", r["due"], r["ok"], r["failed"], r["events"])
 
     def styles_job() -> None:
-        r = run_styles(sf)
+        r = tracked(sf, "styles", lambda: run_styles(sf))
         log.info("styles: traders=%s tags=%s", r["traders"], r["tags"])
 
     def market_snapshot_job() -> None:
@@ -159,6 +160,17 @@ def main() -> None:
             n = snapshot_hour(s, datetime.now(UTC))
             s.commit()
         log.info("market snapshot: %s rows", n)
+
+    def research_job() -> None:
+        async def collect():
+            async with HyperliquidInfoClient(settings.hl_info_url, settings.hl_market_weight_per_minute,
+                                             settings.hl_timeout_seconds, settings.hl_max_retries,
+                                             bucket=radar_bucket) as hl, okx_client() as okx:
+                return await market_research(sf, settings, hl, okx)
+        tracked(sf, "research_frames", lambda: asyncio.run(collect()))
+
+    def research_catalog_job() -> None:
+        tracked(sf, "research_catalog", lambda: research_daily(sf, settings))
 
     def sentinel_job() -> None:
         log.info("sentinels: %s", sentinel.run(sf))
@@ -202,8 +214,14 @@ def main() -> None:
     sched.add_job(market_okx_job, "interval", minutes=settings.market_sweep_interval_minutes,
                   next_run_time=now + timedelta(minutes=1, seconds=30), id="market_okx")
     sched.add_job(market_snapshot_job, "cron", minute=55, id="market_snapshot")
+    sched.add_job(research_job, "cron", minute=55, id="research_frames")
+    # Publish the first observed hour after a deployment. The unique hour key also covers restarts.
+    sched.add_job(research_job, "date", run_date=now + timedelta(seconds=75), id="research_frames_boot")
+    sched.add_job(research_catalog_job, "interval", hours=6, next_run_time=now + timedelta(seconds=45),
+                  id="research_catalog")
     # Factors and style labels (~20 s): after new cycles, timing scores and radar polls have landed
-    sched.add_job(styles_job, "interval", hours=6, next_run_time=now + timedelta(minutes=50), id="styles")
+    sched.add_job(styles_job, "cron", hour="0,6,12,18", minute=50, id="styles")
+    sched.add_job(styles_job, "date", run_date=now + timedelta(seconds=90), id="styles_boot")
     # Price-zone sentinels follow fill archiving; the digest goes out at 08:20 Beijing time
     sched.add_job(sentinel_job, "interval", minutes=30, next_run_time=now + timedelta(minutes=9), id="sentinels")
     sched.add_job(digest_job, "cron", hour=0, minute=20, id="digest")

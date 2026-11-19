@@ -4,6 +4,7 @@
     "description": "Research Hyperliquid traders from real on-chain data: tiered collection, flow-adjusted returns, graded evidence."
   },
   "nav": {
+    "replayLab": "Market Replay Lab",
     "overview": "Overview",
     "rankings": "Rankings",
     "dataHealth": "Data health",
@@ -28,6 +29,7 @@
     "compare": "Compare traders",
     "legs": "Swing hall of fame",
     "desc": {
+      "replayLab": "Compare BTC and ETH events, flows and forward outcomes",
       "discover": "Find traders by style, each label with evidence",
       "rankings": "Hyperliquid's official board, de-noised",
       "okx": "OKX lead-trader boards and public position history",
@@ -1859,7 +1861,7 @@
       "7200": "2 h"
     },
     "approx": "approx. equity",
-    "approxHint": "OKX has no equity history; current lead assets are used, so the ratio may be off",
+    "approxHint": "OKX retrospective approximation uses current lead assets and whole-position peak size.",
     "onCapital": "{pnl} on $10k",
     "trades": "{n} trades",
     "liq": "{n} liquidated",

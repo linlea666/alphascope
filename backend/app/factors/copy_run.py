@@ -18,7 +18,7 @@ from app.traders import trader_label
 log = logging.getLogger(__name__)
 
 WINDOWS = (7, 30, 90)
-PARAMS_KEY = "default"  # 100% ratio, 30 s delay, account margin, 10x cap, 4.5 bp fee, 3 bp slippage
+PARAMS_KEY = "default-v2"  # 100% ratio, 30 s delay, account margin, 10x cap, 4.5 bp fee, 3 bp slippage
 POOL_LIMIT = 600
 ALERT_STATUSES = {"declining", "dormant", "drifting"}
 OWNER = "default"

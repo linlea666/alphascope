@@ -1,3 +1,4 @@
+import { ResearchSummary } from "@/components/ResearchSummary";
 import { getLocale, getTranslations } from "next-intl/server";
 import { ApiErrorState } from "@/components/ApiErrorState";
 import { Freshness } from "@/components/Freshness";
@@ -44,13 +45,18 @@ export default async function DataHealthPage() {
       <PageHeader title={t("health.title")} subtitle={t("health.subtitle")}>
         <Freshness value={d.freshness} />
       </PageHeader>
+      <ResearchSummary health />
+      <Panel title={locale==="zh"?"风格任务 · 最近 48 小时":"Style jobs · last 48 hours"}>
+        <p>{d.style_window.succeeded} / {d.style_window.expected} {locale==="zh"?"个到期调度已成功":"due schedule slots completed"} · {locale==="zh"?"开始记录":"Monitoring since"} {fmtTime(d.style_window.first_observation,locale)}</p>
+        {d.style_window.missing?.length ? <p className="text-xs text-muted">{locale==="zh"?"无成功记录的调度":"Slots without success"} · {d.style_window.missing.map(t=>fmtTime(t,locale)).join(" · ")}</p>:null}
+      </Panel>
 
       <div className="grid gap-5 lg:grid-cols-3">
         <Panel title={t("health.latest")}>
           <ul className="space-y-2 text-sm">
             {d.latest_success.map((r) => (
               <li key={r.kind} className="flex items-center justify-between gap-2">
-                <span>{r.kind}</span>
+                <span>{r.kind} {r.process_peak_mib != null && <small className="text-muted">· RSS {r.process_peak_mib} MiB</small>}</span>
                 <span className="flex items-center gap-2">
                   {statusBadge(r.status)}
                   <span className="num text-xs text-muted">{fmtTime(r.finished_at, locale)}</span>

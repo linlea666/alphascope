@@ -80,7 +80,7 @@ def changes(prev: dict[str, dict], after: dict[str, Pos], opened: dict[str, date
             continue
         mark = mark_of(p) or mids.get(coin) or (prev[coin]["mark_px"] if coin in prev else None)
         src = opened.get(coin)
-        exact = kind in ("open", "flip", "first_seen") and src is not None and (prev_obs is None or src > prev_obs)
+        exact = kind in ("open", "flip", "first_seen") and src is not None and src <= now and (prev_obs is None or src > prev_obs)
         if kind == "first_seen" and not exact:
             event_time, precision, start = now, "window", None
         elif exact:
@@ -102,9 +102,11 @@ def record_observation(s: Session, wallet_id: int, venue: str, after: dict[str, 
                        opened: dict[str, datetime] | None = None) -> list[Change]:
     mids, opened = mids or {}, opened or {}
     after = {c: p for c, p in after.items() if p.szi}
-    watch = s.execute(text("SELECT last_observed_at, base_tier FROM position_watch WHERE wallet_id = :w"),
+    watch = s.execute(text("SELECT last_observed_at, base_tier FROM position_watch WHERE wallet_id = :w FOR UPDATE"),
                       {"w": wallet_id}).first()
     prev_obs = watch.last_observed_at if watch else None
+    if prev_obs is not None and now <= prev_obs:
+        return []
     base_tier = watch.base_tier if watch else "cold"
     prev = {r["coin"]: dict(r) for r in s.execute(text("SELECT * FROM trader_position WHERE wallet_id = :w"),
                                                   {"w": wallet_id}).mappings()}

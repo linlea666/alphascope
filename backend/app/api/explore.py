@@ -312,7 +312,7 @@ def wallet_backtest(address: str, session: Session = Depends(get_session), days:
     if not r.get("ok"):
         return r
     stored = session.execute(text("""SELECT delay_curve FROM copy_backtest WHERE wallet_id = :w AND window_days = 30
-                                     AND params_key = 'default'"""), {"w": w["id"]}).scalar()
+                                     AND params_key = 'default-v2'"""), {"w": w["id"]}).scalar()
     return {**r, "delay_curve": r.get("delay_curve") or stored, "delay_curve_source": "live" if r.get("delay_curve")
             else ("nightly_30d" if stored else None)}
 
@@ -333,7 +333,7 @@ def wallet_copyability(address: str, session: Session = Depends(get_session)):
                                 WHERE wallet_id = :w"""), {"w": w["id"]}).mappings().first()
     bts = session.execute(text("""
         SELECT window_days, ret, pnl, mdd, leader_ret, retention, trades, liquidations, costs, approx_equity, computed_at
-        FROM copy_backtest WHERE wallet_id = :w AND params_key = 'default' ORDER BY window_days"""),
+        FROM copy_backtest WHERE wallet_id = :w AND params_key = 'default-v2' ORDER BY window_days"""),
         {"w": w["id"]}).mappings().all()
     nums = ("ret", "pnl", "mdd", "leader_ret", "retention", "costs")
     return {"score": {**dict(score), "score": num(score["score"])} if score else None,
@@ -359,7 +359,7 @@ def copy_board(session: Session = Depends(get_session), window: int = Query(30, 
                s.score, s.grade, s.status AS score_status, h.status AS health
         FROM copy_backtest b JOIN wallet w ON w.id = b.wallet_id
         LEFT JOIN copy_score s ON s.wallet_id = b.wallet_id LEFT JOIN trader_health h ON h.wallet_id = b.wallet_id
-        WHERE b.window_days = :win AND b.params_key = 'default' AND b.trades >= :mt{venue_clause(venue)}
+        WHERE b.window_days = :win AND b.params_key = 'default-v2' AND b.trades >= :mt{venue_clause(venue)}
         ORDER BY {order} LIMIT :n"""), {"win": window, "mt": min_trades, "n": limit}).mappings().all()
     computed = session.execute(text("SELECT max(computed_at) FROM copy_backtest")).scalar()
     nums = ("ret", "pnl", "mdd", "leader_ret", "retention", "costs", "score")

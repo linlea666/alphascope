@@ -346,7 +346,7 @@ class Fill(Base):
     liquidation: Mapped[dict | None] = mapped_column(JSONB)
     raw_object_id: Mapped[int | None] = mapped_column(ForeignKey("raw_object.id"))
 
-    __table_args__ = (Index("ix_fill_wallet_coin_time", "wallet_id", "coin", "time"),)
+    __table_args__ = (Index("ix_fill_wallet_coin_time", "wallet_id", "coin", "time"), Index("ix_fill_coin_time", "coin", "time"))
 
 
 class FillSync(Base):
@@ -1024,6 +1024,7 @@ class MarketSnapshot(Base):
     venue: Mapped[str] = mapped_column(String(16), primary_key=True)  # all | hyperliquid | okx
     cohort: Mapped[str] = mapped_column(String(16), primary_key=True)
     coin: Mapped[str] = mapped_column(String(48), primary_key=True)
+    available_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     observed: Mapped[int] = mapped_column(Integer)  # traders with fresh data in the cohort
     long_traders: Mapped[int] = mapped_column(Integer)
     short_traders: Mapped[int] = mapped_column(Integer)
@@ -1185,3 +1186,101 @@ class CoinLimit(Base):
     coin: Mapped[str] = mapped_column(String(48), primary_key=True)
     max_leverage: Mapped[int] = mapped_column(Integer)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ResearchEvent(Base):
+    """An immutable event definition; an edit creates a new revision."""
+    __tablename__ = "research_event"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    event_key: Mapped[str] = mapped_column(String(96))
+    revision: Mapped[int] = mapped_column(Integer)
+    coin: Mapped[str] = mapped_column(String(32))
+    title: Mapped[str] = mapped_column(String(160))
+    direction: Mapped[str] = mapped_column(String(8))
+    cluster_key: Mapped[str] = mapped_column(String(96))
+    source: Mapped[str] = mapped_column(String(32))
+    method: Mapped[str] = mapped_column(String(48))
+    start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    start_px: Mapped[Decimal] = mapped_column(Numeric)
+    end_px: Mapped[Decimal] = mapped_column(Numeric)
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
+    __table_args__ = (UniqueConstraint("event_key", "revision"), Index("ix_research_event_coin_start", "coin", "start_at"))
+
+
+class ResearchFrame(Base):
+    """Hourly evidence frozen as observed, including all contributing wallets and their cohort at publication."""
+    __tablename__ = "research_frame"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    coin: Mapped[str] = mapped_column(String(32))
+    venue: Mapped[str] = mapped_column(String(16))
+    bucket_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
+    version: Mapped[str] = mapped_column(String(16))
+    metrics: Mapped[dict] = mapped_column(JSONB)
+    accounts: Mapped[list] = mapped_column(JSONB)
+    context: Mapped[dict] = mapped_column(JSONB)
+    __table_args__ = (UniqueConstraint("coin", "venue", "bucket_ts", "version"),
+                      Index("ix_research_frame_available", "coin", "venue", "available_at"))
+
+
+class ResearchNotice(Base):
+    __tablename__ = "research_notice"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    frame_id: Mapped[int] = mapped_column(ForeignKey("research_frame.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(40))
+    evidence: Mapped[dict] = mapped_column(JSONB)
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    outcome: Mapped[dict | None] = mapped_column(JSONB)
+    watching: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    __table_args__ = (UniqueConstraint("frame_id", "kind"),)
+
+
+class ResearchForecast(Base):
+    __tablename__ = "research_forecast"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    coin: Mapped[str] = mapped_column(String(32))
+    model: Mapped[str] = mapped_column(String(32))
+    horizon: Mapped[int] = mapped_column(Integer)
+    issued_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    cutoff: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    frame_id: Mapped[int] = mapped_column(ForeignKey("research_frame.id"))
+    evidence: Mapped[dict] = mapped_column(JSONB)
+    outcome: Mapped[dict | None] = mapped_column(JSONB)
+    __table_args__ = (UniqueConstraint("frame_id", "model", "horizon"), Index("ix_forecast_due", "coin", "due_at"))
+
+
+class ResearchExperiment(Base):
+    __tablename__ = "research_experiment"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    coin: Mapped[str] = mapped_column(String(32))
+    hypothesis: Mapped[str] = mapped_column(String(48))
+    version: Mapped[int] = mapped_column(Integer)
+    registered_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
+    specification: Mapped[dict] = mapped_column(JSONB)
+    __table_args__ = (UniqueConstraint("coin", "hypothesis", "version"),)
+
+
+class ResearchEvaluation(Base):
+    __tablename__ = "research_evaluation"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    experiment_id: Mapped[int] = mapped_column(ForeignKey("research_experiment.id"))
+    cutoff: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    result: Mapped[dict] = mapped_column(JSONB)
+    __table_args__ = (UniqueConstraint("experiment_id", "cutoff"),)
+
+
+class ResearchReport(Base):
+    __tablename__ = "research_report"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    event_id: Mapped[int] = mapped_column(ForeignKey("research_event.id"))
+    coin: Mapped[str] = mapped_column(String(32))
+    hours: Mapped[int] = mapped_column(Integer)
+    mode: Mapped[str] = mapped_column(String(24))
+    vintage: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    source_version: Mapped[str] = mapped_column(String(32))
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
+    payload: Mapped[dict] = mapped_column(JSONB)
+    __table_args__ = (UniqueConstraint("event_id", "coin", "hours", "mode", "vintage", "source_version"),)

@@ -124,15 +124,10 @@ def snapshot_hour(s: Session, now: datetime) -> int:
                                                  "lev20_short_ntl", "liq_known_ntl")}, **e})
     if out:
         s.execute(text("""
-            INSERT INTO market_snapshot (bucket_ts, venue, cohort, coin, observed, long_traders, short_traders,
+            INSERT INTO market_snapshot (available_at, bucket_ts, venue, cohort, coin, observed, long_traders, short_traders,
               long_ntl, short_ntl, lev10_long_ntl, lev10_short_ntl, lev20_long_ntl, lev20_short_ntl, liq_known_ntl,
               opens, closes)
-            VALUES (:b, :v, :c, :coin, :obs, :long_traders, :short_traders, :long_ntl, :short_ntl, :lev10_long_ntl,
+            VALUES (clock_timestamp(), :b, :v, :c, :coin, :obs, :long_traders, :short_traders, :long_ntl, :short_ntl, :lev10_long_ntl,
               :lev10_short_ntl, :lev20_long_ntl, :lev20_short_ntl, :liq_known_ntl, :opens, :closes)
-            ON CONFLICT (bucket_ts, venue, cohort, coin) DO UPDATE SET observed = EXCLUDED.observed,
-              long_traders = EXCLUDED.long_traders, short_traders = EXCLUDED.short_traders,
-              long_ntl = EXCLUDED.long_ntl, short_ntl = EXCLUDED.short_ntl, lev10_long_ntl = EXCLUDED.lev10_long_ntl,
-              lev10_short_ntl = EXCLUDED.lev10_short_ntl, lev20_long_ntl = EXCLUDED.lev20_long_ntl,
-              lev20_short_ntl = EXCLUDED.lev20_short_ntl, liq_known_ntl = EXCLUDED.liq_known_ntl,
-              opens = EXCLUDED.opens, closes = EXCLUDED.closes"""), out)
+            ON CONFLICT (bucket_ts, venue, cohort, coin) DO NOTHING"""), out)
     return len(out)

@@ -82,7 +82,7 @@ def data_health(session: Session = Depends(get_session)):
         SELECT id, kind, status, started_at, finished_at, stats, error FROM ingest_run
         ORDER BY started_at DESC LIMIT 40""")).mappings().all()
     latest = session.execute(text("""
-        SELECT DISTINCT ON (kind) kind, status, started_at, finished_at FROM ingest_run
+        SELECT DISTINCT ON (kind) kind, status, started_at, finished_at, stats->'process_peak_mib' AS process_peak_mib FROM ingest_run
         WHERE status IN ('success', 'not_modified', 'partial') ORDER BY kind, started_at DESC""")).mappings().all()
     tables = {}
     for t in ("wallet", "leaderboard_snapshot", "wallet_metric", "account_snapshot", "raw_object",
@@ -124,7 +124,21 @@ def data_health(session: Session = Depends(get_session)):
         SELECT (SELECT count(*) FROM wallet WHERE venue = 'okx' AND handle IS NULL) AS without_handle,
                (SELECT count(DISTINCT coin) FROM market_candle WHERE source = 'okx' AND interval = '1h') AS candle_coins,
                (SELECT max(updated_at) FROM okx_instrument) AS instruments_at""")).mappings().one()
+    style_window = session.execute(text("""
+        WITH slots AS (
+            SELECT t FROM generate_series(date_trunc('day',now())-interval '2 days'+interval '50 minutes',
+                         now()-interval '10 minutes',interval '6 hours') t
+            WHERE t>now()-interval '48 hours'
+        ), checks AS (
+            SELECT t,(SELECT min(r.finished_at) FROM ingest_run r WHERE r.kind='styles' AND r.status='success'
+                      AND r.started_at>=t AND r.started_at<t+interval '5 minutes') finished FROM slots
+        )
+        SELECT count(*) expected,count(finished) succeeded,
+               (SELECT min(started_at) FROM ingest_run WHERE kind='styles') first_observation,
+               array_agg(t ORDER BY t) FILTER(WHERE finished IS NULL) missing FROM checks
+    """)).mappings().one()
     return {
+        "style_window":dict(style_window),
         "freshness": data_as_of(session),
         "okx": {"runs": [dict(r) for r in okx_runs], "pool": [dict(r) for r in okx_pool], **dict(okx_meta),
                 "requests_per_minute": settings.okx_requests_per_minute},
