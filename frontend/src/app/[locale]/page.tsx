@@ -14,14 +14,16 @@ import { fmtNum, fmtPct, fmtTime, fmtUsd, signClass } from "@/lib/format";
 const TIER_ORDER = ["B", "C", "Z", "A", "S"];
 
 export default async function OverviewPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const top = (await searchParams).top === "30d" ? "30d" : "7d";
+  const query = await searchParams;
+  const mobileCoin=query.coin==="ETH"?"ETH":"BTC";
+  const top = query.top === "30d" ? "30d" : "7d";
   const t = await getTranslations();
   const locale = await getLocale();
   let data: Overview;
   try {
     data = await api.overview();
   } catch (e) {
-    return <ApiErrorState status={e instanceof ApiError ? e.status : undefined} detail={e instanceof ApiError ? e.message : undefined} />;
+    return <><ResearchSummary mobileCoin={mobileCoin} top={top}/><ApiErrorState status={e instanceof ApiError ? e.status : undefined} detail={e instanceof ApiError ? e.message : undefined} /></>;
   }
   let okx: OkxSummary | null = null;
   try {
@@ -39,7 +41,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
         <Freshness value={data.freshness} />
       </PageHeader>
 
-      <ResearchSummary />
+      <ResearchSummary mobileCoin={mobileCoin} top={top}/>
       <StartGuide />
 
       <DigestCard />

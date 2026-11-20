@@ -8,7 +8,7 @@ import { CanvasRenderer } from "echarts/renderers";
 
 echarts.use([LineChart, GridComponent, LegendComponent, TooltipComponent, DataZoomComponent, MarkLineComponent, CanvasRenderer]);
 
-export type Line = { name: string; data: [string, number | null][]; color?: string; axis?: 0 | 1; dashed?: boolean; area?: boolean };
+export type Line = { name: string; data: [string, number | null][]; color?: string; axis?: 0 | 1; dashed?: boolean; area?: boolean; connectNulls?: boolean };
 type Fmt = "usd" | "pct" | "num";
 
 function cssVar(name: string): string {
@@ -61,7 +61,7 @@ export function LinesChart({ lines, locale, formats = ["num"], height = 280, zer
         name: l.name,
         type: "line",
         showSymbol: false,
-        connectNulls: true,
+        connectNulls: l.connectNulls ?? true,
         yAxisIndex: l.axis ?? 0,
         data: l.data,
         lineStyle: { width: 1.8, color: l.color ?? palette[i % palette.length], type: l.dashed ? "dashed" : "solid" },

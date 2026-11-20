@@ -53,6 +53,7 @@ export async function DigestCard() {
         </Link>
       }
     >
+      {Object.entries(g.exchange_observations ?? {}).map(([coin,id]) => <Link key={coin} className="mr-4 text-sm text-accent" href={{pathname:"/replay",query:{coin,tab:"exchange",observation:id}}}>{coin} · {locale==="zh"?"查看当时的交易所资金观察":"Open archived exchange evidence"} #{id}</Link>)}
       {g.market_review && <div className="mb-3 space-y-1 text-xs text-muted">
         {Object.entries(g.market_review.markets).map(([coin,m])=><div key={coin}>{Object.entries(m.venues).map(([venue,f])=><Link key={venue} className="mr-3 text-accent" href={{pathname:"/replay",query:{coin,venue,tab:"live",frame:f.frame}}}>{coin} · {venue} · Δ24h {f.change?.net_units?.toLocaleString(locale,{maximumFractionDigits:2})??"—"} · n={f.change?.common_n??"—"}</Link>)}{m.outcomes.map(o=><span className="mr-2" key={o.horizon}>{o.horizon}h · Brier {o.brier.toFixed(3)} / {o.baseline.toFixed(3)} · n={o.n}</span>)}</div>)}
         {Object.entries(g.market_review.comparison).map(([venue,v])=><span key={venue} className="mr-3">{venue} · BTC / ETH · {({aligned:locale==="zh"?"同向":"aligned",opposite:locale==="zh"?"反向":"opposite",flat:locale==="zh"?"一侧持平":"flat",insufficient:locale==="zh"?"等待双币 24h 样本":"awaiting 24h samples"} as Record<string,string>)[v]}</span>)}

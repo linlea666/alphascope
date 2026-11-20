@@ -1,3 +1,4 @@
+import {ExchangeDesk} from "@/components/ExchangeDesk";
 import { getLocale } from "next-intl/server";
 import { Link } from "@/i18n/routing";
 import { LinesChart } from "@/components/LinesChart";
@@ -190,6 +191,7 @@ export default async function ReplayPage({ searchParams }: { searchParams: Promi
       </PageHeader>
       <nav className="flex flex-wrap gap-2">
         {[
+          ["exchange", zh ? "交易所资金行为" : "Exchange positioning"],
           ["events", zh ? "事件对比" : "Event comparison"],
           ["live", zh ? "群体与清算" : "Cohorts & liquidation"],
           ["archive", zh ? "前瞻档案" : "Forward archive"],
@@ -199,7 +201,7 @@ export default async function ReplayPage({ searchParams }: { searchParams: Promi
           </Link>
         ))}
       </nav>
-      {selectedTab === "live" ? (
+      {selectedTab === "exchange" ? <ExchangeDesk coin={coin} q={q} zh={zh}/> : selectedTab === "live" ? (
         <Live coin={coin} q={q} zh={zh} />
       ) : selectedTab === "archive" ? (
         <Forward coin={coin} zh={zh} />

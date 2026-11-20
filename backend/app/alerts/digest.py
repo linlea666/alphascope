@@ -58,6 +58,9 @@ def build(session: Session, now: datetime) -> dict:
         {"o": OWNER, "s": since}).mappings().all()
     num = lambda v: None if v is None else float(v)  # noqa: E731
     return {
+        "exchange_observations": dict(session.execute(text("""
+            SELECT DISTINCT ON (coin) coin,id FROM exchange_observation WHERE published_at<=:t
+            ORDER BY coin,bucket DESC"""), {"t": now}).all()),
         "market_review":daily_review(session,get_settings().research_coins,now),
         "major_markets": {coin: jsonable_encoder(notice_rows(session,coin,now,since)) for coin in get_settings().research_coins},
         "generated_at": now.isoformat(), "since": since.isoformat(),
@@ -122,6 +125,8 @@ def compose(day: date, p: dict, public_url: str) -> tuple[str, str]:
     for venue,v in review.get("comparison",{}).items():
         lines.append(f"· {venue} BTC / ETH 固定持仓账户方向：{verdict[v]}")
     if public_url:
+        for coin, oid in p.get("exchange_observations", {}).items():
+            lines.append(f"{coin} 交易所资金观察 · {public_url.rstrip('/')}/zh/replay?coin={coin}&tab=exchange&observation={oid}")
         lines += ["", f"网页：{public_url.rstrip('/')}/zh"]
     lines += ["", "只来自我们观测的样本；历史关系不代表未来，不构成交易建议。"]
     return f"[AlphaScope] 每日情报 {day}", "\n".join(lines)

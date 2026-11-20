@@ -1096,6 +1096,7 @@ export type Digest = {
     created_at: string;
     emailed_at: string | null;
     baseline: boolean;
+    exchange_observations?: Record<string,number>;
     market_review?:{markets:Record<string,{venues:Record<string,{frame:number;change:{common_n:number;net_units:number|null}|null}>;outcomes:{horizon:number;n:number;brier:number;baseline:number}[]}>;comparison:Record<string,string>};
     major_markets?:Record<string,{id:number;venue:string;frame_id:number;kind:string;evidence:{rank:number}}[]>;
     watch_moves: { address: string; name: string | null; venue: string; coin: string; kind: string; side: string; notional_change: number; entry_px: number | null; event_time: string }[];

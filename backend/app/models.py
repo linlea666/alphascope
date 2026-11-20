@@ -1305,3 +1305,15 @@ class CopyReplayAudit(Base):
     version: Mapped[str] = mapped_column(String(32),primary_key=True)
     outcome: Mapped[dict] = mapped_column(JSONB)
     published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True),server_default=func.clock_timestamp())
+
+
+class ExchangeObservation(Base):
+    """Immutable public exchange readings for one five-minute slot; watching is a team bookmark."""
+    __tablename__ = "exchange_observation"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    coin: Mapped[str] = mapped_column(Text)
+    bucket: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    published_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
+    payload: Mapped[dict] = mapped_column(JSONB)
+    watching: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    __table_args__ = (UniqueConstraint("coin", "bucket"), Index("ix_exchange_publication", "coin", "published_at"))

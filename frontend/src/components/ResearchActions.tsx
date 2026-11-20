@@ -2,14 +2,14 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export function NoticeWatch({ id, watching, zh }: { id: number; watching: boolean; zh: boolean }) {
+export function NoticeWatch({ id, watching, zh, resource = "notices" }: { id: number; watching: boolean; zh: boolean; resource?: "notices" | "exchange" }) {
   const router = useRouter();
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
   async function toggle() {
     setBusy(true);
     try {
-      const r = await fetch(`/api/bff/research/notices/${id}/watch`, {
+      const r = await fetch(`/api/bff/research/${resource}/${id}/watch`, {
         method: "PUT",
         headers: { "content-type": "application/json", "x-alphascope": "1" },
         body: JSON.stringify({ watching: !watching }),

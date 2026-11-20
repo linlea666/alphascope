@@ -26,6 +26,7 @@ from app.okx.candles import sync_candles
 from app.okx.client import OkxClient
 from app.okx.leaderboard import ensure_daily
 from app.okx.sync import refresh_assets, refresh_instruments, resolve_profiles, sync_history
+from app.research.exchange import collect as collect_exchange
 from app.research.jobs import market_research, research_daily, tracked
 from app.research.positions import rebuild_stale
 from app.research.timing import run_timing
@@ -165,6 +166,9 @@ def main() -> None:
             s.commit()
         log.info("market snapshot: %s rows", n)
 
+    def exchange_job() -> None:
+        tracked(sf, "exchange_observations", lambda: asyncio.run(collect_exchange(sf, settings.research_coins)))
+
     def research_job() -> None:
         async def collect():
             async with HyperliquidInfoClient(settings.hl_info_url, settings.hl_market_weight_per_minute,
@@ -218,6 +222,9 @@ def main() -> None:
     sched.add_job(market_okx_job, "interval", minutes=settings.market_sweep_interval_minutes,
                   next_run_time=now + timedelta(minutes=1, seconds=30), id="market_okx")
     sched.add_job(market_snapshot_job, "cron", minute=55, id="market_snapshot")
+    sched.add_job(exchange_job, "cron", minute="*/5", second=10, id="exchange_observations",
+                  coalesce=True, max_instances=1)
+    sched.add_job(exchange_job, "date", run_date=now + timedelta(seconds=10), id="exchange_boot")
     sched.add_job(research_job, "cron", minute=55, id="research_frames")
     # Publish the first observed hour after a deployment. The unique hour key also covers restarts.
     sched.add_job(research_job, "date", run_date=now + timedelta(seconds=75), id="research_frames_boot")

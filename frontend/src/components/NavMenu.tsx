@@ -15,11 +15,11 @@ export function NavMenu({ entries }: { entries: NavEntry[] }) {
     <nav className="flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
       {entries.map((e) =>
         "items" in e ? (
-          <div key={e.label} className="group relative">
+          <div key={e.label} className="group md:relative">
             <button type="button" className={`relative cursor-default ${e.items.some((i) => isActive(path, i.href)) ? on : "text-muted hover:text-text"}`}>
               {e.label} <span className="text-[10px]">▾</span>
             </button>
-            <div className="invisible absolute left-0 top-full z-30 min-w-[240px] pt-3 opacity-0 transition group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
+            <div className="invisible absolute inset-x-4 top-full z-30 md:left-0 md:right-auto md:min-w-[240px] pt-3 opacity-0 transition group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
               <div className="rounded-lg border border-border bg-panel py-1 shadow-lg">
                 {e.items.map((i) => (
                   <Link key={i.href} href={i.href} className={`block px-3 py-2 hover:bg-panel-2 ${isActive(path, i.href) ? "bg-panel-2" : ""}`}>
