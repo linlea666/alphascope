@@ -22,12 +22,25 @@ async function forward(req: NextRequest, path: string[]): Promise<Response> {
       return NextResponse.json({ detail: "cross-site request refused" }, { status: 403 });
     }
   }
+  let body: string | undefined;
+  if (req.method !== "GET" && req.method !== "DELETE") {
+    body = await req.text();
+    if (sub === "settings/binance-profiles" || sub === "settings/binance-profiles/verify") {
+      let data;
+      try { data = JSON.parse(body); } catch { return NextResponse.json({ detail: "invalid_json" }, { status: 400 }); }
+      const origin = new URL(req.headers.get("origin")!);
+      if ((data?.credential || sub.endsWith("/verify")) && origin.protocol !== "https:" &&
+          !["localhost", "127.0.0.1", "[::1]"].includes(origin.hostname)) {
+        return NextResponse.json({ detail: "secure_connection_required" }, { status: 403 });
+      }
+    }
+  }
   const url = new URL(`/api/v1/${sub}`, BASE);
   req.nextUrl.searchParams.forEach((v, k) => url.searchParams.set(k, v));
   const res = await fetch(url, {
     method: req.method,
     headers: { "content-type": "application/json" },
-    body: req.method === "GET" || req.method === "DELETE" ? undefined : await req.text(),
+    body,
     cache: "no-store",
   });
   return new NextResponse(await res.text(), { status: res.status, headers: { "content-type": "application/json" } });

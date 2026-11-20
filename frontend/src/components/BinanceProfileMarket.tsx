@@ -80,12 +80,14 @@ export async function BinanceProfileMarket({
       <Panel
         title={t("已分享主页的仓位样本", "Positions from monitored public profiles")}
         hint={t(
-          "统计设置里选定且主动分享持仓的交易员。上方群体切换只影响均价参考线。",
-          "Includes configured traders sharing positions. The cohort selector changes only the reference prices.",
+          "统计自动发现或优先观察、且主动分享持仓的交易员。上方群体切换只影响均价参考线。",
+          "Includes discovered or prioritized traders sharing positions. The cohort selector changes only the reference prices.",
         )}
       >
         <p>
-          {t("新鲜公开主页", "Fresh public profiles")} {market?.fresh ?? "—"} / {market?.configured ?? "—"} ·{" "}
+          {t("近期成功读取 / 累计收录主页", "Fresh shared / recorded profiles")} {market?.fresh ?? "—"} / {market?.configured ?? "—"} ·{" "}
+          {t("持有本币的主页", "Profiles holding this asset")} {market?.fresh ? market.holders : "—"} ·{" "}
+          {t("有效强平价金额覆盖率", "Liquidation price coverage by notional")} {market?.liq_coverage != null ? (market.liq_coverage * 100).toFixed(1) + "%" : "—"} ·{" "}
           {t("本币仓位", "Positions in this asset")} {market?.fresh ? market.positions.length : "—"}
         </p>
         <p className="text-xs text-muted">

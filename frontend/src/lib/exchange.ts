@@ -58,6 +58,8 @@ export type Page = {
     side: "BUY" | "SELL";
     time: string | null;
     public_id: string | null;
+    discovered: boolean;
+    pinned: boolean;
     name: string | null;
     n: number;
     usd: number | null;

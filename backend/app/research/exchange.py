@@ -4,6 +4,7 @@ import asyncio
 import json
 import math
 from datetime import UTC, datetime, timedelta
+from email.utils import parsedate_to_datetime
 from threading import Lock
 from time import monotonic
 
@@ -20,6 +21,17 @@ RATIOS = {
     "top_positions": ("topLongShortPositionRatio", "long-short-position-ratio-contract-top-trader"),
 }
 STALE = timedelta(minutes=10)
+
+
+def retry_time(header):
+    now = datetime.now(UTC)
+    minimum = now + timedelta(hours=1)
+    try:
+        if header and header.isdigit():
+            return max(minimum, now + timedelta(seconds=int(header)))
+        return max(minimum, parsedate_to_datetime(header))
+    except (ValueError, OverflowError, TypeError):
+        return minimum
 
 
 def number(value):

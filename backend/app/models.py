@@ -1326,4 +1326,17 @@ class BinanceProfileSnapshot(Base):
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
     shared: Mapped[bool] = mapped_column(Boolean)
     positions: Mapped[list] = mapped_column(JSONB)
-    __table_args__ = (Index("ix_binance_profile_observed", "profile_id", "observed_at"),)
+    __table_args__ = (Index("ix_binance_profile_observed", "profile_id", "observed_at"),
+                      Index("ix_binance_snapshot_recent", "observed_at"))
+
+
+class BinanceProfileDirectory(Base):
+    __tablename__ = "binance_profile_directory"
+    profile_id: Mapped[str] = mapped_column(String(19), primary_key=True)
+    name: Mapped[str | None] = mapped_column(Text)
+    pinned: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    btc_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    eth_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    attempted: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    priority_risk: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))

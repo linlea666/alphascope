@@ -28,9 +28,19 @@ def detail_page(
     cohort: Literal["traders", "whales"] = "traders",
     order: Literal["ASC", "DESC"] = "DESC",
     page: int = Query(1, ge=1, le=10000),
+    s: Session = Depends(get_session),
 ):
     try:
-        return details(symbol(coin), window, side, cohort, order, page)
+        result = details(symbol(coin), window, side, cohort, order, page)
+        ids = [str(r["public_id"]) for r in result["rows"] if r["public_id"]]
+        flags = {r.profile_id:r for r in s.execute(text("""SELECT profile_id,pinned,
+                 (btc_seen IS NOT NULL OR eth_seen IS NOT NULL) AS discovered FROM binance_profile_directory
+                 WHERE profile_id=ANY(:ids)"""), {"ids":ids})} if ids else {}
+        rows = []
+        for row in result["rows"]:
+            flag = flags.get(str(row["public_id"]))
+            rows.append({**row, "pinned": bool(flag and flag.pinned), "discovered":bool(flag and flag.discovered)})
+        return {**result,"rows":rows}
     except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
         raise HTTPException(503, "Binance detail page unavailable") from exc
 

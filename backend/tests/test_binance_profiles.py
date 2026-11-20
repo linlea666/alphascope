@@ -48,11 +48,11 @@ def test_pages_fully_read_before_filtering_and_publication():
         bp.credentials("no credentials")
 
 
-@pytest.mark.parametrize("status,reason", [(401, "access_denied"), (403, "access_denied"), (429, "rate_limited")])
+@pytest.mark.parametrize("status,reason", [(401, "access_denied"), (403, "source_restricted"), (429, "rate_limited")])
 def test_rate_and_access_rejections(status, reason):
     with httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(status, headers={"retry-after":"7200"}))) as c:
         with pytest.raises(bp.Unavailable) as err:
-            bp.read(c, "/friendly/future/smart-money/profile", {})
+            bp.read(c, "/private/future/smart-money/profile/query-positions", {}, {"cookie":"test"})
     assert err.value.reason == reason
     if status == 429:
         assert err.value.resume > datetime.now(UTC) + timedelta(minutes=119)
@@ -62,6 +62,7 @@ def test_settings_collection_and_revocation(sf, client, monkeypatch, tmp_path):
     monkeypatch.setattr(settings_store, "get_settings", lambda: type("Settings", (), {"secret_key_path": tmp_path/"key"})())
     config = {"enabled": True, "ids": [PID], "minutes": 30, "credential": SECRET}
     assert client.put(SETTINGS, json={**config, "minutes": 1}).status_code == 422
+    monkeypatch.setattr(bp, "fetch_profile", lambda *a, **kw: (True, []))
     r = client.put(SETTINGS, json=config)
     assert r.status_code == 200 and r.json()["has_credential"] and "test-secret" not in r.text
     calls = []
@@ -80,12 +81,14 @@ def test_settings_collection_and_revocation(sf, client, monkeypatch, tmp_path):
         store = settings_store.get_secret(s, bp.KEY)
         assert "test-secret" in store
         assert "test-secret" not in s.scalar(text("SELECT secret FROM app_setting WHERE key=:k"), {"k":bp.KEY})
-        settings_store.put(s, bp.KEY, {"attempts": {}, "last_attempt":None})
+        s.execute(text("UPDATE binance_profile_directory SET attempted=NULL"))
+        settings_store.put(s, bp.KEY, {"last_attempt":None})
     monkeypatch.setattr(bp, "fetch_profile", lambda *a: (False, []))
     bp.poll(sf)
     assert client.get(MARKET, params={"coin":"BTC"}).json()["positions"] == []
     with sf.begin() as s:
-        settings_store.put(s, bp.KEY, {"attempts": {}, "last_attempt":None})
+        s.execute(text("UPDATE binance_profile_directory SET attempted=NULL"))
+        settings_store.put(s, bp.KEY, {"last_attempt":None})
     def denied(*args):
         calls.append(PID)
         raise bp.Unavailable("access_denied")

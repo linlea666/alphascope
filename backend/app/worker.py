@@ -26,6 +26,7 @@ from app.okx.candles import sync_candles
 from app.okx.client import OkxClient
 from app.okx.leaderboard import ensure_daily
 from app.okx.sync import refresh_assets, refresh_instruments, resolve_profiles, sync_history
+from app.research.profile_directory import discover as discover_binance_profiles
 from app.research.binance_profiles import poll as poll_binance_profiles
 from app.research.exchange import collect as collect_exchange
 from app.research.jobs import market_research, research_daily, tracked
@@ -223,6 +224,8 @@ def main() -> None:
     sched.add_job(market_okx_job, "interval", minutes=settings.market_sweep_interval_minutes,
                   next_run_time=now + timedelta(minutes=1, seconds=30), id="market_okx")
     sched.add_job(market_snapshot_job, "cron", minute=55, id="market_snapshot")
+    sched.add_job(discover_binance_profiles, "interval", minutes=30, next_run_time=now + timedelta(seconds=20),
+                  args=[sf], id="binance_profile_discovery", coalesce=True, max_instances=1)
     sched.add_job(poll_binance_profiles, "interval", minutes=1, args=[sf], id="binance_shared_profiles",
                   coalesce=True, max_instances=1)
     sched.add_job(exchange_job, "cron", minute="*/5", second=10, id="exchange_observations",

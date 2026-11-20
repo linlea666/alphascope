@@ -1,3 +1,4 @@
+import { ProfilePriority } from "./ProfilePriority";
 import { profileLink } from "@/lib/binanceProfiles";
 import { ExchangeRefresh } from "./ExchangeRefresh";
 import { Link } from "@/i18n/routing";
@@ -235,16 +236,16 @@ export async function ExchangeDesk({ coin, q, zh }: { coin: string; q: Query; zh
                     </thead>
                     <tbody>
                       {list.rows.map((r, i) => (
-                        <tr key={r.public_id ?? i} className="border-t border-border">
+                        <tr key={r.public_id ? r.public_id + r.side : i} className="border-t border-border">
                           <td className={td}>
                             {r.public_id ? (
                               <>
                                 {r.name ?? t("公开交易员", "Public trader")}
                                 <small className="block text-muted">Binance · {r.public_id}</small>
-                                {/^[0-9]{19}$/.test(r.public_id) && <Link prefetch={false} className="text-xs text-accent"
-                                  href={{ pathname: "/settings", query: { profile: r.public_id }, hash: "binance-profiles" }}>
-                                  {t("配置主页观察", "Configure profile observation")} →
-                                </Link>}
+                                {/^[0-9]{19}$/.test(r.public_id) && <div className="flex gap-2">
+                                  <small>{r.discovered ? t("已自动发现","Discovered") : t("待名单同步","Awaiting list sync")}</small>
+                                  <ProfilePriority id={r.public_id} initial={r.pinned} zh={zh}/>
+                                </div>}
                               </>
                             ) : (
                               <>

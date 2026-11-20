@@ -8,8 +8,7 @@ import { PageHeader, Panel } from "@/components/ui";
 import { api, ApiError, type AppSettings } from "@/lib/api";
 import { fmtNum, fmtTime } from "@/lib/format";
 
-export default async function SettingsPage({searchParams}: {searchParams: Promise<{profile?: string}>}) {
-  const {profile} = await searchParams;
+export default async function SettingsPage() {
   const t = await getTranslations("settings");
   const locale = await getLocale();
   let d: AppSettings;
@@ -46,7 +45,7 @@ export default async function SettingsPage({searchParams}: {searchParams: Promis
         )}
       </Panel>
       <section id="binance-profiles" className="scroll-mt-20"><Panel title={locale === "zh" ? "币安公开持仓采集" : "Binance shared positions"}>
-        {profiles ? <BinanceProfileSettings initial={profiles} candidate={profile && /^[0-9]{19}$/.test(profile) ? profile : undefined} zh={locale === "zh"} /> : <p>{locale === "zh" ? "设置暂不可用" : "Settings unavailable"}</p>}
+        {profiles ? <BinanceProfileSettings initial={profiles} zh={locale === "zh"} /> : <p>{locale === "zh" ? "设置暂不可用" : "Settings unavailable"}</p>}
       </Panel></section>
       <SettingsForm initial={d} />
     </div>

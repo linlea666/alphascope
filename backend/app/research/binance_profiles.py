@@ -3,14 +3,14 @@ import json
 import re
 from time import sleep
 from datetime import UTC, datetime, timedelta
-from email.utils import parsedate_to_datetime
 
 import httpx
 from sqlalchemy import text
 
 from app import settings_store as store
 from app.market.structure import Row, build
-from app.research.exchange import number
+from app.research.exchange import number, retry_time
+from app.research.profile_directory import SCAN, select_due
 
 BASE = "https://www.binance.com/bapi/asset/v1"
 KEY = "binance_profiles"
@@ -35,30 +35,26 @@ def credentials(value):
 
 
 def state(s):
-    return {**DEFAULT, **store.get(s, KEY), "has_credential": store.has_secret(s, KEY)}
-
-
-def retry_time(header):
-    now = datetime.now(UTC)
-    minimum = now + timedelta(hours=1)
-    try:
-        if header and header.isdigit():
-            return max(minimum, now + timedelta(seconds=int(header)))
-        return max(minimum, parsedate_to_datetime(header))
-    except (ValueError, OverflowError, TypeError):
-        return minimum
+    cfg = {**DEFAULT, **store.get(s, KEY)}
+    cfg.pop("attempts", None)
+    pins = s.scalars(text("SELECT profile_id FROM binance_profile_directory WHERE pinned ORDER BY profile_id")).all()
+    return {**cfg, "ids": pins, "has_credential": store.has_secret(s, KEY),
+            "discovery": store.get(s, SCAN),
+            "directory_count": s.scalar(text("SELECT count(*) FROM binance_profile_directory"))}
 
 
 def read(client, path, params, headers=None):
     response = client.get(BASE + path, params=params, headers=headers)
-    if response.status_code in (401, 403, 451) or response.is_redirect:
-        raise Unavailable("access_denied")
+    if response.status_code in (403, 451):
+        raise Unavailable("source_restricted")
+    if response.status_code == 401 or response.is_redirect:
+        raise Unavailable("access_denied" if headers else "source_restricted")
     if response.status_code in (418, 429):
         raise Unavailable("rate_limited", retry_time(response.headers.get("retry-after")))
     response.raise_for_status()
     body = response.json()
     if str(body.get("code")) in ("100001005", "100002002"):
-        raise Unavailable("access_denied")
+        raise Unavailable("access_denied" if headers else "source_restricted")
     if str(body.get("code")) != "000000" or body.get("success") is False:
         raise Unavailable("upstream_error")
     return body["data"]
@@ -84,7 +80,7 @@ def position(row):
             "mark": mark, "liq": positive("liqPrice"), "lev": positive("leverage"), "notional": abs(amount) * mark}
 
 
-def fetch_profile(client, pid, headers):
+def fetch_profile(client, pid, headers, verify_only=False):
     profile = read(client, "/friendly/future/smart-money/profile", {"topTraderId": pid})
     if str(profile.get("topTraderId")) != pid or not isinstance(profile.get("sharingPosition"), bool):
         raise ValueError("unverified profile")
@@ -115,6 +111,8 @@ def fetch_profile(client, pid, headers):
             if item:
                 records.append(item)
         offset += len(rows)
+        if verify_only and rows and (total is None or total >= offset):
+            return True, records
         if offset == total or (len(rows) < 9 and total is None):
             return True, records
         if len(rows) < 9 or (total is not None and (offset > total or total > 36)):
@@ -127,20 +125,20 @@ def poll(sf):
     with sf.begin() as s:
         if not s.scalar(text("SELECT pg_try_advisory_xact_lock(:k)"), {"k": LOCK}):
             return
-        cfg = state(s)
+        cfg = {**DEFAULT, **store.get(s, KEY)}
         now = datetime.now(UTC)
-        if not cfg["enabled"] or not cfg["ids"] or cfg["status"] == "access_denied":
+        if not cfg["enabled"] or cfg["status"] in ("access_denied", "source_restricted"):
             return
         if cfg.get("last_attempt") and datetime.fromisoformat(cfg["last_attempt"]) > now - timedelta(seconds=55):
             return
         if cfg.get("resume_at") and datetime.fromisoformat(cfg["resume_at"]) > now:
             return
-        attempts = cfg.get("attempts", {})
-        pid = min(cfg["ids"], key=lambda i: attempts.get(i, ""))
-        if pid in attempts and datetime.fromisoformat(attempts[pid]) + timedelta(minutes=cfg["minutes"]) > now:
+        turn = cfg.get("next_turn", 0)
+        pid = select_due(s, cfg["minutes"], turn)
+        if not pid:
             return
-        attempts[pid] = now.isoformat()
-        changes = {"attempts": attempts, "last_attempt": now.isoformat(), "last_profile": pid, "resume_at": None}
+        s.execute(text("UPDATE binance_profile_directory SET attempted=:at WHERE profile_id=:pid"), {"at":now,"pid":pid})
+        changes = {"next_turn": (turn+1)%4, "last_attempt": now.isoformat(), "last_profile": pid, "resume_at": None}
         try:
             secret = store.get_secret(s, KEY)
             if not secret:
@@ -149,6 +147,10 @@ def poll(sf):
                 shared, rows = fetch_profile(client, pid, json.loads(secret))
             s.execute(text("""INSERT INTO binance_profile_snapshot(profile_id,shared,positions)
                 VALUES (:pid,:shared,CAST(:rows AS jsonb))"""), {"pid": pid, "shared": shared, "rows": json.dumps(rows)})
+            near = any(p["liq"] and 0 < (p["mark"] - p["liq"]) * (1 if p["side"] == "LONG" else -1)
+                       / p["mark"] <= 0.05 for p in rows)
+            s.execute(text("UPDATE binance_profile_directory SET priority_risk=:risk WHERE profile_id=:pid"),
+                      {"risk":bool(near), "pid":pid})
             changes["status"] = "ready" if shared else "hidden"
             if shared:
                 changes["last_success"] = datetime.now(UTC).isoformat()
@@ -161,16 +163,20 @@ def poll(sf):
 
 def structure(s, coin):
     cfg = state(s)
-    snaps = s.execute(text("""SELECT DISTINCT ON (profile_id) profile_id, observed_at, shared, positions
-        FROM binance_profile_snapshot WHERE profile_id=ANY(:ids) ORDER BY profile_id, observed_at DESC"""),
-        {"ids": cfg["ids"]}).mappings().all() if cfg["enabled"] and cfg["ids"] else []
     cutoff = datetime.now(UTC) - timedelta(minutes=2 * cfg["minutes"])
-    fresh = [r for r in snaps if r["shared"] and r["observed_at"] >= cutoff]
+    fresh = s.execute(text("""SELECT * FROM (SELECT DISTINCT ON (profile_id) profile_id,observed_at,shared,positions
+        FROM binance_profile_snapshot WHERE observed_at>=:cutoff ORDER BY profile_id,observed_at DESC,id DESC) recent
+        WHERE shared"""), {"cutoff":cutoff}).mappings().all() if cfg["enabled"] else []
     positions = [{**p, "profile_id": r["profile_id"], "observed_at": r["observed_at"]} for r in fresh
                  for p in r["positions"] if p["coin"] == coin]
     ref = max(positions, key=lambda p: p["observed_at"])["mark"] if positions else None
     rows = [Row(int(p["profile_id"]), 1 if p["side"] == "LONG" else -1, p["notional"], p["entry"],
                 p["liq"], p["lev"], None) for p in positions]
-    return {"coin": coin, "source": "binance_shared_profile", "ref": ref, "configured": len(cfg["ids"]),
+    return {"coin": coin, "source": "binance_shared_profile", "ref": ref, "configured": cfg["directory_count"],
             "fresh": len(fresh), "enabled": cfg["enabled"], "last_success": cfg.get("last_success"), "status": cfg["status"],
+            "holders": len({p["profile_id"] for p in positions}),
+            "liq_coverage": (sum(p["notional"] for p in positions if p["liq"] and
+                (p["liq"] < ref if p["side"] == "LONG" else p["liq"] > ref)) /
+                sum(p["notional"] for p in positions)) if positions else None,
+            "discovery": cfg["discovery"].get(coin),
             "positions": positions, "structure": build(rows, ref, entry_span=0.5, liq_span=0.5) if ref else None}
