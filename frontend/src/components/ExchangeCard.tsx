@@ -1,3 +1,4 @@
+import { profileLink } from "@/lib/binanceProfiles";
 import { Link } from "@/i18n/routing";
 import { exchangeLink, formatValue, type Observation } from "@/lib/exchange";
 import { utc } from "@/lib/research";
@@ -164,6 +165,9 @@ export function ExchangeCard({ coin, obs, zh }: { coin: string; obs: Observation
       </div>
       <Link prefetch={false} className="text-sm text-accent" href={exchangeLink(coin)}>
         {zh ? "查看持仓与交易明细" : "Explore positions and flow"} →
+      </Link>
+      <Link prefetch={false} className="block text-sm text-accent" href={profileLink(coin)}>
+        {zh ? "查看开仓成本与强平价" : "Explore entry and liquidation prices"} →
       </Link>
     </div>
   );

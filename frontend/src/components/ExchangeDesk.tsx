@@ -1,3 +1,4 @@
+import { profileLink } from "@/lib/binanceProfiles";
 import { ExchangeRefresh } from "./ExchangeRefresh";
 import { Link } from "@/i18n/routing";
 import { exchange, exchangeLink, formatValue, windows, type Window, type Evidence } from "@/lib/exchange";
@@ -160,6 +161,7 @@ export async function ExchangeDesk({ coin, q, zh }: { coin: string; q: Query; zh
             {t("名单刷新", "Roster updated")} {utc(obs?.readings.roster?.data.updated)} ·{" "}
             {t("采集", "Collected")} {utc(sample?.at)} {sample?.stale && t("· 已过期", "· Stale")}
           </p>
+          {!frozen && <Link className="text-sm text-accent" href={profileLink(coin, cohort)}>{t("查看开仓成本与强平价", "Explore entry and liquidation prices")} →</Link>}
           <div className="grid gap-3 sm:grid-cols-2">
             {(["long", "short"] as const).map((s) => (
               <div key={s} className="rounded border border-border p-3">
@@ -239,6 +241,10 @@ export async function ExchangeDesk({ coin, q, zh }: { coin: string; q: Query; zh
                               <>
                                 {r.name ?? t("公开交易员", "Public trader")}
                                 <small className="block text-muted">Binance · {r.public_id}</small>
+                                {/^[0-9]{19}$/.test(r.public_id) && <Link prefetch={false} className="text-xs text-accent"
+                                  href={{ pathname: "/settings", query: { profile: r.public_id }, hash: "binance-profiles" }}>
+                                  {t("配置主页观察", "Configure profile observation")} →
+                                </Link>}
                               </>
                             ) : (
                               <>

@@ -22,7 +22,7 @@ type Funding = Sample<{
 }>;
 type Readings = Partial<Record<Window, Sample<Groups>>> &
   Partial<Record<`${"binance" | "okx"}_${"accounts" | "top_accounts" | "top_positions"}`, Sample<Ratio>>> & {
-    roster?: Sample<{ updated: string; total: number }>;
+    roster?: Sample<{ updated: string; total: number; entry?: Record<"traders" | "whales", Record<"long" | "short", number | null>> }>;
     funding?: Funding;
     okx_funding?: Funding;
   };

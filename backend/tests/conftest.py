@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 FIXTURES = Path(__file__).parent / "fixtures"
 BACKEND = Path(__file__).parent.parent
 TEST_DB_URL = os.environ.get("ALPHASCOPE_TEST_DATABASE_URL", "postgresql+psycopg://localhost/alphascope_test")
-TABLES = ("exchange_observation", "copy_replay_audit", "research_review","research_report", "research_evaluation", "research_experiment", "research_forecast", "research_notice", "research_frame", "research_event", "coin_limit", "copy_backtest", "copy_score", "trader_health", "sentinel_hit", "zone_sentinel", "daily_digest", "style_tag", "factor_value", "market_snapshot", "market_event", "trader_position", "position_watch",
+TABLES = ("binance_profile_snapshot", "exchange_observation", "copy_replay_audit", "research_review","research_report", "research_evaluation", "research_experiment", "research_forecast", "research_notice", "research_frame", "research_event", "coin_limit", "copy_backtest", "copy_score", "trader_health", "sentinel_hit", "zone_sentinel", "daily_digest", "style_tag", "factor_value", "market_snapshot", "market_event", "trader_position", "position_watch",
           "okx_presence", "okx_leaderboard_row", "okx_leaderboard_run", "okx_trader", "okx_position", "okx_instrument",
           "sim_equity", "sim_trade", "sim_position", "copy_sim", "notification", "position_event", "live_position", "live_account", "alert_subscription", "app_setting",
           "watch_item", "watch_group", "wallet_alias", "leg_capture", "timing_score", "decision_timing", "timing_pivot", "trade_decision", "position_cycle", "market_symbol", "market_file", "fill", "fill_sync", "wallet_swing_profile", "wallet_leg_return", "swing_leg", "market_candle",

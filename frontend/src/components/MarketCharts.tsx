@@ -167,7 +167,7 @@ export function LiqHistogram({ data, locale, labels }: { data: MarketLiquidation
 
 /** Notional by price band, longs to the left and shorts to the right, zones shaded, the reference price dashed.
  *  Used for both entry prices and venue-reported liquidation prices (each with its own price range). */
-export function PriceLadder({ long, short, longZones, shortZones, refPx, locale, labels, height = 520 }: { long: PriceBin[]; short: PriceBin[]; longZones: PriceZone[]; shortZones: PriceZone[]; refPx: number; locale: string; labels: { longs: string; shorts: string; price: string; zone: string; empty: string }; height?: number }) {
+export function PriceLadder({ long, short, longZones, shortZones, refPx, locale, labels, levels, height = 520 }: { long: PriceBin[]; short: PriceBin[]; longZones: PriceZone[]; shortZones: PriceZone[]; refPx: number; locale: string; labels: { longs: string; shorts: string; price: string; zone: string; empty: string }; height?: number; levels?: {price: number; label: string}[] }) {
   const ref = useChart(
     (chart) => {
       const text = cssVar("--muted");
@@ -204,13 +204,16 @@ export function PriceLadder({ long, short, longZones, shortZones, refPx, locale,
             data: long.map((b) => -b.notional),
             itemStyle: { color: cssVar("--up") },
             markArea: { silent: true, data: area(longZones, cssVar("--up")) },
-            markLine: refIdx >= 0 ? { symbol: "none", label: { formatter: `${labels.price} ${px.format(refPx)}`, color: text }, lineStyle: { color: cssVar("--accent"), type: "dashed" }, data: [{ yAxis: refIdx }] } : undefined,
+            markLine: refIdx >= 0 ? { symbol: "none", label: { formatter: `${labels.price} ${px.format(refPx)}`, color: text }, lineStyle: { color: cssVar("--accent"), type: "dashed" }, data: [{ yAxis: refIdx }, ...(levels ?? []).flatMap(level => {
+              const bin = long.findIndex(b => b.lo <= level.price && level.price < b.hi);
+              return bin < 0 ? [] : [{ yAxis: bin, label: { position: "insideStartTop", formatter: level.label + " " + px.format(level.price) } }];
+            })] } : undefined,
           },
           { name: labels.shorts, type: "bar", stack: "x", data: short.map((b) => b.notional), itemStyle: { color: cssVar("--down") }, markArea: { silent: true, data: area(shortZones, cssVar("--down")) } },
         ],
       });
     },
-    [long, short, longZones, shortZones, refPx, locale],
+    [long, short, longZones, shortZones, refPx, locale, levels],
   );
   const any = long.some((b) => b.notional) || short.some((b) => b.notional);
   return any ? <div ref={ref} className="w-full" style={{ height }} /> : <p className="py-10 text-center text-sm text-muted">{labels.empty}</p>;

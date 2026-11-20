@@ -1317,3 +1317,13 @@ class ExchangeObservation(Base):
     payload: Mapped[dict] = mapped_column(JSONB)
     watching: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     __table_args__ = (UniqueConstraint("coin", "bucket"), Index("ix_exchange_publication", "coin", "published_at"))
+
+
+class BinanceProfileSnapshot(Base):
+    __tablename__ = "binance_profile_snapshot"
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    profile_id: Mapped[str] = mapped_column(String(19))
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
+    shared: Mapped[bool] = mapped_column(Boolean)
+    positions: Mapped[list] = mapped_column(JSONB)
+    __table_args__ = (Index("ix_binance_profile_observed", "profile_id", "observed_at"),)

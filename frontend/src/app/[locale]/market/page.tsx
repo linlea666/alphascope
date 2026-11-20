@@ -1,4 +1,6 @@
 import { getLocale, getTranslations } from "next-intl/server";
+import { BinanceProfileMarket } from "@/components/BinanceProfileMarket";
+import { profileLink } from "@/lib/binanceProfiles";
 import { AddressLink } from "@/components/AddressLink";
 import { ApiErrorState } from "@/components/ApiErrorState";
 import { LiqLadder, MarketHistoryChart, MarketTreemap, PriceLadder } from "@/components/MarketCharts";
@@ -22,6 +24,9 @@ export default async function MarketPage({ searchParams }: { searchParams: Promi
   const sp = await searchParams;
   const t = await getTranslations("market");
   const locale = await getLocale();
+  if (sp.source === "binance" && (sp.coin === "BTC" || sp.coin === "ETH")) {
+    return <BinanceProfileMarket coin={sp.coin} group={sp.group === "whales" ? "whales" : "traders"} locale={locale} />;
+  }
   const venue = VENUES.includes(sp.venue as (typeof VENUES)[number]) ? sp.venue! : "all";
   const cohort = COHORTS.includes(sp.cohort as (typeof COHORTS)[number]) ? sp.cohort! : "all";
   const hours = HOURS.includes(Number(sp.hours) as (typeof HOURS)[number]) ? Number(sp.hours) : 4;
@@ -255,6 +260,9 @@ async function CoinDetail({ coin, row, history, st, contributors, sp, q, locale 
     <div className="space-y-4">
       <div className="flex flex-wrap items-baseline gap-3">
         <h2 className="text-lg font-semibold">{coin}</h2>
+        {(coin === "BTC" || coin === "ETH") && <Link className="text-sm text-accent" href={profileLink(coin)}>
+          {locale === "zh" ? "查看币安开仓成本与强平价" : "Binance entry and liquidation prices"} →
+        </Link>}
         {row && (
           <span className="text-sm text-muted">
             {t("coinLine", { traders: row.traders, longs: row.long_traders, shorts: row.short_traders, px: fmtPx(row.mark_px), lev: row.median_leverage === null ? "—" : fmtNum(row.median_leverage, locale, 0) })}

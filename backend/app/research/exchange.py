@@ -75,6 +75,8 @@ def roster(raw, symbol):
         "total": int(raw["totalTraders"]),
         "value": number(raw["totalPositions"]),
         "ratio": number(raw.get("longShortRatio")),
+        "entry": {group: {side: number(raw.get(f"{side}{field}AvgEntryPrice")) for side in ("long", "short")}
+                  for group, field in (("traders", "Traders"), ("whales", "Whales"))},
     }
 
 
