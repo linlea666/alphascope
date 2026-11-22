@@ -1,6 +1,7 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { AddressLink } from "@/components/AddressLink";
 import { ApiErrorState } from "@/components/ApiErrorState";
+import { CopyValidation } from "@/components/CopyValidation";
 import { HealthBadge } from "@/components/HealthBadge";
 import { Term } from "@/components/Term";
 import { Badge, PageHeader, Panel, td, th } from "@/components/ui";
@@ -8,7 +9,7 @@ import { VenueSwitch } from "@/components/VenueSwitch";
 import { DelayBars, Sparkline } from "@/components/viz";
 import { Link } from "@/i18n/routing";
 import { getVenue } from "@/lib/venue";
-import { api, ApiError, type CopyBoard } from "@/lib/api";
+import { api, ApiError, type CopyBoard, type CopyValidation as Validation } from "@/lib/api";
 import { fmtNum, fmtPct, fmtTime, fmtUsd, signClass } from "@/lib/format";
 
 const WINDOWS = [7, 30, 90] as const;
@@ -24,6 +25,8 @@ export default async function CopyBoardPage({ searchParams }: { searchParams: Pr
   const window = WINDOWS.find((w) => String(w) === sp.window) ?? 30;
   const sort = (SORTS as readonly string[]).includes(sp.sort ?? "") ? sp.sort! : "ret";
   let d: CopyBoard;
+  // the score check is secondary: the board still renders without it
+  const validation = api.copyValidation().catch((): Validation | null => null);
   try {
     d = await api.copyBoard({ window, sort, venue, limit: 150 });
   } catch (e) {
@@ -31,6 +34,7 @@ export default async function CopyBoardPage({ searchParams }: { searchParams: Pr
   }
   const pill = (active: boolean) => `rounded border px-3 py-1 ${active ? "border-accent bg-accent text-white" : "border-border text-muted hover:text-text"}`;
   const small = (active: boolean) => `rounded border px-2 py-0.5 ${active ? "border-accent text-accent" : "border-border text-muted hover:text-text"}`;
+  const report = await validation;
   const delayLabels = [t("delays.0"), t("delays.30"), t("delays.300"), t("delays.1800"), t("delays.7200")];
 
   return (
@@ -137,6 +141,7 @@ export default async function CopyBoardPage({ searchParams }: { searchParams: Pr
         )}
       </Panel>
       <p className="text-xs leading-relaxed text-muted">{t("method")}</p>
+      {report && <CopyValidation report={report} />}
     </div>
   );
 }

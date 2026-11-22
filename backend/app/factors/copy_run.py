@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app import settings_store
 from app.alerts.mailer import send
-from app.factors import copyability, health
+from app.factors import copy_validation, copyability, health
 from app.research.timing import TIMING_VERSION
 from app.sim.backtest import DELAYS, BacktestParams, PriceBook, backtest
 from app.traders import trader_label
@@ -88,6 +88,7 @@ def score_wallet(s: Session, wid: int, now: datetime) -> dict:
           components = EXCLUDED.components, computed_at = EXCLUDED.computed_at"""),
         {"w": wid, "st": res["status"], "sc": res["score"], "g": res["grade"], "c": json.dumps(res["components"]),
          "t": now})
+    copy_validation.record(s, wid, res, now)
     return res
 
 
@@ -172,7 +173,9 @@ def run_copy_analysis(sf: sessionmaker[Session], now: datetime | None = None, li
         s.commit()
         mail = notify_changes(s, now, sender)
         s.commit()
-    return {"pool": len(pool), "backtested_30d": ok, "scored": scored, "health": statuses, "email": mail}
+        validated = copy_validation.settle(s, now)
+    return {"pool": len(pool), "backtested_30d": ok, "scored": scored, "health": statuses, "email": mail,
+            "validation_outcomes": validated}
 
 def replay_copy_history(sf):
     """Reprice legacy backtests at their original cutoffs. Newer scheduled runs keep precedence."""

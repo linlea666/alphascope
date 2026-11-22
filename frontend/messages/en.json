@@ -1833,7 +1833,7 @@
     "subtitle": "If you had copied these traders over the last 7 / 30 / 90 days with one setting, after fees, slippage and a 30-second delay, who would have made you the most? Replayed nightly from real trades and candles.",
     "window": "{n} days",
     "computed": "computed {t}",
-    "notYet": "Not computed yet (nightly at 01:00 UTC, and 20 minutes after the service starts)",
+    "notYet": "Not computed yet (nightly at 01:00 UTC; after a missed night, about 20 minutes after the service starts)",
     "tableTitle": "Copy backtest, last {n} days",
     "hint": "Same setting for all: $10k, 100% proportional copy, 30 s delay, 4.5 bp fee, 3 bp slippage, max 10x, cross margin. Pool: watchlist, simulated, style-labelled, timing-significant and OKX-board traders.",
     "sort": "Sort",
@@ -1869,7 +1869,25 @@
     "simulate": "Simulate",
     "details": "Details",
     "empty": "No backtests yet.",
-    "method": "Method: every open, add, reduce and close at its real time plus the delay, filled at the finest candle available (1 minute to 1 hour), liquidation checked hourly. OKX only records whole positions, so a follower enters at the first open and exits at the final close and misses intermediate adds and trims. Funding not modelled. Hindsight, not a forecast."
+    "method": "Method: every open, add, reduce and close at its real time plus the delay, filled at the finest candle available (1 minute to 1 hour), liquidation checked hourly. OKX only records whole positions, so a follower enters at the first open and exits at the final close and misses intermediate adds and trims. Funding not modelled. Hindsight, not a forecast.",
+    "validation": {
+      "title": "Does the score work? Did copying A/B-graded traders earn more afterwards?",
+      "hint": "Each day's copyability grades are frozen and never edited. After 7 and 30 days, the copy over those days is replayed with the same default settings to check whether higher grades came out ahead.",
+      "horizon": "{n} days after grading",
+      "accumulating": "Accumulating",
+      "significant": "Grades rank well",
+      "notSignificant": "No effect yet",
+      "firstDue": "First results after {date}",
+      "progress": "{graded} grading days have outcomes; {n} are usable (non-overlapping, at least {min} traders each). A verdict needs {need}.",
+      "rho": "Mean rank correlation between grade and subsequent copy return: {rho}",
+      "grade": "Grade",
+      "n": "Traders",
+      "mean": "Mean copy return",
+      "win": "Profitable",
+      "since": "Grades archived since {date}.",
+      "none": "No archived grades yet.",
+      "method": "Traders are only ranked against others graded the same day, so market moves cancel out. Only grading days at least one horizon apart are used, so return windows never overlap. A one-sided sign-flip permutation test runs over grading days. Traders with no trades in the window count as a zero copy return."
+    }
   },
   "copyCard": {
     "title": "Copyability score",
@@ -1915,7 +1933,8 @@
       "previous": "Original return and fills",
       "replayed": "Recomputed return and fills",
       "fills": "{ret} · {n} fills",
-      "unavailable": "Replay unavailable"
+      "unavailable": "Replay unavailable",
+      "vintage": "Recomputed up to the original time, but with the trade records, candles, OKX lead equity and leverage as archived today. It is not what could have been computed back then."
     }
   },
   "backtest": {

@@ -1188,6 +1188,25 @@ export type CopyBoard = {
   })[];
 };
 
+export type GradeOutcome = { n: number; mean: number | null; median: number | null; win: number | null };
+export type CopyValidation = {
+  first_graded: string | null;
+  last_graded: string | null;
+  horizons: {
+    horizon: number;
+    status: "accumulating" | "tested";
+    graded_days: number;
+    eligible_days: number;
+    need_days: number;
+    min_traders: number;
+    next_due: string | null;
+    mean_rho: number | null;
+    p_value: number | null;
+    grades: Record<"A" | "B" | "C" | "D", GradeOutcome>;
+    days: { as_of: string; n: number; rho: number; spread: number | null }[];
+  }[];
+};
+
 export type Candles = { coin: string; interval: string; source: string | null; rows: [string, number, number, number, number][] };
 
 export const api = {
@@ -1244,6 +1263,7 @@ export const api = {
   behavior: (address: string) => get<Behavior>(`/api/v1/wallets/${encodeURIComponent(address)}/behavior`),
   copyability: (address: string) => get<Copyability>(`/api/v1/wallets/${encodeURIComponent(address)}/copyability`),
   copyBoard: (params: Record<string, string | number | undefined>) => get<CopyBoard>("/api/v1/copy-board", params),
+  copyValidation: () => get<CopyValidation>("/api/v1/copy-board/validation"),
   marketAtRisk: (params: Record<string, string | number | undefined>) => get<MarketAtRisk>("/api/v1/market/at-risk", params),
   marketLiquidated: (params: Record<string, string | number | undefined>) => get<MarketLiquidated>("/api/v1/market/liquidated", params),
   marketUnderwater: (params: Record<string, string | number | boolean | undefined>) => get<{ as_of: string; rows: MarketPositionRow[] }>("/api/v1/market/underwater", params),

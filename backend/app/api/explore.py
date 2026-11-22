@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.common import VenueFilter, num, venue_clause
 from app.db import get_session
+from app.factors import copy_validation
 from app.quant.returns import Point, index_path
 from app.research.behavior import fingerprint
 from app.research.timing import TIMING_VERSION
@@ -370,3 +371,14 @@ def copy_board(session: Session = Depends(get_session), window: int = Query(30, 
     nums = ("ret", "pnl", "mdd", "leader_ret", "retention", "costs", "score")
     return {"window": window, "sort": sort, "computed_at": computed,
             "rows": [{**dict(r), **{k: num(r[k]) for k in nums}} for r in rows]}
+
+
+@router.get("/copy-board/validation")
+def copy_validation_report(session: Session = Depends(get_session)):
+    """Whether yesterday's copyability grades ranked what copying then earned: per horizon, grades frozen each day
+    against the copy return over the following days, tested on non-overlapping grading days."""
+    first = session.execute(text("SELECT min(as_of), max(as_of) FROM copy_score_history WHERE status = 'scored'")).one()
+    return {"first_graded": first[0], "last_graded": first[1], "horizons": [
+        {**r, "days": [{**d, "as_of": d["as_of"].isoformat()} for d in r["days"]],
+         "next_due": (first[0] + timedelta(days=r["horizon"])).isoformat() if first[0] and not r["graded_days"] else None}
+        for r in (copy_validation.evaluate(session, h) for h in copy_validation.HORIZONS)]}

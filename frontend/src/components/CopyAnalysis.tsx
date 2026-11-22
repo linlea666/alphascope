@@ -128,6 +128,7 @@ export async function CopyabilityCard({ address }: { address: string }) {
       {!!c.replay_audit?.length && (
         <details className="mt-5 border-t border-border pt-3 text-xs">
           <summary className="cursor-pointer">{t("audit.title", { n: c.replay_audit.length })}</summary>
+          <p className="mt-2 text-muted">{t("audit.vintage")}</p>
           <div className="mt-2 overflow-x-auto">
             <table className="w-full">
               <thead><tr>

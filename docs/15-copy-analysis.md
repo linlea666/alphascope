@@ -16,12 +16,13 @@
 
 接口：`GET /api/v1/wallets/{a}/backtest?days&ratio&delay&leverage_mode&capital`（决策 ≤ 3000 时同时算延迟敏感度：0 / 30 秒 / 5 分 / 30 分 / 2 小时）。
 
-## 每日批量（worker `copy_analysis`，01:00 UTC，服务启动 20 分钟后也跑一次）
+## 每日批量（worker `copy_analysis`，01:00 UTC；错过一晚时，服务启动约 20 分钟后补跑）
 
 1. 候选池（≤ 600）：收藏、模拟中、风格 verified/candidate、节奏显著、OKX 7 天在榜，且 90 天内有交易。
 2. 默认设置（1 万、100%、30 秒延迟、4.5bp + 3bp、10x、全仓）回测 7 / 30 / 90 天 → `copy_backtest`；30 天附延迟曲线。
 3. 可跟单性评分 `copy_score`（`app/factors/copyability.py`）：实力 20、回测收益 20、回撤 15、强平与杠杆 15、延迟敏感度 15、样本与活跃 10、集中度 5；A ≥ 80 / B ≥ 65 / C ≥ 50；已平 < 15 或无回测 → 数据不足。
 4. 状态 `trader_health`（`app/factors/health.py`）：近 30 天 vs 此前 180 天 → 沉寂 / 走下坡 / 风格漂移 / 近期火热 / 稳定 / 样本不足；收藏、订阅或模拟中的交易员变差时合并发一封邮件，并进入每日简报。
+5. 评分存档与前瞻检验（`app/factors/copy_validation.py`，迁移 0025）：每个 UTC 日的评分冻结进 `copy_score_history`，有了随后结果的那天不再改写。评分后满 7 天、30 天，用同一套默认设置回放此后的跟单收益，写入 `copy_score_outcome`；期间没有决策的记为 0，缺权益等无法回放的记原因、不计入。检验只在同一评分日内比较排名（Spearman），评分日之间至少间隔一个周期，满 8 个评分日后做单侧符号翻转置换检验。结果见 `/copy-board` 底部“评分可信度”，接口 `GET /api/v1/copy-board/validation`。迁移时以当时的 `copy_score` 作为第一天存档。
 
 ## 行为指纹（`app/research/behavior.py`，`GET /api/v1/wallets/{a}/behavior`）
 
