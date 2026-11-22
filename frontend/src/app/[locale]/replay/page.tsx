@@ -675,12 +675,39 @@ async function Forward({ coin, zh }: { coin: string; zh: boolean }) {
             : "Shadow model · repeatable predictive edge has not been established"
         }
       >
-        {data.scores.map((s) => (
-          <p key={s.model + s.horizon} className="mb-2 text-xs">
-            {s.model} ·{s.horizon}h · n={s.n} · Brier {numeric(s.brier, 4)} / {numeric(s.base_brier, 4)} · Log
-            Loss {numeric(s.log_loss, 4)} / {numeric(s.base_log_loss, 4)}
-          </p>
-        ))}
+        {data.scores.map((s) => {
+          const k = s.skill;
+          const verdict =
+            k.p === null
+              ? zh
+                ? `积累中：${k.blocks}/8 个独立块（每块 ${k.block_size} 次预测）`
+                : `Accumulating: ${k.blocks}/8 independent blocks of ${k.block_size} forecasts`
+              : k.p < 0.05 && (k.mean_diff ?? 0) < 0
+                ? zh
+                  ? `优于基准 · p=${numeric(k.p, 3)}`
+                  : `Beats baseline · p=${numeric(k.p, 3)}`
+                : zh
+                  ? `未优于基准 · p=${numeric(k.p, 3)}`
+                  : `Not better than baseline · p=${numeric(k.p, 3)}`;
+          return (
+            <div key={s.model + s.horizon} className="mb-2 text-xs">
+              <p>
+                {s.model} ·{s.horizon}h · n={s.n} · Brier {numeric(s.brier, 4)} / {numeric(s.base_brier, 4)} · Log
+                Loss {numeric(s.log_loss, 4)} / {numeric(s.base_log_loss, 4)}
+              </p>
+              <p className="text-muted">
+                {verdict}
+                {s.missing_rate !== null &&
+                  (zh ? ` · 无法结算 ${percent(s.missing_rate)}` : ` · unsettled ${percent(s.missing_rate)}`)}
+              </p>
+            </div>
+          );
+        })}
+        <p className="mb-2 text-xs text-muted">
+          {zh
+            ? "检验：同一批预测上模型与基准 Brier 之差，按连续 2 倍周期的预测分块求和、随机翻转符号（单侧）。每小时发出的长周期预测彼此重叠，普通 t 检验会高估显著性。"
+            : "Test: model minus baseline Brier on the same forecasts, summed over consecutive blocks of twice the horizon with random sign flips (one-sided). Hourly forecasts with longer horizons overlap, which makes a plain t-test overconfident."}
+        </p>
         {data.calibration.length > 0 && (
           <details>
             <summary className="cursor-pointer text-accent">

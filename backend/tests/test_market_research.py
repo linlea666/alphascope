@@ -6,7 +6,7 @@ from sqlalchemy import select, text
 from app.models import ResearchFrame
 from app.research.context import depth
 from app.research.forward import probabilities, register
-from app.research.frames import capture, percentile
+from app.research.frames import capture, notable, percentile
 from app.research.replay import add_event, refresh_events, summarize, wallet_flows
 from tests.test_zones_api import client  # noqa: F401
 
@@ -308,3 +308,64 @@ def test_daily_review_opposite_coins_and_unavailable_venue(sf):
     with sf() as s:
         review = daily_review(s, ["BTC", "ETH"], datetime.now(UTC))
     assert review["comparison"] == {"okx": "opposite", "hyperliquid": "insufficient"}
+
+
+def test_notices_control_false_discoveries_across_a_frames_metrics():
+    history = list(range(30))
+    assert percentile(100, history)["p"] == pytest.approx(2 / 31)
+    assert percentile(15, history)["p"] == 1.0
+    # a month of history: only a value beyond everything seen survives the correction for eight metrics
+    month = list(range(720))
+    ranks = {k: percentile(360, month) for k in "abcdefg"} | {"h": percentile(5000, month)}
+    assert notable(ranks) == {"h": pytest.approx(8 * 2 / 721)}
+    # with one day of history even the most extreme value is not enough
+    assert notable({"h": percentile(5000, list(range(24))), "a": percentile(3, list(range(24)))}) == {}
+    assert notable({"a": {"n": 3, "rank": None, "p": None}}) == {}
+
+
+def test_specialists_record_the_scale_corrected_q(sf):
+    from app.research.frames import freeze_accounts
+    from app.research.timing import TIMING_VERSION
+    with sf.begin() as s:
+        wid = s.execute(text("""INSERT INTO wallet (address, first_seen_at, first_seen_source, last_seen_at,
+            present_in_latest) VALUES ('0xspecialist', now(), 't', now(), true) RETURNING id""")).scalar_one()
+        s.execute(text("""INSERT INTO position_watch (wallet_id, venue, tier, base_tier, added_at, next_due,
+            last_observed_at, stale_after, failures, n_positions, account_value)
+            VALUES (:w, 'hyperliquid', 'hot', 'hot', now(), now(), now(), now() + interval '1 hour', 0, 1, 5000)"""),
+            {"w": wid})
+        s.execute(text("""INSERT INTO trader_position (wallet_id, coin, venue, szi, notional_usd, upl, opened_at_source,
+            first_seen_at, observed_at) VALUES (:w, 'ETH', 'hyperliquid', 1, 3000, 0, 'source', now(), now())"""),
+            {"w": wid})
+        for scale, q in (("swing", 0.04), ("day", 0.3), ("trend", 0.5)):
+            s.execute(text("""INSERT INTO timing_score (wallet_id, scale, time_window, coin_group, version, as_of,
+                status, n_decisions, n_scored, pivot_hits, pivots, pivots_hit, cycles, q_value, edge_shrunk)
+                VALUES (:w, :sc, 'all', 'c:ETH', :v, now() - interval '1 hour', 'scored', 10, 10, 0, 0, 0, 1, :q, 0.1)"""),
+                {"w": wid, "sc": scale, "q": q, "v": TIMING_VERSION})
+        [a] = freeze_accounts(s, "ETH", "hyperliquid", datetime.now(UTC))
+    assert a["q_value"] == pytest.approx(0.04) and a["scales"] == 3
+    assert a["q_adjusted"] == pytest.approx(0.12) and a["cohort"] == "candidate"
+
+
+def test_study_decision_is_fixed_within_a_look(sf, monkeypatch):
+    from app.models import ResearchEvaluation
+    from app.research import forward
+    with sf.begin() as s:
+        register(s, "BTC")
+        s.execute(text("UPDATE research_experiment SET registered_at = now() - interval '30 days'"))
+    look = {"n": 1}
+    monkeypatch.setattr(forward, "paired_test", lambda *a: {
+        "status": "evaluated", "look": look["n"], "alpha": 0.025, "p": 0.001, "folds": [{"effect": 0.01}]})
+    qs = iter([0.001, 0.5, 0.5])
+    monkeypatch.setattr(forward, "benjamini_hochberg", lambda ps: [next(qs)] * len(ps))
+    day = datetime.now(UTC).replace(hour=1, minute=0, second=0, microsecond=0)
+    results = []
+    for i, n in enumerate((1, 1, 2)):
+        look["n"] = n
+        with sf.begin() as s:
+            forward.evaluate(s, day + timedelta(days=i))
+            results.append([r.result for r in s.scalars(select(ResearchEvaluation).where(
+                ResearchEvaluation.cutoff == (day + timedelta(days=i)).replace(hour=0)))])
+    first, same_look, next_look = (r[0] for r in results)
+    assert first["review_eligible"] and first["q"] == 0.001
+    assert same_look["review_eligible"] and same_look["q"] == 0.001 and same_look["decided_at"] == first["decided_at"]
+    assert not next_look["review_eligible"] and next_look["q"] == 0.5

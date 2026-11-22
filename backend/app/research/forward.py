@@ -239,6 +239,26 @@ def settle(s, coin, now):
         row.outcome = out
 
 
+def skill(losses, horizon):
+    """One-sided test that the model's loss is below the baseline's, both scored on the same forecasts.
+
+    losses: (model, baseline) pairs in issue order. Forecasts are issued hourly for an h-hour horizon, so up to h-1
+    neighbours share part of their outcome window and a plain t-test (or Newey-West, at these sample sizes) rejects
+    too often. Loss differences are summed in consecutive blocks of 2h forecasts, which are nearly independent, and
+    the block signs are flipped at random, as in the pre-registered studies. Simulated overlapping series reject at
+    about the nominal rate. At least eight blocks are required."""
+    d = np.array([m - b for m, b in losses], dtype=float)
+    size = 2 * horizon
+    k = len(d) // size
+    out = {"n": len(d), "mean_diff": float(d.mean()) if len(d) else None, "blocks": k, "block_size": size, "p": None}
+    if k < 8:
+        return out
+    values = d[: k * size].reshape(k, size).sum(axis=1)
+    signs = np.random.default_rng(17).choice([-1, 1], size=(4096, k))
+    out["p"] = float((1 + np.count_nonzero(signs @ values <= values.sum())) / 4097)
+    return out
+
+
 def treatment(key, e, version=STUDY_VERSION):
     d = e["delta"]
     if key == "eth_specialist":
@@ -391,7 +411,18 @@ def evaluate(s, now):
             and q < result["alpha"]
             and all(f["effect"] is not None and f["effect"] > 0 for f in result["folds"])
         )
-        result.update(q=float(q), review_eligible=bool(eligible))
+        result.update(q=float(q), review_eligible=bool(eligible), decided_at=cutoff.isoformat())
+        # One decision per look. The tested pairs of a look are fixed, but its BH q also depends on the other
+        # studies' p-values, which change daily; re-deciding would give repeated chances to cross alpha.
+        prior = s.scalar(
+            select(ResearchEvaluation.result)
+            .where(ResearchEvaluation.experiment_id == study.id, ResearchEvaluation.cutoff < cutoff)
+            .order_by(ResearchEvaluation.cutoff.desc())
+            .limit(1)
+        )
+        if prior and result["look"] > 0 and prior.get("look") == result["look"] and "q" in prior:
+            result.update(q=prior["q"], review_eligible=prior.get("review_eligible", False),
+                          decided_at=prior.get("decided_at"))
         s.execute(
             insert(ResearchEvaluation)
             .values(experiment_id=study.id, cutoff=cutoff, result=result)

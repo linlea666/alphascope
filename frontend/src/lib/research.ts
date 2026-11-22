@@ -188,6 +188,10 @@ export type Archive = {
     base_brier: number;
     log_loss: number;
     base_log_loss: number;
+    missing: number;
+    missing_rate: number | null;
+    pending: number;
+    skill: { n: number; mean_diff: number | null; blocks: number; block_size: number; p: number | null };
   }[];
 };
 export const research = {

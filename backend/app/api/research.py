@@ -24,6 +24,7 @@ from app.models import (
     ResearchReport,
     ResearchReview,
 )
+from app.research.forward import skill
 from app.research.frames import VENUES, coverage, notice_rows
 from app.research.replay import WINDOWS, catalog, details, event_info, summarize
 
@@ -285,13 +286,28 @@ def archive(coin: str = "BTC", s: Session = Depends(get_session)):
         .order_by(ResearchForecast.issued_at.desc(), ResearchForecast.horizon)
         .limit(120)
     ).all()
-    scores = s.execute(
-        text("""SELECT model,horizon,count(*) n,avg((outcome->>'p_brier')::float) brier,
-        avg((outcome->>'baseline_brier')::float) base_brier,avg((outcome->>'p_log_loss')::float) log_loss,
-        avg((outcome->>'baseline_log_loss')::float) base_log_loss FROM research_forecast
-        WHERE coin=:coin AND outcome->>'status'='settled' GROUP BY model,horizon ORDER BY model,horizon"""),
+    graded = {}
+    for r in s.execute(
+        text("""SELECT model,horizon,outcome->>'status' status,(outcome->>'p_brier')::float brier,
+        (outcome->>'baseline_brier')::float base_brier,(outcome->>'p_log_loss')::float log_loss,
+        (outcome->>'baseline_log_loss')::float base_log_loss FROM research_forecast
+        WHERE coin=:coin ORDER BY model,horizon,issued_at"""),
         {"coin": coin},
-    ).mappings()
+    ).mappings():
+        graded.setdefault((r["model"], r["horizon"]), []).append(r)
+    scores = []
+    for (model, horizon), rows in graded.items():
+        done = [r for r in rows if r["status"] == "settled"]
+        missing = sum(r["status"] == "missing" for r in rows)
+        mean = (lambda k: sum(r[k] for r in done) / len(done)) if done else (lambda k: None)
+        scores.append({
+            "model": model, "horizon": horizon, "n": len(done), "missing": missing,
+            "missing_rate": missing / (len(done) + missing) if done or missing else None,
+            "pending": len(rows) - len(done) - missing,
+            "brier": mean("brier"), "base_brier": mean("base_brier"),
+            "log_loss": mean("log_loss"), "base_log_loss": mean("base_log_loss"),
+            "skill": skill([(r["brier"], r["base_brier"]) for r in done], horizon),
+        })
     calibration = (
         s.execute(
             text("""
@@ -338,7 +354,7 @@ def archive(coin: str = "BTC", s: Session = Depends(get_session)):
         ],
         "forecasts": forecasts,
         "calibration": [dict(r) for r in calibration],
-        "scores": [dict(r) for r in scores],
+        "scores": scores,
         "status": "shadow",
     }
 

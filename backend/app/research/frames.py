@@ -11,7 +11,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from app.market import structure
 from app.models import ResearchFrame, ResearchNotice
-from app.research.timing import TIMING_VERSION
+from app.research.timing import TIMING_VERSION, benjamini_hochberg
 
 VERSION = "frame-v1"
 VENUES = ("hyperliquid", "okx")
@@ -21,7 +21,8 @@ def freeze_accounts(s, coin, venue, observed):
     rows = s.execute(
         text("""
         WITH timing AS (
-          SELECT DISTINCT ON(wallet_id) wallet_id, q_value, edge_shrunk, n_scored, as_of
+          SELECT DISTINCT ON(wallet_id) wallet_id, q_value, edge_shrunk, n_scored, as_of,
+            count(*) OVER (PARTITION BY wallet_id) AS scales
           FROM timing_score WHERE coin_group=:grp AND time_window='all' AND version=:v
           AND status='scored' AND as_of<=:t ORDER BY wallet_id,q_value NULLS LAST,n_scored DESC,scale
         ), verified AS (
@@ -29,7 +30,7 @@ def freeze_accounts(s, coin, venue, observed):
           WHERE computed_at<=:t GROUP BY wallet_id
         )
         SELECT p.wallet_id,w.address,p.szi,p.notional_usd,p.leverage,p.mark_px,p.liq_px,p.entry_px,p.margin_mode,
-          p.observed_at,h.account_value,h.tier, t.q_value,t.edge_shrunk,t.n_scored,t.as_of AS score_at,
+          p.observed_at,h.account_value,h.tier, t.q_value,t.edge_shrunk,t.n_scored,t.as_of AS score_at,t.scales,
           coalesce(v.verified,false) verified
         FROM trader_position p JOIN position_watch h USING(wallet_id) JOIN wallet w ON w.id=p.wallet_id
         LEFT JOIN timing t USING(wallet_id) LEFT JOIN verified v USING(wallet_id)
@@ -39,6 +40,9 @@ def freeze_accounts(s, coin, venue, observed):
     ).mappings()
     accounts = [jsonable_encoder(dict(r)) for r in rows]
     for r in accounts:
+        # The cohort keeps the best of the wallet's scored scales, as the running studies were registered with.
+        # q_adjusted corrects that choice for the number of scales (Bonferroni) for any later study version.
+        r["q_adjusted"] = min(1.0, r["q_value"] * r["scales"]) if r["q_value"] is not None else None
         qualified = r["q_value"] is not None and r["q_value"] < 0.1 and (r["edge_shrunk"] or 0) > 0
         r["cohort"] = "specialist" if qualified and r["verified"] else "candidate" if qualified else "ordinary"
     return accounts
@@ -109,12 +113,26 @@ def changes(current, prior):
 
 def percentile(value, history):
     xs = [x for x in history if x is not None]
+    if value is None or len(xs) < 24:
+        return {"n": len(xs), "rank": None, "p": None}
+    below, above = sum(x <= value for x in xs), sum(x >= value for x in xs)
     return {
         "n": len(xs),
-        "rank": (sum(x < value for x in xs) + 0.5 * sum(x == value for x in xs)) / len(xs)
-        if value is not None and len(xs) >= 24
-        else None,
+        "rank": (sum(x < value for x in xs) + 0.5 * sum(x == value for x in xs)) / len(xs),
+        # two-sided: how often history was at least this extreme, counting the current value
+        "p": min(1.0, 2 * (min(below, above) + 1) / (len(xs) + 1)),
     }
+
+
+NOTICE_FDR = 0.1
+
+
+def notable(ranks):
+    """Metrics extreme enough to note. Every frame tests all of its ranked metrics at once, so the false discovery
+    rate is controlled across them (Benjamini-Hochberg); with short histories nothing qualifies yet."""
+    tested = [(k, stat["p"]) for k, stat in ranks.items() if stat.get("p") is not None]
+    qs = benjamini_hochberg([p for _, p in tested])
+    return {k: q for (k, _), q in zip(tested, qs) if q < NOTICE_FDR}
 
 
 def capture(s, coin, venue, now, context):
@@ -273,48 +291,51 @@ def capture(s, coin, venue, now, context):
         .returning(ResearchFrame.id)
     ).scalar()
     if result is not None:
-        for k, stat in m["ranks"].items():
+        for k, q in notable(m["ranks"]).items():
+            stat = m["ranks"][k]
             rank = stat["rank"]
-            if rank is not None and (rank >= 0.95 or rank <= 0.05):
-                contributors = []
-                if k == "net_change":
-                    contributors = m["delta"]["contributors"]
-                elif k not in ("depth", "hourly_volatility"):
-                    eligible = accounts
-                    if k == "divergence":
-                        matched = {a["matched_to"] for a in accounts if "matched_to" in a}
-                        eligible = [a for a in accounts if "matched_to" in a or a["wallet_id"] in matched]
-                    elif k == "high_leverage_share":
-                        eligible = [a for a in accounts if (a["leverage"] or 0) >= 20]
-                    if k == "nearest_distance":
-                        eligible = sorted(
-                            (a for a in accounts if a["liq_px"] and ref and (a["liq_px"] - ref) * a["szi"] < 0),
-                            key=lambda a: abs(a["liq_px"] / ref - 1),
-                        )
-                    else:
-                        eligible = sorted(eligible, key=lambda a: -a["notional_usd"])
-                    contributors = [
-                        {
-                            key: a.get(key)
-                            for key in ("address", "szi", "notional_usd", "leverage", "liq_px", "cohort")
-                        }
-                        for a in eligible[:10]
-                    ]
-                evidence = {
-                    "rank": rank,
-                    "history_n": stat["n"],
-                    "value": m[k],
-                    "cohort": "matched" if k == "divergence" else "all",
-                    "contributors": contributors,
-                    "reference_px": ref,
-                    "n": len(accounts),
-                    "counterevidence": {
-                        "largest_share": m["delta"]["largest_share"],
-                        "common_n": m["delta"]["common_n"],
-                    },
-                    "track": "same_venue_mark_24h",
-                }
-                s.add(ResearchNotice(frame_id=result, kind=k, evidence=evidence, due_at=now + timedelta(hours=24)))
+            contributors = []
+            if k == "net_change":
+                contributors = m["delta"]["contributors"]
+            elif k not in ("depth", "hourly_volatility"):
+                eligible = accounts
+                if k == "divergence":
+                    matched = {a["matched_to"] for a in accounts if "matched_to" in a}
+                    eligible = [a for a in accounts if "matched_to" in a or a["wallet_id"] in matched]
+                elif k == "high_leverage_share":
+                    eligible = [a for a in accounts if (a["leverage"] or 0) >= 20]
+                if k == "nearest_distance":
+                    eligible = sorted(
+                        (a for a in accounts if a["liq_px"] and ref and (a["liq_px"] - ref) * a["szi"] < 0),
+                        key=lambda a: abs(a["liq_px"] / ref - 1),
+                    )
+                else:
+                    eligible = sorted(eligible, key=lambda a: -a["notional_usd"])
+                contributors = [
+                    {
+                        key: a.get(key)
+                        for key in ("address", "szi", "notional_usd", "leverage", "liq_px", "cohort")
+                    }
+                    for a in eligible[:10]
+                ]
+            evidence = {
+                "rank": rank,
+                "p": stat["p"],
+                "q": q,
+                "fdr": NOTICE_FDR,
+                "history_n": stat["n"],
+                "value": m[k],
+                "cohort": "matched" if k == "divergence" else "all",
+                "contributors": contributors,
+                "reference_px": ref,
+                "n": len(accounts),
+                "counterevidence": {
+                    "largest_share": m["delta"]["largest_share"],
+                    "common_n": m["delta"]["common_n"],
+                },
+                "track": "same_venue_mark_24h",
+            }
+            s.add(ResearchNotice(frame_id=result, kind=k, evidence=evidence, due_at=now + timedelta(hours=24)))
     return result
 
 
