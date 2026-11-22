@@ -136,7 +136,8 @@ def test_persistence_ranks_past_against_later_copy_returns(sf, monkeypatch):
     skill = {w: float(rng.normal(0, 0.05)) for w in ids}
     seen = []
 
-    def backtest(s, wid, p, now, prices):
+    def backtest(s, wid, p, now, prices, history):
+        assert history
         seen.append((wid, p.days, now))
         return {"ok": True, "trades": 3, "ret": skill[wid] + float(rng.normal(0, 0.02))}
 
@@ -185,3 +186,36 @@ def test_persistence_keeps_the_most_recent_dates(sf, monkeypatch):
     assert now - timedelta(days=14) < last + timedelta(days=7) <= now
     # the grid stays anchored to the first eligible date
     assert (last - (start + timedelta(days=31))).days % 7 == 0
+
+
+def test_shared_denominator_fools_the_rank_test_but_not_the_direction_test(sf, monkeypatch):
+    start = datetime(2026, 7, 1, tzinfo=UTC)
+    ids = active(sf, 60, start, 150, venue="okx")
+    rng = np.random.default_rng(8)
+    # profitable on average, no persistence, each return divided by the same (current) equity in both windows
+    scale = {w: float(np.exp(rng.normal(0, 1))) for w in ids}
+
+    def backtest(s, wid, p, now, prices, history):
+        return {"ok": True, "trades": 3, "ret": scale[wid] * float(rng.normal(0.02, 0.03))}
+
+    monkeypatch.setattr(cv, "backtest", backtest)
+    monkeypatch.setattr(cv, "PriceBook", lambda s, a, b: None)
+    with sf() as s:
+        out = cv.persistence(s, "okx", 7, start + timedelta(days=150))
+    assert out["p_value"] < 0.01 and out["mean_rho"] > 0.1  # spurious
+    assert out["sign_p"] > 0.05 and abs(out["sign_mean"]) < 0.1
+    assert out["shared_denominator"]
+
+
+def test_changed_method_is_recomputed_after_deployment(sf, monkeypatch):
+    from tests.test_worker import run, schedule
+    run(sf, "copy_persistence", datetime.now(UTC) - timedelta(days=1))
+    with sf.begin() as s:
+        s.execute(text("""INSERT INTO copy_persistence_run (result) VALUES (CAST(:r AS jsonb))"""),
+                  {"r": '{"version": 1, "runs": []}'})
+    soon = schedule(sf, monkeypatch)["copy_persistence"][1]
+    assert soon < datetime.now(UTC) + timedelta(minutes=46)
+    with sf.begin() as s:
+        s.execute(text("UPDATE copy_persistence_run SET result = jsonb_set(result, '{version}', :v)"),
+                  {"v": str(cv.PERSIST_VERSION)})
+    assert schedule(sf, monkeypatch)["copy_persistence"][1].weekday() == 6  # back on Sunday

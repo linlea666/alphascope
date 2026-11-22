@@ -1201,6 +1201,8 @@ export type PersistenceRun = {
   top_minus_bottom?: number;
   positive_share?: number;
   shared_denominator?: boolean;
+  sign_mean?: number | null;
+  sign_p?: number | null;
   dates: { as_of: string; n: number; rho: number | null; top: number | null; bottom: number | null }[];
 };
 export type CopyValidation = {

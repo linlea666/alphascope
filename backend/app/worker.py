@@ -22,7 +22,7 @@ from app.ingest.portfolio_ingest import enrich_batch
 from app.ingest.runs import mark_abandoned_runs
 from app.alerts import digest, sentinel
 from app.factors.copy_run import run_copy_analysis
-from app.factors.copy_validation import refresh_persistence
+from app.factors.copy_validation import persistence_current, refresh_persistence
 from app.factors.run import run_styles
 from app.market.collect import sweep_hyperliquid, sweep_okx, sync_watch
 from app.market.stats import snapshot_hour
@@ -327,8 +327,10 @@ def main() -> None:
                   **catch_up("factor_lab", 24, timedelta(minutes=30)))
     # Does past copy return persist? Point-in-time replays over the whole archive, weekly (tens of thousands of
     # backtests, well clear of the nightly copy analysis).
+    # A changed method supersedes the stored result, so it is recomputed after the deployment instead of on Sunday.
     sched.add_job(isolated("copy_persistence"), "cron", day_of_week="sun", hour=3, minute=30, id="copy_persistence",
-                  **catch_up("copy_persistence", 24 * 7, timedelta(minutes=45)))
+                  **(catch_up("copy_persistence", 24 * 7, timedelta(minutes=45)) if persistence_current(sf)
+                     else {"next_run_time": now + timedelta(minutes=45)}))
     # Copy backtests, copyability and trader health: nightly, and after a restart only if a night was missed
     sched.add_job(isolated("copy_analysis"), "cron", hour=1, minute=0, id="copy_analysis",
                   **catch_up("copy_analysis", 24, timedelta(minutes=20)))

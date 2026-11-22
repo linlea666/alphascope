@@ -53,6 +53,19 @@ def test_backtest_sizes_proportionally_and_uses_delayed_prices(sf):
     assert late["pnl"] < now0["pnl"] and late["resolution"] == {"BTC": "1m"}  # 30 s later: the next 1m open
 
 
+def test_history_replay_sizes_against_account_values_archived_later(sf):
+    close = T0 + timedelta(days=2)
+    wid = seed(sf, [(T0, 80000, 0, 1), (close, 88000, 1, 0)],
+               bars=[(T0 + timedelta(minutes=1), 80100), (close + timedelta(minutes=1), 87900)])
+    with sf.begin() as s:  # the portfolio history was first fetched after the window
+        s.execute(text("UPDATE equity_point SET fetched_at = :t"), {"t": NOW + timedelta(days=5)})
+    with sf() as s:
+        live = backtest(s, wid, BacktestParams(days=30, delay_seconds=0), now=NOW)
+        replay = backtest(s, wid, BacktestParams(days=30, delay_seconds=0), now=NOW, history=True)
+    assert live == {"ok": False, "reason": "no_leader_equity"}
+    assert replay["ok"] and replay["trades"] == 2 and replay["equity_source"] == "history"
+
+
 def test_backtest_hourly_liquidation(sf):
     hour = (T0 + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
     wid = seed(sf, [(T0, 80000, 0, 10)], equity=10_000,  # 80x leader -> capped at 10x of our capital

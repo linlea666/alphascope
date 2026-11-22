@@ -94,6 +94,7 @@ async function Persistence({ report }: { report: Report }) {
               <th className={`${th} text-right`}>{t("dates")}</th>
               <th className={`${th} text-right`}>{t("rhoCol")}</th>
               <th className={`${th} text-right`}>{t("positive")}</th>
+              <th className={`${th} text-right`}>{t("signCol")}</th>
               <th className={`${th} text-right`}>{t("spread")}</th>
               <th className={th}>{t("verdict")}</th>
             </tr>
@@ -101,14 +102,14 @@ async function Persistence({ report }: { report: Report }) {
           <tbody>
             {p.runs.map((r) => {
               const tested = r.dates.filter((d) => d.rho !== null).length;
+              // with a shared denominator only the direction test is free of the scale effect
+              const p = r.shared_denominator ? (r.sign_p ?? null) : r.p_value;
               const verdict =
-                r.status !== "tested" ? (
+                r.status !== "tested" || p === null ? (
                   <Badge>{t("accumulating")}</Badge>
-                ) : r.p_value !== null && r.p_value < 0.05 ? (
-                  <Badge tone={r.shared_denominator ? "warn" : "up"} title={r.shared_denominator ? t("sharedScale") : undefined}>
-                    {t("persists")}{r.shared_denominator ? " *" : ""}
-                  </Badge>
-                ) : r.p_value !== null && r.p_value > 0.95 ? (
+                ) : p < 0.05 ? (
+                  <Badge tone="up">{t("persists")}</Badge>
+                ) : p > 0.95 ? (
                   <Badge tone="down">{t("reverses")}</Badge>
                 ) : (
                   <Badge tone="warn">{t("noPersist")}</Badge>
@@ -123,6 +124,10 @@ async function Persistence({ report }: { report: Report }) {
                     {r.p_value !== null && <span className="text-muted"> · p={fmtNum(r.p_value, locale, 3)}</span>}
                   </td>
                   <td className={`${td} num text-right`}>{r.positive_share == null ? "—" : fmtPct(r.positive_share, locale, 0, false)}</td>
+                  <td className={`${td} num text-right`}>
+                    {fmtNum(r.sign_mean ?? null, locale, 2)}
+                    {r.sign_p != null && <span className="text-muted"> · p={fmtNum(r.sign_p, locale, 3)}</span>}
+                  </td>
                   <td className={`${td} num text-right ${signClass(r.top_minus_bottom)}`}>
                     {r.top_minus_bottom == null ? "—" : fmtPct(r.top_minus_bottom, locale, 1)}
                   </td>

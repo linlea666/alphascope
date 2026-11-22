@@ -1906,7 +1906,8 @@
       "persistNote": "Only traders still in the archive are sampled; those no longer tracked are missing (survivorship), which affects same-date rankings less than average returns. OKX backtests approximate past capital with current lead equity. Computed {date}.",
       "persistNone": "The persistence check has not run yet (Sundays 03:30 UTC).",
       "days": "{n} days",
-      "sharedScale": "* OKX windows share the current lead equity as denominator, which makes profitable traders look more persistent; rely on Hyperliquid (actual historical equity)."
+      "sharedScale": "OKX windows share the current lead equity as denominator, which makes profitable traders look persistent in return rankings, so the OKX verdict uses direction only: whether traders with a positive 30-day copy return were more often positive afterwards. A shared denominator changes sizes, never signs.",
+      "signCol": "Direction (winners keep winning)"
     }
   },
   "copyCard": {

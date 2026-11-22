@@ -593,6 +593,6 @@ def conclusions(s: Session = Depends(get_session)):
     for run in (persistence or {}).get("runs", []):
         items.append({"kind": "persistence", "coin": None, "tier": _tier(run["status"] == "tested", True), "data": {
             k: run.get(k) for k in ("venue", "horizon", "lookback", "status", "mean_rho", "p_value",
-                                    "top_minus_bottom", "need_days", "shared_denominator")}
+                                    "top_minus_bottom", "need_days", "shared_denominator", "sign_mean", "sign_p")}
             | {"tested_days": sum(d["rho"] is not None for d in run["dates"])}})
     return {"items": items, "at": datetime.now(UTC)}

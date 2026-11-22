@@ -116,6 +116,7 @@ def sign_flip(values) -> float:
     return float((1 + np.count_nonzero(signs @ values >= values.sum())) / 4097)
 
 
+PERSIST_VERSION = 2  # 2: Hyperliquid sizes against archived account history; direction test added
 PERSIST_LOOKBACK = 30
 PERSIST_SAMPLE = 300
 PERSIST_DATES = 40  # most recent dates per run; OKX history reaches back years
@@ -154,16 +155,21 @@ def persistence(s: Session, venue: str, horizon: int, now: datetime, lookback: i
         if wids:
             prices = PriceBook(s, day - timedelta(days=lookback), day + timedelta(days=horizon))
             for wid in wids:
-                past = backtest(s, wid, BacktestParams(days=lookback), now=day, prices=prices)
+                past = backtest(s, wid, BacktestParams(days=lookback), now=day, prices=prices, history=True)
                 if not past.get("ok") or not past.get("trades"):
                     continue
                 after = backtest(s, wid, BacktestParams(days=horizon), now=day + timedelta(days=horizon),
-                                 prices=prices)
+                                 prices=prices, history=True)
                 ret = after["ret"] if after.get("ok") else 0.0 if after.get("reason") == "no_decisions" else None
                 if ret is not None:
                     pairs.append((past["ret"], ret))
-        entry = {"as_of": day.date().isoformat(), "n": len(pairs), "rho": None, "top": None, "bottom": None}
+        entry = {"as_of": day.date().isoformat(), "n": len(pairs), "rho": None, "top": None, "bottom": None,
+                 "sign_corr": None}
         if len(pairs) >= MIN_TRADERS:
+            # Direction only: a denominator shared by both windows changes sizes, never signs.
+            won, wins = np.array([p > 0 for p, _ in pairs], float), np.array([f > 0 for _, f in pairs], float)
+            if won.std() > 0 and wins.std() > 0:
+                entry["sign_corr"] = float(np.corrcoef(won, wins)[0, 1])
             pairs.sort()
             fifth = len(pairs) // 5
             entry.update(rho=spearman([p for p, _ in pairs], [f for _, f in pairs]),
@@ -179,6 +185,9 @@ def persistence(s: Session, venue: str, horizon: int, now: datetime, lookback: i
         out["positive_share"] = sum(r > 0 for r in tested) / len(tested)
     if len(tested) >= MIN_DAYS:
         out.update(p_value=sign_flip(tested), status="tested")
+    signs = [d["sign_corr"] for d in out["dates"] if d["sign_corr"] is not None]
+    out["sign_mean"] = float(np.mean(signs)) if signs else None
+    out["sign_p"] = sign_flip(signs) if len(signs) >= MIN_DAYS else None
     return out
 
 
@@ -188,5 +197,12 @@ def refresh_persistence(sf, now: datetime | None = None) -> dict:
         runs = [persistence(s, venue, h, now) for venue in ("hyperliquid", "okx") for h in HORIZONS]
     with sf.begin() as s:
         s.execute(text("INSERT INTO copy_persistence_run (result) VALUES (CAST(:r AS jsonb))"),
-                  {"r": json.dumps({"computed_at": now.isoformat(), "runs": runs})})
+                  {"r": json.dumps({"computed_at": now.isoformat(), "version": PERSIST_VERSION, "runs": runs})})
     return {"status": "success", "dates": sum(len(r["dates"]) for r in runs)}
+
+
+def persistence_current(sf) -> bool:
+    """Whether the latest stored run used the current method."""
+    with sf() as s:
+        version = s.scalar(text("SELECT result->>'version' FROM copy_persistence_run ORDER BY id DESC LIMIT 1"))
+    return version == str(PERSIST_VERSION)

@@ -177,8 +177,13 @@ class BacktestParams:
                       leverage_mode=self.leverage_mode)
 
 
-def load_inputs(session: Session, wallet_id: int, since: datetime, until: datetime) -> dict:
-    """Decisions, the leader-equity function and (OKX) leverage per coin for one trader and window."""
+def load_inputs(session: Session, wallet_id: int, since: datetime, until: datetime, history: bool = False) -> dict:
+    """Decisions, the leader-equity function and (OKX) leverage per coin for one trader and window.
+
+    Hyperliquid account values count from when this archive fetched them, so a live or forward replay never uses a
+    value before it was seen. history=True instead counts each archived point from its own timestamp: Hyperliquid
+    account values are public as they happen, so a follower could have sized against them then, while the archive
+    only started fetching the portfolio history in November 2026."""
     venue, asset = session.execute(text("""
         SELECT w.venue, coalesce(t.asset, (SELECT r.asset FROM okx_leaderboard_row r JOIN okx_leaderboard_run u
                                             ON u.id = r.run_id WHERE r.wallet_id = w.id
@@ -191,11 +196,11 @@ def load_inputs(session: Session, wallet_id: int, since: datetime, until: dateti
     equity: list[tuple[datetime, float]] = []
     if venue == "hyperliquid":
         rows = session.execute(text("""
-            SELECT ts, greatest(ts, fetched_at) AS known, account_value FROM equity_point
-            WHERE wallet_id=:w AND series IN ('allTime','month') AND ts<=:b AND fetched_at<=:b
+            SELECT ts, CASE WHEN :h THEN ts ELSE greatest(ts, fetched_at) END AS known, account_value FROM equity_point
+            WHERE wallet_id=:w AND series IN ('allTime','month') AND ts<=:b AND (:h OR fetched_at<=:b)
             UNION ALL
             SELECT fetched_at, fetched_at, account_value FROM account_snapshot WHERE wallet_id=:w AND fetched_at<=:b
-            ORDER BY 2,1"""), {"w": wallet_id, "b": until})
+            ORDER BY 2,1"""), {"w": wallet_id, "b": until, "h": history})
         latest_source = None
         by_publication = {}
         for ts, known, av in rows:
@@ -408,13 +413,13 @@ def run(inputs: dict, prices: PriceBook, p: BacktestParams, since: datetime, unt
 
 
 def backtest(session: Session, wallet_id: int, p: BacktestParams, now: datetime | None = None,
-             prices: PriceBook | None = None, delays: tuple[int, ...] = ()) -> dict:
-    """One backtest, optionally with the same run at other delays (delay sensitivity)."""
+             prices: PriceBook | None = None, delays: tuple[int, ...] = (), history: bool = False) -> dict:
+    """One backtest, optionally with the same run at other delays (delay sensitivity). history: see load_inputs."""
     if p.days > MAX_DAYS:
         return {"ok": False, "reason": "window_too_long"}
     until = now or datetime.now(UTC)
     since = until - timedelta(days=p.days)
-    inputs = load_inputs(session, wallet_id, since, until)
+    inputs = load_inputs(session, wallet_id, since, until, history)
     # the leader's own return over the window: flow-adjusted (Hyperliquid) or realized PnL / assets (OKX, approx)
     inputs["leader_ret"] = _hl_leader_return(session, wallet_id, since, until) if inputs["venue"] == "hyperliquid" \
         else _okx_realized_return(session, wallet_id, since, until, inputs["asset"])

@@ -84,18 +84,19 @@ function line(c: Conclusion, zh: boolean): [string, Href] {
     case "persistence": {
       const d = c.data;
       const venue = d.venue === "okx" ? "OKX" : "Hyperliquid";
-      const text = d.status !== "tested"
+      // OKX sizes both windows by current equity: only the direction test is free of that shared scale
+      const p = d.shared_denominator ? d.sign_p : d.p_value;
+      const measure = d.shared_denominator
+        ? zh ? `方向一致性 ${numeric(d.sign_mean, 2)}` : `direction agreement ${numeric(d.sign_mean, 2)}`
+        : zh ? `排名相关 ${numeric(d.mean_rho, 2)}，前 1/5 比后 1/5 多 ${pct(d.top_minus_bottom)}`
+          : `rank correlation ${numeric(d.mean_rho, 2)}, top fifth ahead by ${pct(d.top_minus_bottom)}`;
+      const text = d.status !== "tested" || p == null
         ? zh ? `积累中（${d.tested_days}/${d.need_days} 个检验日期）` : `accumulating (${d.tested_days}/${d.need_days} dates)`
-        : (d.p_value ?? 1) < 0.05
-          ? zh ? `有持续性：排名相关 ${numeric(d.mean_rho, 2)}，前 1/5 比后 1/5 多 ${pct(d.top_minus_bottom)}，p=${numeric(d.p_value, 3)}`
-            : `persists: rank correlation ${numeric(d.mean_rho, 2)}, top fifth ahead by ${pct(d.top_minus_bottom)}, p=${numeric(d.p_value, 3)}`
-          : zh ? `未见持续性：排名相关 ${numeric(d.mean_rho, 2)}，p=${numeric(d.p_value, 3)}`
-            : `no persistence: rank correlation ${numeric(d.mean_rho, 2)}, p=${numeric(d.p_value, 3)}`;
-      const caveat = d.shared_denominator && d.status === "tested"
-        ? zh ? "（资金规模按当前带单资产近似，会高估持续性）" : " (capital approximated by current equity; overstates persistence)"
-        : "";
-      return [zh ? `${venue} 过去 ${d.lookback} 天跟单收益高的人，之后 ${d.horizon} 天：${text}${caveat}`
-        : `${venue} best ${d.lookback}-day copy returns, next ${d.horizon} days: ${text}${caveat}`, { pathname: "/copy-board" }];
+        : p < 0.05
+          ? zh ? `有持续性：${measure}，p=${numeric(p, 3)}` : `persists: ${measure}, p=${numeric(p, 3)}`
+          : zh ? `未见持续性：${measure}，p=${numeric(p, 3)}` : `no persistence: ${measure}, p=${numeric(p, 3)}`;
+      return [zh ? `${venue} 过去 ${d.lookback} 天跟单收益高的人，之后 ${d.horizon} 天：${text}`
+        : `${venue} best ${d.lookback}-day copy returns, next ${d.horizon} days: ${text}`, { pathname: "/copy-board" }];
     }
     case "copy_score": {
       const d = c.data;
