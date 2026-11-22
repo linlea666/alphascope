@@ -114,3 +114,74 @@ def test_report_endpoint(sf, client):
     assert body["first_graded"] == DAY0.date().isoformat() and seven["status"] == "accumulating"
     assert len(seven["days"]) == 2 and seven["need_days"] == cv.MIN_DAYS
     assert thirty["graded_days"] == 0 and thirty["next_due"] == (DAY0 + timedelta(days=30)).date().isoformat()
+
+
+def active(sf, n, start, days, venue="hyperliquid"):
+    """n traders deciding every day from start for `days` days."""
+    ids = wallets(sf, n)
+    with sf.begin() as s:
+        s.execute(text("UPDATE wallet SET venue = :v WHERE id = ANY(:w)"), {"v": venue, "w": ids})
+        s.execute(text("""INSERT INTO trade_decision (wallet_id, coin, version, kind, side, started_at, ended_at,
+            n_fills, size, notional, vwap, pos_before, pos_after, realized_pnl, fee)
+            SELECT w, 'BTC', 'p1', 'add', 'buy', t, t, 1, 1, 100, 100, 1, 2, 0, 0
+            FROM unnest(CAST(:w AS bigint[])) w, generate_series(:a, :a + make_interval(days => :d), interval '1 day') t"""),
+            {"w": ids, "a": start, "d": days})
+    return ids
+
+
+def test_persistence_ranks_past_against_later_copy_returns(sf, monkeypatch):
+    start = datetime(2026, 7, 1, tzinfo=UTC)
+    ids = active(sf, 40, start, 120)
+    rng = np.random.default_rng(4)
+    skill = {w: float(rng.normal(0, 0.05)) for w in ids}
+    seen = []
+
+    def backtest(s, wid, p, now, prices):
+        seen.append((wid, p.days, now))
+        return {"ok": True, "trades": 3, "ret": skill[wid] + float(rng.normal(0, 0.02))}
+
+    monkeypatch.setattr(cv, "backtest", backtest)
+    monkeypatch.setattr(cv, "PriceBook", lambda s, a, b: None)
+    with sf() as s:
+        out = cv.persistence(s, "hyperliquid", 7, start + timedelta(days=120))
+    assert out["status"] == "tested" and out["p_value"] < 0.01 and out["mean_rho"] > 0.5
+    assert out["top_minus_bottom"] > 0
+    dates = [datetime.fromisoformat(d["as_of"]).replace(tzinfo=UTC) for d in out["dates"]]
+    assert dates[0] == start + timedelta(days=31) and all(b - a == timedelta(days=7) for a, b in zip(dates, dates[1:]))
+    # the past return ends at the date and the later one starts there
+    assert {(days, now in dates) for _, days, now in seen if days == 30} == {(30, True)}
+    assert all(now - timedelta(days=7) in dates for _, days, now in seen if days == 7)
+    skill.update({w: 0.0 for w in ids})
+    with sf() as s:
+        flat = cv.persistence(s, "hyperliquid", 7, start + timedelta(days=120))
+    assert flat["p_value"] > 0.05
+
+
+def test_persistence_needs_active_traders_and_reports_by_venue(sf, monkeypatch):
+    monkeypatch.setattr(cv, "backtest", lambda *a, **k: {"ok": False, "reason": "no_decisions"})
+    monkeypatch.setattr(cv, "PriceBook", lambda s, a, b: None)
+    with sf() as s:
+        assert cv.persistence(s, "okx", 7, datetime.now(UTC))["dates"] == []
+    active(sf, 5, datetime(2026, 7, 1, tzinfo=UTC), 60, venue="okx")
+    cv.refresh_persistence(sf, datetime(2026, 9, 1, tzinfo=UTC))
+    with sf() as s:
+        runs = s.scalar(text("SELECT result FROM copy_persistence_run"))["runs"]
+    assert [(r["venue"], r["horizon"]) for r in runs] == [("hyperliquid", 7), ("hyperliquid", 30), ("okx", 7), ("okx", 30)]
+    okx = runs[2]
+    assert okx["dates"] and all(d["n"] == 0 and d["rho"] is None for d in okx["dates"]) and okx["status"] == "accumulating"
+
+
+def test_persistence_keeps_the_most_recent_dates(sf, monkeypatch):
+    monkeypatch.setattr(cv, "backtest", lambda *a, **k: {"ok": False, "reason": "no_decisions"})
+    monkeypatch.setattr(cv, "PriceBook", lambda s, a, b: None)
+    monkeypatch.setattr(cv, "PERSIST_DATES", 5)
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    active(sf, 2, start, 200)
+    now = start + timedelta(days=200)
+    with sf() as s:
+        dates = [d["as_of"] for d in cv.persistence(s, "hyperliquid", 7, now)["dates"]]
+    assert len(dates) == 5
+    last = datetime.fromisoformat(dates[-1]).replace(tzinfo=UTC)
+    assert now - timedelta(days=14) < last + timedelta(days=7) <= now
+    # the grid stays anchored to the first eligible date
+    assert (last - (start + timedelta(days=31))).days % 7 == 0

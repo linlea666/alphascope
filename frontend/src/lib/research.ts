@@ -232,6 +232,9 @@ export type Conclusion =
   | Tiered<"regime", { regime: string | null; day: string; stats: RegimeStats | null; all: RegimeStats }>
   | Tiered<"factors", { candidates: FactorTest[]; tests: number; computed_at: string }>
   | Tiered<"funding", { rate: number | null; level: string | null; percentile: number | null; source_at: string | null }>
+  | Tiered<"persistence", { venue: string; horizon: number; lookback: number; status: string; mean_rho: number | null;
+      p_value: number | null; top_minus_bottom: number | null; need_days: number; tested_days: number;
+      shared_denominator?: boolean }>
   | Tiered<"copy_score", { horizon: number; status: string; graded_days: number; need_days: number;
       mean_rho: number | null; p_value: number | null; tested_days: number }>;
 export const research = {

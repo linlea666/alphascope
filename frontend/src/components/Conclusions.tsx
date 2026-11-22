@@ -3,7 +3,7 @@ import { Link } from "@/i18n/routing";
 import { numeric, research, type Conclusion } from "@/lib/research";
 
 const TIERS = [
-  ["verified", "已验证", "Verified", "通过了事先设定的检验", "Passed a test fixed in advance", "up"],
+  ["verified", "已有结论", "Concluded", "事先设定的检验已得出结果，正面或负面都列在这里", "A test fixed in advance has decided, either way", "up"],
   ["watching", "观察中", "Being tested", "正在积累样本，或只是筛查出的候选", "Still accumulating, or only a screening candidate", "warn"],
   ["descriptive", "描述性", "Descriptive", "当前读数和历史对照，不构成预测", "Readings and history, not predictions", "neutral"],
 ] as const;
@@ -32,10 +32,11 @@ function line(c: Conclusion, zh: boolean): [string, Href] {
   switch (c.kind) {
     case "forecast": {
       const d = c.data;
+      const beats = d.p !== null && d.p < 0.05 && (d.mean_diff ?? 0) < 0;
       const text =
         d.p === null
           ? zh ? `积累中（${d.blocks}/8 个独立块）` : `accumulating (${d.blocks}/8 blocks)`
-          : c.tier === "verified"
+          : beats
             ? zh ? `优于历史频率基准，p=${numeric(d.p, 3)}` : `beats the base-rate baseline, p=${numeric(d.p, 3)}`
             : zh ? `未优于历史频率基准，p=${numeric(d.p, 3)}` : `no better than the base rate, p=${numeric(d.p, 3)}`;
       return [zh ? `${coin} 24 小时方向概率预测：${text}` : `${coin} 24h direction forecast: ${text}`, replay(coin, "archive")];
@@ -45,6 +46,8 @@ function line(c: Conclusion, zh: boolean): [string, Href] {
       const name = HYPOTHESES[d.hypothesis]?.[zh ? 0 : 1] ?? d.hypothesis;
       const state = d.review === "approve"
         ? zh ? "已审核通过" : "approved"
+        : d.review === "reject"
+          ? zh ? "审核未通过" : "rejected"
         : d.eligible
           ? zh ? "达到审核条件" : "eligible for review"
           : zh ? `已配对 ${d.pairs} 组，检验 ${d.tested_pairs} 组 / ${d.weeks} 周` : `${d.pairs} pairs, ${d.tested_pairs} tested over ${d.weeks} weeks`;
@@ -78,11 +81,27 @@ function line(c: Conclusion, zh: boolean): [string, Href] {
         : zh ? "本期费率为零或暂无" : "zero or unavailable";
       return [zh ? `${coin} 币安资金费：${text}` : `${coin} Binance funding: ${text}`, replay(coin, "exchange")];
     }
+    case "persistence": {
+      const d = c.data;
+      const venue = d.venue === "okx" ? "OKX" : "Hyperliquid";
+      const text = d.status !== "tested"
+        ? zh ? `积累中（${d.tested_days}/${d.need_days} 个检验日期）` : `accumulating (${d.tested_days}/${d.need_days} dates)`
+        : (d.p_value ?? 1) < 0.05
+          ? zh ? `有持续性：排名相关 ${numeric(d.mean_rho, 2)}，前 1/5 比后 1/5 多 ${pct(d.top_minus_bottom)}，p=${numeric(d.p_value, 3)}`
+            : `persists: rank correlation ${numeric(d.mean_rho, 2)}, top fifth ahead by ${pct(d.top_minus_bottom)}, p=${numeric(d.p_value, 3)}`
+          : zh ? `未见持续性：排名相关 ${numeric(d.mean_rho, 2)}，p=${numeric(d.p_value, 3)}`
+            : `no persistence: rank correlation ${numeric(d.mean_rho, 2)}, p=${numeric(d.p_value, 3)}`;
+      const caveat = d.shared_denominator && d.status === "tested"
+        ? zh ? "（资金规模按当前带单资产近似，会高估持续性）" : " (capital approximated by current equity; overstates persistence)"
+        : "";
+      return [zh ? `${venue} 过去 ${d.lookback} 天跟单收益高的人，之后 ${d.horizon} 天：${text}${caveat}`
+        : `${venue} best ${d.lookback}-day copy returns, next ${d.horizon} days: ${text}${caveat}`, { pathname: "/copy-board" }];
+    }
     case "copy_score": {
       const d = c.data;
       const text = d.status !== "tested"
         ? zh ? `积累中（${d.tested_days}/${d.need_days} 个独立评分日）` : `accumulating (${d.tested_days}/${d.need_days} grading days)`
-        : c.tier === "verified"
+        : (d.p_value ?? 1) < 0.05 && (d.mean_rho ?? 0) > 0
           ? zh ? `评分高者随后跟单更赚钱，p=${numeric(d.p_value, 3)}` : `higher grades earned more afterwards, p=${numeric(d.p_value, 3)}`
           : zh ? `评分与随后收益没有显著关系，p=${numeric(d.p_value, 3)}` : `no significant link to later returns, p=${numeric(d.p_value, 3)}`;
       return [zh ? `可跟单评分（${d.horizon} 天后验证）：${text}` : `Copyability grades (${d.horizon}-day check): ${text}`, { pathname: "/copy-board" }];
@@ -97,7 +116,7 @@ export async function Conclusions({ zh }: { zh: boolean }) {
   return (
     <Panel
       title={zh ? "研究结论 · 按证据强弱分级" : "Research conclusions by strength of evidence"}
-      hint={zh ? "只有「已验证」一栏是经过预设检验的结论；其余是正在检验的问题或当前读数。" : "Only the first column holds results that passed a pre-set test; the rest are open questions or readings."}
+      hint={zh ? "只有「已有结论」一栏来自事先设定的检验；其余是正在检验的问题或当前读数。" : "Only the first column comes from tests fixed in advance; the rest are open questions or readings."}
     >
       <div className="grid gap-4 md:grid-cols-3">
         {TIERS.map(([tier, zn, en, zd, ed, tone]) => {

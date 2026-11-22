@@ -1189,9 +1189,24 @@ export type CopyBoard = {
 };
 
 export type GradeOutcome = { n: number; mean: number | null; median: number | null; win: number | null };
+export type PersistenceRun = {
+  venue: "hyperliquid" | "okx";
+  horizon: number;
+  lookback: number;
+  sample: number;
+  status: "accumulating" | "tested";
+  need_days: number;
+  mean_rho: number | null;
+  p_value: number | null;
+  top_minus_bottom?: number;
+  positive_share?: number;
+  shared_denominator?: boolean;
+  dates: { as_of: string; n: number; rho: number | null; top: number | null; bottom: number | null }[];
+};
 export type CopyValidation = {
   first_graded: string | null;
   last_graded: string | null;
+  persistence: { computed_at: string; runs: PersistenceRun[] } | null;
   horizons: {
     horizon: number;
     status: "accumulating" | "tested";

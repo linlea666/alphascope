@@ -22,6 +22,7 @@ from app.ingest.portfolio_ingest import enrich_batch
 from app.ingest.runs import mark_abandoned_runs
 from app.alerts import digest, sentinel
 from app.factors.copy_run import run_copy_analysis
+from app.factors.copy_validation import refresh_persistence
 from app.factors.run import run_styles
 from app.market.collect import sweep_hyperliquid, sweep_okx, sync_watch
 from app.market.stats import snapshot_hour
@@ -86,8 +87,13 @@ def _factor_lab(sf, settings):
     log.info("factor lab: %s", tracked(sf, "factor_lab", lambda: refresh_factor_lab(sf, settings.research_coins)))
 
 
+def _copy_persistence(sf, settings):
+    log.info("copy persistence: %s", tracked(sf, "copy_persistence", lambda: refresh_persistence(sf)))
+
+
 BATCH = {"timing": _timing, "okx_timing": _okx_timing, "swings": _swings, "positions": _positions,
-         "styles": _styles, "copy_analysis": _copy_analysis, "factor_lab": _factor_lab}
+         "styles": _styles, "copy_analysis": _copy_analysis, "factor_lab": _factor_lab,
+         "copy_persistence": _copy_persistence}
 
 
 def _child(name: str) -> None:
@@ -319,6 +325,10 @@ def main() -> None:
     sched.add_job(binance_metrics_job, "cron", minute=35, id="binance_metrics", next_run_time=now + timedelta(minutes=3))
     sched.add_job(isolated("factor_lab"), "cron", hour=6, minute=40, id="factor_lab",
                   **catch_up("factor_lab", 24, timedelta(minutes=30)))
+    # Does past copy return persist? Point-in-time replays over the whole archive, weekly (tens of thousands of
+    # backtests, well clear of the nightly copy analysis).
+    sched.add_job(isolated("copy_persistence"), "cron", day_of_week="sun", hour=3, minute=30, id="copy_persistence",
+                  **catch_up("copy_persistence", 24 * 7, timedelta(minutes=45)))
     # Copy backtests, copyability and trader health: nightly, and after a restart only if a night was missed
     sched.add_job(isolated("copy_analysis"), "cron", hour=1, minute=0, id="copy_analysis",
                   **catch_up("copy_analysis", 24, timedelta(minutes=20)))

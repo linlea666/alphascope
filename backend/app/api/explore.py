@@ -378,7 +378,8 @@ def copy_validation_report(session: Session = Depends(get_session)):
     """Whether yesterday's copyability grades ranked what copying then earned: per horizon, grades frozen each day
     against the copy return over the following days, tested on non-overlapping grading days."""
     first = session.execute(text("SELECT min(as_of), max(as_of) FROM copy_score_history WHERE status = 'scored'")).one()
-    return {"first_graded": first[0], "last_graded": first[1], "horizons": [
+    persistence = session.scalar(text("SELECT result FROM copy_persistence_run ORDER BY id DESC LIMIT 1"))
+    return {"first_graded": first[0], "last_graded": first[1], "persistence": persistence, "horizons": [
         {**r, "days": [{**d, "as_of": d["as_of"].isoformat()} for d in r["days"]],
          "next_due": (first[0] + timedelta(days=r["horizon"])).isoformat() if first[0] and not r["graded_days"] else None}
         for r in (copy_validation.evaluate(session, h) for h in copy_validation.HORIZONS)]}

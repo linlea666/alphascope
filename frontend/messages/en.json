@@ -1886,7 +1886,23 @@
       "win": "Profitable",
       "since": "Grades archived since {date}.",
       "none": "No archived grades yet.",
-      "method": "Traders are only ranked against others graded the same day, so market moves cancel out. Only grading days at least one horizon apart are used, so return windows never overlap. A one-sided sign-flip permutation test runs over grading days. Traders with no trades in the window count as a zero copy return."
+      "method": "Traders are only ranked against others graded the same day, so market moves cancel out. Only grading days at least one horizon apart are used, so return windows never overlap. A one-sided sign-flip permutation test runs over grading days. Traders with no trades in the window count as a zero copy return.",
+      "persistTitle": "Persistence: did traders with the best {lookback}-day copy return keep it up?",
+      "persistHint": "On dates one horizon apart, a random sample of up to {sample} then-active traders is copied over the {lookback} days before each date (data before the date only) and over the days after it, and the two returns are rank-correlated. The copy board ranks by past return; this checks whether that ranking carries forward.",
+      "venue": "Venue",
+      "after": "After",
+      "dates": "Dates",
+      "rhoCol": "Mean rank correlation",
+      "positive": "Dates with positive correlation",
+      "spread": "Top fifth − bottom fifth",
+      "verdict": "Verdict",
+      "persists": "Persists",
+      "reverses": "Reverses",
+      "noPersist": "No persistence",
+      "persistNote": "Only traders still in the archive are sampled; those no longer tracked are missing (survivorship), which affects same-date rankings less than average returns. OKX backtests approximate past capital with current lead equity. Computed {date}.",
+      "persistNone": "The persistence check has not run yet (Sundays 03:30 UTC).",
+      "days": "{n} days",
+      "sharedScale": "* OKX windows share the current lead equity as denominator, which makes profitable traders look more persistent; rely on Hyperliquid (actual historical equity)."
     }
   },
   "copyCard": {

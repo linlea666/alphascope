@@ -537,14 +537,15 @@ def factor_screen(coin: str, s: Session = Depends(get_session)):
             **r["coins"].get(coin, {"status": "not_run"})}
 
 
-def _tier(verified, testing):
-    return "verified" if verified else "watching" if testing else "descriptive"
+def _tier(concluded, testing):
+    return "verified" if concluded else "watching" if testing else "descriptive"
 
 
 @router.get("/conclusions")
 def conclusions(s: Session = Depends(get_session)):
-    """What the research currently supports, one item per question, each with its evidence tier: verified (passed a
-    pre-set test), watching (being tested or a screening candidate) or descriptive (a reading, not a claim)."""
+    """What the research currently supports, one item per question, each with its evidence tier: verified (a pre-set
+    test reached its decision, whichever way), watching (still accumulating, or a screening candidate) or descriptive
+    (a reading, not a claim)."""
     from app.factors import copy_validation
     from app.research.forward import MODEL, STUDY_VERSION
 
@@ -555,8 +556,7 @@ def conclusions(s: Session = Depends(get_session)):
             FROM research_forecast WHERE coin=:c AND model=:m AND horizon=24 AND outcome->>'status'='settled'
             ORDER BY issued_at"""), {"c": coin, "m": MODEL}).all()
         k = skill([(m, b) for m, b in rows], 24)
-        beats = k["p"] is not None and k["p"] < 0.05 and (k["mean_diff"] or 0) < 0
-        items.append({"kind": "forecast", "coin": coin, "tier": _tier(beats, True), "data": k})
+        items.append({"kind": "forecast", "coin": coin, "tier": _tier(k["p"] is not None, True), "data": k})
         for st in s.scalars(select(ResearchExperiment).where(ResearchExperiment.coin == coin,
                                                              ResearchExperiment.version == STUDY_VERSION)):
             ev = s.scalar(select(ResearchEvaluation).where(ResearchEvaluation.experiment_id == st.id)
@@ -564,8 +564,8 @@ def conclusions(s: Session = Depends(get_session)):
             review = s.scalar(select(ResearchReview).where(ResearchReview.experiment_id == st.id)
                               .order_by(ResearchReview.id.desc()).limit(1))
             r = ev.result if ev else {}
-            approved = review is not None and review.decision == "approve"
-            items.append({"kind": "study", "coin": coin, "tier": _tier(approved, True), "data": {
+            decided = review is not None and review.decision in ("approve", "reject")
+            items.append({"kind": "study", "coin": coin, "tier": _tier(decided, True), "data": {
                 "hypothesis": st.hypothesis, "status": r.get("status", "insufficient"), "pairs": r.get("pairs", 0),
                 "tested_pairs": r.get("tested_pairs", 0), "weeks": r.get("weeks", 0), "effect": r.get("effect"),
                 "q": r.get("q"), "eligible": r.get("review_eligible", False),
@@ -586,8 +586,13 @@ def conclusions(s: Session = Depends(get_session)):
                 "rate": obs.get("rate"), "level": (obs.get("history") or {}).get("level"),
                 "percentile": (obs.get("history") or {}).get("percentile"), "source_at": obs.get("source_at")}})
     score = copy_validation.evaluate(s, copy_validation.HORIZONS[0])
-    works = score["status"] == "tested" and (score["p_value"] or 1) < 0.05 and (score["mean_rho"] or 0) > 0
-    items.append({"kind": "copy_score", "coin": None, "tier": _tier(works, True), "data": {
+    items.append({"kind": "copy_score", "coin": None, "tier": _tier(score["status"] == "tested", True), "data": {
         k: score[k] for k in ("horizon", "status", "graded_days", "need_days", "mean_rho", "p_value")}
         | {"tested_days": len(score["days"])}})
+    persistence = s.scalar(text("SELECT result FROM copy_persistence_run ORDER BY id DESC LIMIT 1"))
+    for run in (persistence or {}).get("runs", []):
+        items.append({"kind": "persistence", "coin": None, "tier": _tier(run["status"] == "tested", True), "data": {
+            k: run.get(k) for k in ("venue", "horizon", "lookback", "status", "mean_rho", "p_value",
+                                    "top_minus_bottom", "need_days", "shared_denominator")}
+            | {"tested_days": sum(d["rho"] is not None for d in run["dates"])}})
     return {"items": items, "at": datetime.now(UTC)}

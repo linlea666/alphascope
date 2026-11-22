@@ -4,7 +4,7 @@ with the nightly default settings. Traders are ranked against others graded the 
 cancels out, and only grading days at least one horizon apart enter the test, so no two tested windows overlap."""
 
 import json
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import numpy as np
 from sqlalchemy import text
@@ -105,9 +105,88 @@ def evaluate(s: Session, horizon: int) -> dict:
               "mean_rho": float(np.mean([t["rho"] for t in tested])) if tested else None,
               "p_value": None, "status": "accumulating"}
     if len(tested) >= MIN_DAYS:
-        # one-sided sign-flip test: under no skill each day's rank correlation is as likely negative as positive
-        values = np.array([t["rho"] for t in tested])
-        signs = np.random.default_rng(17).choice([-1, 1], size=(4096, len(values)))
-        result["p_value"] = float((1 + np.count_nonzero(signs @ values >= values.sum())) / 4097)
-        result["status"] = "tested"
+        result.update(p_value=sign_flip([t["rho"] for t in tested]), status="tested")
     return result
+
+
+def sign_flip(values) -> float:
+    """One-sided: under no relation each independent day's rank correlation is as likely negative as positive."""
+    values = np.asarray(values, float)
+    signs = np.random.default_rng(17).choice([-1, 1], size=(4096, len(values)))
+    return float((1 + np.count_nonzero(signs @ values >= values.sum())) / 4097)
+
+
+PERSIST_LOOKBACK = 30
+PERSIST_SAMPLE = 300
+PERSIST_DATES = 40  # most recent dates per run; OKX history reaches back years
+MIN_ACTIVE = 5  # decisions in the lookback window
+
+
+def persistence(s: Session, venue: str, horizon: int, now: datetime, lookback: int = PERSIST_LOOKBACK,
+                sample: int = PERSIST_SAMPLE) -> dict:
+    """Did copying the traders with the best past copy return pay afterwards? On dates `horizon` days apart, a
+    random sample of the venue's active traders is copied over the `lookback` days before the date and the
+    `horizon` days after it, both with the nightly defaults, and the two returns are rank-correlated.
+
+    Only data timestamped before each date enters the past return. The traders are those the archive knows today,
+    so traders that stopped being tracked are missing (survivorship); the within-date ranking is less exposed to
+    that than average returns are."""
+    first = s.scalar(text("""SELECT min(d.ended_at) FROM trade_decision d JOIN wallet w ON w.id = d.wallet_id
+        WHERE w.venue = :v"""), {"v": venue})
+    # OKX copies are sized against the lead's current equity, the same denominator in both windows. Profitable traders
+    # then look persistent partly through that shared scale, so OKX results overstate persistence.
+    out = {"venue": venue, "horizon": horizon, "lookback": lookback, "sample": sample, "dates": [],
+           "shared_denominator": venue == "okx",
+           "need_days": MIN_DAYS, "min_traders": MIN_TRADERS, "mean_rho": None, "p_value": None,
+           "status": "accumulating"}
+    if first is None:
+        return out
+    day = (first + timedelta(days=lookback + 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    last = now - timedelta(days=horizon)
+    if last - day > timedelta(days=horizon * (PERSIST_DATES - 1)):
+        day += (last - day) // timedelta(days=horizon) * timedelta(days=horizon) - timedelta(days=horizon * (PERSIST_DATES - 1))
+    while day + timedelta(days=horizon) <= now:
+        wids = s.scalars(text("""SELECT d.wallet_id FROM trade_decision d JOIN wallet w ON w.id = d.wallet_id
+            WHERE w.venue = :v AND d.ended_at >= :a AND d.ended_at < :b GROUP BY d.wallet_id HAVING count(*) >= :k
+            ORDER BY md5(d.wallet_id::text || CAST(:b AS text)) LIMIT :n"""),
+            {"v": venue, "a": day - timedelta(days=lookback), "b": day, "k": MIN_ACTIVE, "n": sample}).all()
+        pairs = []
+        if wids:
+            prices = PriceBook(s, day - timedelta(days=lookback), day + timedelta(days=horizon))
+            for wid in wids:
+                past = backtest(s, wid, BacktestParams(days=lookback), now=day, prices=prices)
+                if not past.get("ok") or not past.get("trades"):
+                    continue
+                after = backtest(s, wid, BacktestParams(days=horizon), now=day + timedelta(days=horizon),
+                                 prices=prices)
+                ret = after["ret"] if after.get("ok") else 0.0 if after.get("reason") == "no_decisions" else None
+                if ret is not None:
+                    pairs.append((past["ret"], ret))
+        entry = {"as_of": day.date().isoformat(), "n": len(pairs), "rho": None, "top": None, "bottom": None}
+        if len(pairs) >= MIN_TRADERS:
+            pairs.sort()
+            fifth = len(pairs) // 5
+            entry.update(rho=spearman([p for p, _ in pairs], [f for _, f in pairs]),
+                         bottom=float(np.mean([f for _, f in pairs[:fifth]])),
+                         top=float(np.mean([f for _, f in pairs[-fifth:]])))
+        out["dates"].append(entry)
+        day += timedelta(days=horizon)
+    tested = [d["rho"] for d in out["dates"] if d["rho"] is not None]
+    if tested:
+        out["mean_rho"] = float(np.mean(tested))
+        spreads = [d["top"] - d["bottom"] for d in out["dates"] if d["rho"] is not None]
+        out["top_minus_bottom"] = float(np.mean(spreads))
+        out["positive_share"] = sum(r > 0 for r in tested) / len(tested)
+    if len(tested) >= MIN_DAYS:
+        out.update(p_value=sign_flip(tested), status="tested")
+    return out
+
+
+def refresh_persistence(sf, now: datetime | None = None) -> dict:
+    now = now or datetime.now(UTC)
+    with sf() as s:
+        runs = [persistence(s, venue, h, now) for venue in ("hyperliquid", "okx") for h in HORIZONS]
+    with sf.begin() as s:
+        s.execute(text("INSERT INTO copy_persistence_run (result) VALUES (CAST(:r AS jsonb))"),
+                  {"r": json.dumps({"computed_at": now.isoformat(), "runs": runs})})
+    return {"status": "success", "dates": sum(len(r["dates"]) for r in runs)}
