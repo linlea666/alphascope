@@ -14,12 +14,9 @@ export async function Nav() {
     { href: "/market", label: t("market") },
     {
       label: t("find"),
-      items: [item("/copy-board", "copyBoard"), item("/discover", "discover"), item("/rankings", "rankings"), item("/okx", "okx"), item("/timing", "timing"), item("/compare", "compare")],
+      items: [item("/copy-board", "copyBoard"), item("/traders", "traders"), item("/compare", "compare")],
     },
-    {
-      label: t("research"),
-      items: [item("/replay", "replayLab"), item("/legs", "legs"), item("/zones", "zones"), item("/holders", "holders"), item("/swings", "swings")],
-    },
+    { label: t("research"), items: [item("/replay", "replayLab"), item("/cycles", "cycles")] },
     { label: t("mine"), items: [item("/watchlist", "watchlist"), item("/alerts", "alerts"), item("/sims", "sims")] },
     { label: t("system"), items: [item("/data-health", "dataHealth"), item("/settings", "settings")] },
   ];

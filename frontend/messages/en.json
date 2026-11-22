@@ -23,7 +23,7 @@
     "market": "Radar",
     "discover": "Discover",
     "research": "Research",
-    "find": "Find",
+    "find": "Traders",
     "mine": "Mine",
     "system": "System",
     "compare": "Compare traders",
@@ -44,9 +44,13 @@
       "sims": "Simulate following a trader at live prices",
       "dataHealth": "Collection jobs, budgets and coverage",
       "settings": "Email and live monitor settings",
-      "copyBoard": "What copying them would have made over 7/30/90 days (after costs, with delay)"
+      "copyBoard": "What copying them would have made over 7/30/90 days (after costs, with delay)",
+      "traders": "Style discovery, rankings, timing and the OKX boards in one place",
+      "cycles": "BTC cycles: leg hall of fame, price zones, swing holders and two-sided candidates"
     },
-    "copyBoard": "Copy profit board"
+    "copyBoard": "Copy profit board",
+    "traders": "Trader discovery",
+    "cycles": "Cycle research"
   },
   "common": {
     "dataAsOf": "Data as of",
