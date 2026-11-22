@@ -11,6 +11,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.factors.copyability import SCORE_VERSION
+from app.quant.rank import spearman
 from app.sim.backtest import BacktestParams, PriceBook, backtest
 
 HORIZONS = (7, 30)
@@ -64,21 +65,6 @@ def settle(s: Session, now: datetime, max_days: int = 3) -> int:
             stored += 1
         s.commit()
     return stored
-
-
-def ranks(x: np.ndarray) -> np.ndarray:
-    order = x.argsort(kind="mergesort")
-    r = np.empty(len(x))
-    r[order] = np.arange(len(x))
-    _, inv, counts = np.unique(x, return_inverse=True, return_counts=True)
-    return (np.bincount(inv, r) / counts)[inv]  # ties share their mean rank
-
-
-def spearman(a, b) -> float | None:
-    ra, rb = ranks(np.asarray(a, float)), ranks(np.asarray(b, float))
-    if ra.std() == 0 or rb.std() == 0:
-        return None
-    return float(np.corrcoef(ra, rb)[0, 1])
 
 
 def independent(days: list, horizon: int) -> list:

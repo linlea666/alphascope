@@ -1,4 +1,5 @@
 import {ExchangeDesk} from "@/components/ExchangeDesk";
+import { FactorLab } from "@/components/FactorLab";
 import { getLocale } from "next-intl/server";
 import { Link } from "@/i18n/routing";
 import { LinesChart } from "@/components/LinesChart";
@@ -195,6 +196,7 @@ export default async function ReplayPage({ searchParams }: { searchParams: Promi
           ["events", zh ? "事件对比" : "Event comparison"],
           ["live", zh ? "群体与清算" : "Cohorts & liquidation"],
           ["archive", zh ? "前瞻档案" : "Forward archive"],
+          ["factors", zh ? "因子实验室" : "Factor lab"],
         ].map(([k, name]) => (
           <Link key={k} className={tab(k === selectedTab)} href={href({ tab: k })}>
             {name}
@@ -205,6 +207,8 @@ export default async function ReplayPage({ searchParams }: { searchParams: Promi
         <Live coin={coin} q={q} zh={zh} />
       ) : selectedTab === "archive" ? (
         <Forward coin={coin} zh={zh} />
+      ) : selectedTab === "factors" ? (
+        <FactorLab coin={coin} zh={zh} />
       ) : (
         <Events coin={coin} coins={coins} q={q} zh={zh} locale={locale} />
       )}

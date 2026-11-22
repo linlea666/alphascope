@@ -137,3 +137,22 @@ def test_owner_is_told_once_when_collection_stops(sf, monkeypatch, tmp_path):
         settings_store.put(s, bp.KEY, {"last_attempt": None, "enabled": True})
     bp.poll(sf)  # already stopped: no second email, no further attempts
     assert len(sent) == 1 and "https://scope.example/zh/settings" in sent[0][2]
+
+
+def test_result_for_a_replaced_credential_is_discarded(sf, monkeypatch, tmp_path):
+    monkeypatch.setattr(settings_store, "get_settings", lambda: type("Settings", (), {"secret_key_path": tmp_path/"key"})())
+    with sf.begin() as s:
+        settings_store.put(s, bp.KEY, {"enabled": True, "status": "ready"}, secret=json.dumps({"cookie": "p20t=old"}))
+        s.execute(text("INSERT INTO binance_profile_directory(profile_id) VALUES(:p)"), {"p": PID})
+
+    def fetch(client, pid, headers):
+        # the owner saves a new credential while the old one is still being used upstream
+        with sf.begin() as s:
+            settings_store.put(s, bp.KEY, {"status": "ready"}, secret=json.dumps({"cookie": "p20t=new"}))
+        raise bp.Unavailable("access_denied")
+
+    monkeypatch.setattr(bp, "fetch_profile", fetch)
+    bp.poll(sf)
+    with sf() as s:
+        assert settings_store.get(s, bp.KEY)["status"] == "ready"
+        assert s.scalar(text("SELECT attempted IS NOT NULL FROM binance_profile_directory"))

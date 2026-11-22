@@ -4,6 +4,7 @@ import numpy as np
 from sqlalchemy import text
 
 from app.factors import copy_validation as cv
+from app.quant.rank import ranks, spearman
 from tests.test_zones_api import client  # noqa: F401
 
 DAY0 = datetime(2026, 9, 1, 1, 0, tzinfo=UTC)
@@ -65,8 +66,8 @@ def test_outcome_is_the_copy_over_the_days_after_the_grade(sf, monkeypatch):
 
 
 def test_ranks_share_ties_and_overlapping_days_are_skipped():
-    assert list(cv.ranks(np.array([3.0, 1.0, 3.0, 2.0]))) == [2.5, 0, 2.5, 1]
-    assert cv.spearman([1, 2, 3], [5, 5, 5]) is None
+    assert list(ranks(np.array([3.0, 1.0, 3.0, 2.0]))) == [2.5, 0, 2.5, 1]
+    assert spearman([1, 2, 3], [5, 5, 5]) is None
     days = [DAY0.date() + timedelta(days=i) for i in (0, 3, 7, 8, 15)]
     assert cv.independent(days, 7) == [days[0], days[2], days[4]]
 

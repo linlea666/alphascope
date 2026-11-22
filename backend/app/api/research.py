@@ -522,3 +522,72 @@ def sources(
         "hours": hours,
         "mode": mode,
     }
+
+
+@router.get("/factors")
+def factor_screen(coin: str, s: Session = Depends(get_session)):
+    """The latest nightly historical factor screen for one coin (exploratory; see app.research.factor_lab)."""
+    coin = symbol(coin)
+    row = s.execute(text("SELECT computed_at, result FROM factor_lab_run ORDER BY id DESC LIMIT 1")).first()
+    if row is None:
+        return {"coin": coin, "status": "not_run", "computed_at": None, "factors": {}}
+    r = row.result
+    return {"coin": coin, "computed_at": row.computed_at, "version": r["version"], "fdr": r["fdr"],
+            "oos_alpha": r["oos_alpha"], "test_count": r["tests"], "factors": r["factors"],
+            **r["coins"].get(coin, {"status": "not_run"})}
+
+
+def _tier(verified, testing):
+    return "verified" if verified else "watching" if testing else "descriptive"
+
+
+@router.get("/conclusions")
+def conclusions(s: Session = Depends(get_session)):
+    """What the research currently supports, one item per question, each with its evidence tier: verified (passed a
+    pre-set test), watching (being tested or a screening candidate) or descriptive (a reading, not a claim)."""
+    from app.factors import copy_validation
+    from app.research.forward import MODEL, STUDY_VERSION
+
+    items = []
+    lab = s.execute(text("SELECT computed_at, result FROM factor_lab_run ORDER BY id DESC LIMIT 1")).first()
+    for coin in get_settings().research_coins:
+        rows = s.execute(text("""SELECT (outcome->>'p_brier')::float m, (outcome->>'baseline_brier')::float b
+            FROM research_forecast WHERE coin=:c AND model=:m AND horizon=24 AND outcome->>'status'='settled'
+            ORDER BY issued_at"""), {"c": coin, "m": MODEL}).all()
+        k = skill([(m, b) for m, b in rows], 24)
+        beats = k["p"] is not None and k["p"] < 0.05 and (k["mean_diff"] or 0) < 0
+        items.append({"kind": "forecast", "coin": coin, "tier": _tier(beats, True), "data": k})
+        for st in s.scalars(select(ResearchExperiment).where(ResearchExperiment.coin == coin,
+                                                             ResearchExperiment.version == STUDY_VERSION)):
+            ev = s.scalar(select(ResearchEvaluation).where(ResearchEvaluation.experiment_id == st.id)
+                          .order_by(ResearchEvaluation.cutoff.desc()).limit(1))
+            review = s.scalar(select(ResearchReview).where(ResearchReview.experiment_id == st.id)
+                              .order_by(ResearchReview.id.desc()).limit(1))
+            r = ev.result if ev else {}
+            approved = review is not None and review.decision == "approve"
+            items.append({"kind": "study", "coin": coin, "tier": _tier(approved, True), "data": {
+                "hypothesis": st.hypothesis, "status": r.get("status", "insufficient"), "pairs": r.get("pairs", 0),
+                "tested_pairs": r.get("tested_pairs", 0), "weeks": r.get("weeks", 0), "effect": r.get("effect"),
+                "q": r.get("q"), "eligible": r.get("review_eligible", False),
+                "review": review.decision if review else None}})
+        entry = (lab.result["coins"].get(coin) if lab else None) or {}
+        if entry.get("status") == "screened":
+            regime = (entry.get("today") or {}).get("regime")
+            items.append({"kind": "regime", "coin": coin, "tier": "descriptive", "data": {
+                "regime": regime, "day": entry["today"]["day"], "stats": entry["regimes"].get(regime),
+                "all": entry["regimes"]["all"]}})
+            found = [t for t in entry["tests"] if t["status"] == "candidate"]
+            items.append({"kind": "factors", "coin": coin, "tier": _tier(False, bool(found)), "data": {
+                "candidates": found, "tests": lab.result["tests"], "computed_at": lab.computed_at}})
+        obs = s.execute(text("""SELECT payload->'readings'->'funding'->'data' FROM exchange_observation
+            WHERE coin=:c ORDER BY bucket DESC LIMIT 1"""), {"c": coin}).scalar()
+        if obs:
+            items.append({"kind": "funding", "coin": coin, "tier": "descriptive", "data": {
+                "rate": obs.get("rate"), "level": (obs.get("history") or {}).get("level"),
+                "percentile": (obs.get("history") or {}).get("percentile"), "source_at": obs.get("source_at")}})
+    score = copy_validation.evaluate(s, copy_validation.HORIZONS[0])
+    works = score["status"] == "tested" and (score["p_value"] or 1) < 0.05 and (score["mean_rho"] or 0) > 0
+    items.append({"kind": "copy_score", "coin": None, "tier": _tier(works, True), "data": {
+        k: score[k] for k in ("horizon", "status", "graded_days", "need_days", "mean_rho", "p_value")}
+        | {"tested_days": len(score["days"])}})
+    return {"items": items, "at": datetime.now(UTC)}

@@ -6,7 +6,7 @@ Run with: python -m app.worker
 import asyncio
 import logging
 import multiprocessing
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 from sqlalchemy import text
@@ -14,6 +14,7 @@ from sqlalchemy import text
 from app.config import get_settings
 from app.db import session_factory
 from app.ingest.binance_ingest import import_binance
+from app.ingest.binance_metrics import sync_metrics
 from app.ingest.fill_sync import sync_fills
 from app.ingest.leaderboard_ingest import ingest_leaderboard
 from app.ingest.market_ingest import record_candles
@@ -31,6 +32,7 @@ from app.okx.sync import refresh_assets, refresh_instruments, resolve_profiles, 
 from app.research.profile_directory import discover as discover_binance_profiles
 from app.research.binance_profiles import poll as poll_binance_profiles
 from app.research.exchange import collect as collect_exchange
+from app.research.factor_lab import refresh as refresh_factor_lab
 from app.research.funding_history import refresh as refresh_funding_history
 from app.research.jobs import market_research, research_daily, tracked
 from app.research.positions import rebuild_stale
@@ -80,8 +82,12 @@ def _copy_analysis(sf, settings):
     log.info("copy analysis: %s", tracked(sf, "copy_analysis", lambda: run_copy_analysis(sf)))
 
 
+def _factor_lab(sf, settings):
+    log.info("factor lab: %s", tracked(sf, "factor_lab", lambda: refresh_factor_lab(sf, settings.research_coins)))
+
+
 BATCH = {"timing": _timing, "okx_timing": _okx_timing, "swings": _swings, "positions": _positions,
-         "styles": _styles, "copy_analysis": _copy_analysis}
+         "styles": _styles, "copy_analysis": _copy_analysis, "factor_lab": _factor_lab}
 
 
 def _child(name: str) -> None:
@@ -223,6 +229,10 @@ def main() -> None:
     def funding_history_job() -> None:
         tracked(sf, "funding_history", lambda: asyncio.run(refresh_funding_history(sf, settings.research_coins)))
 
+    def binance_metrics_job() -> None:
+        start = date.fromisoformat(settings.binance_core_start)
+        tracked(sf, "binance_metrics", lambda: asyncio.run(sync_metrics(sf, settings.research_coins, start)))
+
     def exchange_job() -> None:
         tracked(sf, "exchange_observations", lambda: asyncio.run(collect_exchange(sf, settings.research_coins)))
 
@@ -304,6 +314,11 @@ def main() -> None:
     # Price-zone sentinels follow fill archiving; the digest goes out at 08:20 Beijing time
     sched.add_job(sentinel_job, "interval", minutes=30, next_run_time=now + timedelta(minutes=9), id="sentinels")
     sched.add_job(digest_job, "cron", hour=0, minute=20, id="digest")
+    # Positioning history for the factor screen: each run backfills up to 300 daily files, then only new days.
+    # Binance publishes a day's metrics file the next morning (UTC), so the screen runs after that.
+    sched.add_job(binance_metrics_job, "cron", minute=35, id="binance_metrics", next_run_time=now + timedelta(minutes=3))
+    sched.add_job(isolated("factor_lab"), "cron", hour=6, minute=40, id="factor_lab",
+                  **catch_up("factor_lab", 24, timedelta(minutes=30)))
     # Copy backtests, copyability and trader health: nightly, and after a restart only if a night was missed
     sched.add_job(isolated("copy_analysis"), "cron", hour=1, minute=0, id="copy_analysis",
                   **catch_up("copy_analysis", 24, timedelta(minutes=20)))

@@ -194,6 +194,46 @@ export type Archive = {
     skill: { n: number; mean_diff: number | null; blocks: number; block_size: number; p: number | null };
   }[];
 };
+export type FactorTest = {
+  factor: string;
+  horizon: number;
+  n_is: number;
+  n_oos: number;
+  ic_is: number | null;
+  p_is: number | null;
+  ic_oos: number | null;
+  p_oos: number | null;
+  q: number | null;
+  status: "candidate" | "in_sample_only" | "none";
+};
+export type RegimeStats = { n: number; mean_1d: number | null; up_1d?: number | null; mean_3d: number | null; up_3d?: number | null };
+export type FactorScreen = {
+  coin: string;
+  status: "screened" | "insufficient_history" | "not_run";
+  computed_at: string | null;
+  version?: string;
+  fdr?: number;
+  oos_alpha?: number;
+  test_count?: number;
+  tests?: FactorTest[];
+  factors: Record<string, string>;
+  days?: number;
+  start?: string | null;
+  end?: string | null;
+  split?: string;
+  regimes?: Record<"long_build" | "short_cover" | "short_build" | "long_unwind" | "all", RegimeStats>;
+  today?: { day: string; regime: string | null; values: Record<string, { value: number | null; percentile: number | null }> };
+};
+type Tiered<K, D> = { kind: K; coin: string | null; tier: "verified" | "watching" | "descriptive"; data: D };
+export type Conclusion =
+  | Tiered<"forecast", { n: number; mean_diff: number | null; blocks: number; block_size: number; p: number | null }>
+  | Tiered<"study", { hypothesis: string; status: string; pairs: number; tested_pairs: number; weeks: number;
+      effect: number | null; q: number | null; eligible: boolean; review: string | null }>
+  | Tiered<"regime", { regime: string | null; day: string; stats: RegimeStats | null; all: RegimeStats }>
+  | Tiered<"factors", { candidates: FactorTest[]; tests: number; computed_at: string }>
+  | Tiered<"funding", { rate: number | null; level: string | null; percentile: number | null; source_at: string | null }>
+  | Tiered<"copy_score", { horizon: number; status: string; graded_days: number; need_days: number;
+      mean_rho: number | null; p_value: number | null; tested_days: number }>;
 export const research = {
   sources: (
     id: number,
@@ -254,6 +294,8 @@ export const research = {
       }
     >(`/api/v1/research/frames/${id}`, { coin, offset }),
   archive: (coin: string) => get<Archive>("/api/v1/research/archive", { coin }),
+  factors: (coin: string) => get<FactorScreen>("/api/v1/research/factors", { coin }),
+  conclusions: () => get<{ items: Conclusion[]; at: string }>("/api/v1/research/conclusions"),
   similar: (id: number, hours: number, asOf: string, cross: boolean, mode: string) =>
     get<{
       n: number;

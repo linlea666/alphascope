@@ -1,4 +1,5 @@
 import { ResearchSummary } from "@/components/ResearchSummary";
+import { Conclusions } from "@/components/Conclusions";
 import { getLocale, getTranslations } from "next-intl/server";
 import { AddressLink } from "@/components/AddressLink";
 import { ApiErrorState } from "@/components/ApiErrorState";
@@ -42,6 +43,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
       </PageHeader>
 
       <ResearchSummary mobileCoin={mobileCoin} top={top}/>
+      <Conclusions zh={locale === "zh"} />
       <StartGuide />
 
       <DigestCard />

@@ -122,7 +122,8 @@ def fetch_profile(client, pid, headers, verify_only=False):
 
 
 def poll(sf):
-    # Serialize configuration and publication across API processes and worker restarts.
+    # Claim and publish in short transactions under the advisory lock that also serializes configuration changes;
+    # the upstream requests in between (up to four pages, two seconds apart) hold no lock or open transaction.
     with sf.begin() as s:
         if not s.scalar(text("SELECT pg_try_advisory_xact_lock(:k)"), {"k": LOCK}):
             return
@@ -139,27 +140,35 @@ def poll(sf):
         if not pid:
             return
         s.execute(text("UPDATE binance_profile_directory SET attempted=:at WHERE profile_id=:pid"), {"at":now,"pid":pid})
-        changes = {"next_turn": (turn+1)%4, "last_attempt": now.isoformat(), "last_profile": pid, "resume_at": None}
-        try:
-            secret = store.get_secret(s, KEY)
-            if not secret:
-                raise Unavailable("access_denied")
-            with httpx.Client(timeout=8, follow_redirects=False) as client:
-                shared, rows = fetch_profile(client, pid, json.loads(secret))
+        store.put(s, KEY, {"next_turn": (turn+1)%4, "last_attempt": now.isoformat(), "last_profile": pid})
+        secret = store.get_secret(s, KEY)
+    changes, shared, rows = {"resume_at": None}, None, None
+    try:
+        if not secret:
+            raise Unavailable("access_denied")
+        with httpx.Client(timeout=8, follow_redirects=False) as client:
+            shared, rows = fetch_profile(client, pid, json.loads(secret))
+        changes["status"] = "ready" if shared else "hidden"
+        if shared:
+            changes["last_success"] = datetime.now(UTC).isoformat()
+    except Unavailable as exc:
+        changes.update(status=exc.reason, resume_at=exc.resume.isoformat() if exc.resume else None)
+    except (httpx.HTTPError, ValueError, KeyError, TypeError, AttributeError):
+        changes["status"] = "upstream_error"
+    with sf.begin() as s:
+        s.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": LOCK})
+        current = {**DEFAULT, **store.get(s, KEY)}
+        # The owner saved, cleared or replaced the credential meanwhile: this result belongs to the old one.
+        if store.get_secret(s, KEY) != secret or not current["enabled"]:
+            return
+        if rows is not None:
             s.execute(text("""INSERT INTO binance_profile_snapshot(profile_id,shared,positions)
                 VALUES (:pid,:shared,CAST(:rows AS jsonb))"""), {"pid": pid, "shared": shared, "rows": json.dumps(rows)})
             near = any(p["liq"] and 0 < (p["mark"] - p["liq"]) * (1 if p["side"] == "LONG" else -1)
                        / p["mark"] <= 0.05 for p in rows)
             s.execute(text("UPDATE binance_profile_directory SET priority_risk=:risk WHERE profile_id=:pid"),
                       {"risk":bool(near), "pid":pid})
-            changes["status"] = "ready" if shared else "hidden"
-            if shared:
-                changes["last_success"] = datetime.now(UTC).isoformat()
-        except Unavailable as exc:
-            changes.update(status=exc.reason, resume_at=exc.resume.isoformat() if exc.resume else None)
-        except (httpx.HTTPError, ValueError, KeyError, TypeError, AttributeError):
-            changes["status"] = "upstream_error"
-        if changes["status"] in STOPPED and cfg["status"] not in STOPPED:
+        if changes["status"] in STOPPED and current["status"] not in STOPPED:
             changes["alert"] = alert(s, changes["status"])
         store.put(s, KEY, changes)
 
