@@ -54,10 +54,13 @@ async def market_research(sf, settings, hl, okx):
                 fid = capture(s, coin, venue, datetime.now(UTC), context)
             if fid:
                 publications += 1
+            # A forecast can only be issued within minutes of its frame, so settling (which may fail on an
+            # unrelated old row) runs in its own transaction and cannot take a fresh forecast down with it.
             with sf.begin() as s:
                 register(s, coin)
                 if venue == "hyperliquid" and fid:
                     issue(s, s.get(ResearchFrame, fid), datetime.now(UTC))
+            with sf.begin() as s:
                 settle(s, coin, datetime.now(UTC))
             if context["missing"]:
                 failures.append(f"{coin}/{venue}: " + ",".join(context["missing"]))

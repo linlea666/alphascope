@@ -12,12 +12,16 @@ Group=@USER@
 WorkingDirectory=@PROJECT_DIR@/backend
 EnvironmentFile=@PROJECT_DIR@/data/alphascope.env
 Environment=PYTHONUNBUFFERED=1
+# 多线程调度下 glibc 默认按线程开内存池，碎片难以归还；限制为 2 个
+Environment=MALLOC_ARENA_MAX=2
 ExecStart=@PROJECT_DIR@/.venv/bin/python -m app.worker
 Restart=always
 RestartSec=10
 # 正在进行的任务会被打断，下次启动时自动标记为 abandoned
 TimeoutStopSec=30
-MemoryMax=1500M
+# 批量计算（择时、风格、跟单回测等）在子进程里运行，结束即释放内存；上限覆盖调度进程加两个并发批任务。
+# 超限时内核只杀占用最大的子进程，调度进程继续运行
+MemoryMax=3G
 CPUWeight=50
 Nice=10
 NoNewPrivileges=true

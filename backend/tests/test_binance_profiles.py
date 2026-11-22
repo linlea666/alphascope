@@ -116,3 +116,24 @@ def test_stale_observations_do_not_contribute(sf, client):
             {"p": PID, "rows": json.dumps([bp.position(row())])})
     view = client.get(MARKET,params={"coin":"BTC"}).json()
     assert view["fresh"] == 0 and view["structure"] is None
+
+
+def test_owner_is_told_once_when_collection_stops(sf, monkeypatch, tmp_path):
+    monkeypatch.setattr(settings_store, "get_settings", lambda: type("Settings", (), {"secret_key_path": tmp_path/"key"})())
+    sent = []
+    monkeypatch.setattr(bp, "send", lambda cfg, pw, to, subject, body: sent.append((to, subject, body)))
+    with sf.begin() as s:
+        settings_store.put(s, "smtp", {"username": "me@example.com", "recipients": ["me@example.com"],
+                                       "public_url": "https://scope.example"}, secret="pw")
+        settings_store.put(s, bp.KEY, {"enabled": True, "status": "ready"}, secret=json.dumps({"cookie": "p20t=x"}))
+        s.execute(text("INSERT INTO binance_profile_directory(profile_id) VALUES(:p)"), {"p": PID})
+    def denied(*args):
+        raise bp.Unavailable("access_denied")
+    monkeypatch.setattr(bp, "fetch_profile", denied)
+    bp.poll(sf)
+    with sf.begin() as s:
+        assert settings_store.get(s, bp.KEY)["alert"] == "sent"
+        s.execute(text("UPDATE binance_profile_directory SET attempted=NULL"))
+        settings_store.put(s, bp.KEY, {"last_attempt": None, "enabled": True})
+    bp.poll(sf)  # already stopped: no second email, no further attempts
+    assert len(sent) == 1 and "https://scope.example/zh/settings" in sent[0][2]

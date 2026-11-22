@@ -5,9 +5,11 @@ Run with: python -m app.worker
 
 import asyncio
 import logging
+import multiprocessing
 from datetime import UTC, datetime, timedelta
 
 from apscheduler.schedulers.blocking import BlockingScheduler
+from sqlalchemy import text
 
 from app.config import get_settings
 from app.db import session_factory
@@ -29,6 +31,7 @@ from app.okx.sync import refresh_assets, refresh_instruments, resolve_profiles, 
 from app.research.profile_directory import discover as discover_binance_profiles
 from app.research.binance_profiles import poll as poll_binance_profiles
 from app.research.exchange import collect as collect_exchange
+from app.research.funding_history import refresh as refresh_funding_history
 from app.research.jobs import market_research, research_daily, tracked
 from app.research.positions import rebuild_stale
 from app.research.timing import run_timing
@@ -39,9 +42,74 @@ from app.sources.raw_store import LocalRawStore
 log = logging.getLogger("alphascope.worker")
 
 
-def main() -> None:
+def _logging() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+# Batch computations that make no API calls. Each runs in a fresh process: the scheduler process otherwise keeps
+# the high-water heap of the largest one (CPython rarely returns freed memory), and the next batch then pushes the
+# service past its memory limit. An out-of-memory kill now ends only that child.
+def _timing(sf, settings):
+    r = tracked(sf, "timing", lambda: run_timing(sf))
+    log.info("timing: wallets=%s scored=%s significant=%s", r["wallets"], r["scored"], r["significant_q10"])
+
+
+def _okx_timing(sf, settings):
+    r = tracked(sf, "okx_timing", lambda: run_timing(sf, venue="okx"))
+    log.info("okx timing: traders=%s scored=%s significant=%s", r["wallets"], r["scored"], r["significant_q10"])
+
+
+def _swings(sf, settings):
+    r = run_swings(sf, settings)
+    log.info("swings: legs=%s screened=%s candidates=%s", r.get("legs"), r.get("wallets_screened"),
+             r.get("candidates"))
+
+
+def _positions(sf, settings):
+    r = rebuild_stale(sf)
+    log.info("positions: wallets=%s cycles=%s breaks=%s", r["wallets"], r["cycles"], r["breaks"])
+
+
+def _styles(sf, settings):
+    r = tracked(sf, "styles", lambda: run_styles(sf))
+    log.info("styles: traders=%s tags=%s", r["traders"], r["tags"])
+
+
+def _copy_analysis(sf, settings):
+    log.info("copy analysis: %s", tracked(sf, "copy_analysis", lambda: run_copy_analysis(sf)))
+
+
+BATCH = {"timing": _timing, "okx_timing": _okx_timing, "swings": _swings, "positions": _positions,
+         "styles": _styles, "copy_analysis": _copy_analysis}
+
+
+def _child(name: str) -> None:
+    _logging()
+    BATCH[name](session_factory(), get_settings())
+
+
+def isolated(name: str):
+    def run() -> None:
+        proc = multiprocessing.get_context("spawn").Process(target=_child, args=(name,), name=f"worker-{name}")
+        proc.start()
+        proc.join()
+        if proc.exitcode:
+            # negative: killed by that signal (-9 is the kernel's out-of-memory killer)
+            log.error("%s exited with %s", name, proc.exitcode)
+    run.__name__ = f"{name}_job"
+    return run
+
+
+def finished_within(sf, kind: str, hours: float) -> bool:
+    with sf() as s:
+        return bool(s.scalar(text("""SELECT EXISTS(SELECT 1 FROM ingest_run WHERE kind=:k
+            AND status NOT IN ('running', 'failed', 'abandoned') AND finished_at > now() - make_interval(secs => :s))"""),
+            {"k": kind, "s": hours * 3600}))
+
+
+def main() -> None:
+    _logging()
     settings = get_settings()
     sf = session_factory()
     store = LocalRawStore(settings.raw_store_dir)
@@ -65,10 +133,6 @@ def main() -> None:
         r = asyncio.run(record_candles(sf, settings))
         log.info("market: %s weight=%s", r["status"], r["api"]["weight"])
 
-    def swings_job() -> None:
-        r = run_swings(sf, settings)
-        log.info("swings: legs=%s screened=%s candidates=%s", r.get("legs"), r.get("wallets_screened"),
-                 r.get("candidates"))
 
     def fills_job() -> None:
         r = asyncio.run(sync_fills(sf, settings, store))
@@ -79,17 +143,8 @@ def main() -> None:
         r = asyncio.run(import_binance(sf, settings))
         log.info("binance: %s files=%s rows=%s missing=%s", r["status"], r["files"], r["rows"], r["missing"])
 
-    def positions_job() -> None:
-        r = rebuild_stale(sf)
-        log.info("positions: wallets=%s cycles=%s breaks=%s", r["wallets"], r["cycles"], r["breaks"])
 
-    def timing_job() -> None:
-        r = run_timing(sf)
-        log.info("timing: wallets=%s scored=%s significant=%s", r["wallets"], r["scored"], r["significant_q10"])
 
-    def okx_timing_job() -> None:
-        r = run_timing(sf, venue="okx")
-        log.info("okx timing: traders=%s scored=%s significant=%s", r["wallets"], r["scored"], r["significant_q10"])
 
     def okx_client() -> OkxClient:
         return OkxClient(settings.okx_base_url, settings.okx_requests_per_minute, settings.okx_timeout_seconds,
@@ -158,15 +213,15 @@ def main() -> None:
         r = asyncio.run(go())
         log.info("market okx: due=%s ok=%s failed=%s events=%s", r["due"], r["ok"], r["failed"], r["events"])
 
-    def styles_job() -> None:
-        r = tracked(sf, "styles", lambda: run_styles(sf))
-        log.info("styles: traders=%s tags=%s", r["traders"], r["tags"])
 
     def market_snapshot_job() -> None:
         with sf() as s:
             n = snapshot_hour(s, datetime.now(UTC))
             s.commit()
         log.info("market snapshot: %s rows", n)
+
+    def funding_history_job() -> None:
+        tracked(sf, "funding_history", lambda: asyncio.run(refresh_funding_history(sf, settings.research_coins)))
 
     def exchange_job() -> None:
         tracked(sf, "exchange_observations", lambda: asyncio.run(collect_exchange(sf, settings.research_coins)))
@@ -188,30 +243,36 @@ def main() -> None:
     def digest_job() -> None:
         log.info("digest: %s", digest.run(sf))
 
-    def copy_analysis_job() -> None:
-        log.info("copy analysis: %s", run_copy_analysis(sf))
-
     sched = BlockingScheduler(timezone="UTC", job_defaults={"coalesce": True, "max_instances": 1,
                                                              "misfire_grace_time": 300})
     now = datetime.now(UTC)
+
+    def catch_up(kind: str, hours: float, delay: timedelta) -> dict:
+        # Batch jobs keep fixed clock times, so a restart neither shifts them nor runs them again. The first run
+        # comes early (under the same job id, so it cannot overlap the regular one) only if a period was missed.
+        return {} if finished_within(sf, kind, hours) else {"next_run_time": now + delay}
+
     sched.add_job(leaderboard_job, "interval", minutes=settings.leaderboard_interval_minutes,
                   next_run_time=now, id="leaderboard")
     sched.add_job(enrich_job, "interval", minutes=settings.enrich_interval_minutes,
                   next_run_time=now + timedelta(minutes=2), id="enrich")
     sched.add_job(market_job, "interval", minutes=settings.market_interval_minutes,
                   next_run_time=now + timedelta(minutes=1), id="market")
-    # Swing screening needs fresh candles and portfolio points; it is cheap (no API calls).
-    sched.add_job(swings_job, "interval", hours=6, next_run_time=now + timedelta(minutes=5), id="swings")
+    # Swing screening needs fresh candles and portfolio points; it makes no API calls.
+    sched.add_job(isolated("swings"), "cron", hour="*/6", minute=5, id="swings")
     sched.add_job(fills_job, "interval", minutes=settings.fill_interval_minutes,
                   next_run_time=now + timedelta(minutes=3), id="fills")
     # Binance daily archive files appear the day after; the job only fetches what is missing.
     sched.add_job(binance_job, "interval", hours=settings.binance_interval_hours,
                   next_run_time=now + timedelta(minutes=7), id="binance")
-    sched.add_job(positions_job, "interval", minutes=10, next_run_time=now + timedelta(minutes=4), id="positions")
+    sched.add_job(isolated("positions"), "interval", minutes=10, next_run_time=now + timedelta(minutes=4),
+                  id="positions")
     # Timing scores depend on new fills, candles and pivots; recomputing every few hours is enough.
-    sched.add_job(timing_job, "interval", hours=3, next_run_time=now + timedelta(minutes=15), id="timing")
+    sched.add_job(isolated("timing"), "cron", hour="*/3", minute=15, id="timing",
+                  **catch_up("timing", 3, timedelta(minutes=15)))
     # OKX: ~2k traders with 1-2 years of positions (~20 min); their history changes hourly at most
-    sched.add_job(okx_timing_job, "interval", hours=24, next_run_time=now + timedelta(minutes=40), id="okx_timing")
+    sched.add_job(isolated("okx_timing"), "cron", hour=2, minute=30, id="okx_timing",
+                  **catch_up("okx_timing", 24, timedelta(minutes=40)))
     # OKX: the daily board check is cheap until the local crawl time; history and upkeep share the OKX budget.
     sched.add_job(okx_daily_job, "interval", minutes=30, next_run_time=now + timedelta(minutes=1), id="okx_daily")
     sched.add_job(okx_history_job, "interval", minutes=5, next_run_time=now + timedelta(minutes=2), id="okx_history")
@@ -225,26 +286,27 @@ def main() -> None:
                   next_run_time=now + timedelta(minutes=1, seconds=30), id="market_okx")
     sched.add_job(market_snapshot_job, "cron", minute=55, id="market_snapshot")
     sched.add_job(discover_binance_profiles, "interval", minutes=30, next_run_time=now + timedelta(seconds=20),
-                  args=[sf], id="binance_profile_discovery", coalesce=True, max_instances=1)
-    sched.add_job(poll_binance_profiles, "interval", minutes=1, args=[sf], id="binance_shared_profiles",
-                  coalesce=True, max_instances=1)
+                  args=[sf], id="binance_profile_discovery")
+    sched.add_job(poll_binance_profiles, "interval", minutes=1, args=[sf], id="binance_shared_profiles")
+    sched.add_job(funding_history_job, "interval", hours=6, next_run_time=now + timedelta(seconds=5),
+                  id="funding_history")
     sched.add_job(exchange_job, "cron", minute="*/5", second=10, id="exchange_observations",
-                  coalesce=True, max_instances=1)
-    sched.add_job(exchange_job, "date", run_date=now + timedelta(seconds=10), id="exchange_boot")
+                  next_run_time=now + timedelta(seconds=10))
+    # Frames are only captured at :55. Forecasts settle against the frame nearest their due time (within five
+    # minutes), so an off-schedule capture after a restart would take the hour's slot and leave the forecasts
+    # issued an hour or a day earlier without an outcome. A restart therefore skips at most one hour.
     sched.add_job(research_job, "cron", minute=55, id="research_frames")
-    # Publish the first observed hour after a deployment. The unique hour key also covers restarts.
-    sched.add_job(research_job, "date", run_date=now + timedelta(seconds=75), id="research_frames_boot")
     sched.add_job(research_catalog_job, "interval", hours=6, next_run_time=now + timedelta(seconds=45),
                   id="research_catalog")
     # Factors and style labels (~20 s): after new cycles, timing scores and radar polls have landed
-    sched.add_job(styles_job, "cron", hour="0,6,12,18", minute=50, id="styles")
-    sched.add_job(styles_job, "date", run_date=now + timedelta(seconds=90), id="styles_boot")
+    sched.add_job(isolated("styles"), "cron", hour="0,6,12,18", minute=50, id="styles",
+                  **catch_up("styles", 6, timedelta(seconds=90)))
     # Price-zone sentinels follow fill archiving; the digest goes out at 08:20 Beijing time
     sched.add_job(sentinel_job, "interval", minutes=30, next_run_time=now + timedelta(minutes=9), id="sentinels")
     sched.add_job(digest_job, "cron", hour=0, minute=20, id="digest")
-    # Copy backtests, copyability and trader health: nightly, and once shortly after a (re)start
-    sched.add_job(copy_analysis_job, "cron", hour=1, minute=0, id="copy_analysis")
-    sched.add_job(copy_analysis_job, "date", run_date=now + timedelta(minutes=20), id="copy_analysis_boot")
+    # Copy backtests, copyability and trader health: nightly, and after a restart only if a night was missed
+    sched.add_job(isolated("copy_analysis"), "cron", hour=1, minute=0, id="copy_analysis",
+                  **catch_up("copy_analysis", 24, timedelta(minutes=20)))
     log.info("worker started: leaderboard every %dm, enrich %d wallets every %dm",
              settings.leaderboard_interval_minutes, settings.enrich_batch_size, settings.enrich_interval_minutes)
     try:

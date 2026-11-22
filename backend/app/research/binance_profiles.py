@@ -8,6 +8,7 @@ import httpx
 from sqlalchemy import text
 
 from app import settings_store as store
+from app.alerts.mailer import send
 from app.market.structure import Row, build
 from app.research.exchange import number, retry_time
 from app.research.profile_directory import SCAN, select_due
@@ -127,7 +128,7 @@ def poll(sf):
             return
         cfg = {**DEFAULT, **store.get(s, KEY)}
         now = datetime.now(UTC)
-        if not cfg["enabled"] or cfg["status"] in ("access_denied", "source_restricted"):
+        if not cfg["enabled"] or cfg["status"] in STOPPED:
             return
         if cfg.get("last_attempt") and datetime.fromisoformat(cfg["last_attempt"]) > now - timedelta(seconds=55):
             return
@@ -158,7 +159,27 @@ def poll(sf):
             changes.update(status=exc.reason, resume_at=exc.resume.isoformat() if exc.resume else None)
         except (httpx.HTTPError, ValueError, KeyError, TypeError, AttributeError):
             changes["status"] = "upstream_error"
+        if changes["status"] in STOPPED and cfg["status"] not in STOPPED:
+            changes["alert"] = alert(s, changes["status"])
         store.put(s, KEY, changes)
+
+
+STOPPED = ("access_denied", "source_restricted")
+
+
+def alert(s, status):
+    """Collection stops until the owner saves a new credential, so say so once instead of failing silently."""
+    smtp, password = store.get(s, "smtp"), store.get_secret(s, "smtp")
+    if not (smtp.get("host") and smtp.get("username") and password and smtp.get("recipients")):
+        return "not_configured"
+    reason = "登录凭证已失效或被拒绝" if status == "access_denied" else "币安拒绝了本机地址的访问"
+    link = f"{smtp['public_url'].rstrip('/')}/zh/settings" if smtp.get("public_url") else "设置页"
+    try:
+        send(smtp, password, list(smtp["recipients"]), "[AlphaScope] 币安分享仓位采集已暂停",
+               f"{reason}，BTC/ETH 分享仓位采集已暂停。\n请在 {link} 重新粘贴并验证凭证，验证通过后自动恢复。")
+        return "sent"
+    except Exception:  # noqa: BLE001 - the status itself is already recorded
+        return "failed"
 
 
 def structure(s, coin):
