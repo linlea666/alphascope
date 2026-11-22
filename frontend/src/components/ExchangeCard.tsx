@@ -1,3 +1,4 @@
+import { FundingPanel } from "./FundingPanel";
 import { profileLink } from "@/lib/binanceProfiles";
 import { Link } from "@/i18n/routing";
 import { exchangeLink, formatValue, type Observation } from "@/lib/exchange";
@@ -45,10 +46,7 @@ function Distribution({
 
 export function ExchangeCard({ coin, obs, zh }: { coin: string; obs: Observation | null; zh: boolean }) {
   const positions = obs?.readings.ALL,
-    trades = obs?.readings["24h"],
-    binance = obs?.readings.funding;
-  const binanceFresh = binance && !binance.stale;
-  const funding = binanceFresh ? binance : obs?.readings.okx_funding;
+    trades = obs?.readings["24h"];
   const g = positions?.data.traders,
     net = trades?.data.traders.net;
   const stale = positions?.stale || trades?.stale;
@@ -81,7 +79,6 @@ export function ExchangeCard({ coin, obs, zh }: { coin: string; obs: Observation
           : zh
             ? "买卖金额持平"
             : "balanced flow";
-  const fee = funding?.data;
   return (
     <div className="space-y-3 border-b border-border pb-4 mb-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -126,43 +123,7 @@ export function ExchangeCard({ coin, obs, zh }: { coin: string; obs: Observation
             : "Buying can open longs or close existing shorts."}
         </p>
       </div>
-      <div className="rounded border border-border bg-panel-2 p-3 text-sm">
-        <b>{zh ? "谁付资金费？" : "Who pays funding?"}</b>
-        {!binanceFresh && (
-          <p className="text-xs text-muted">
-            {zh ? "币安本期费率暂无数据" : "Current Binance rate unavailable"}
-            {binance && ` · ${utc(binance.at)}`}
-          </p>
-        )}
-        {fee && !funding?.stale ? (
-          <>
-            <p>
-              {binanceFresh ? "Binance" : "OKX"} ·{" "}
-              {fee.payer === "none"
-                ? zh
-                  ? "本期费率为零"
-                  : "Zero funding"
-                : fee.payer === "long"
-                  ? zh
-                    ? "多头付给空头"
-                    : "Longs pay shorts"
-                  : zh
-                    ? "空头付给多头"
-                    : "Shorts pay longs"}{" "}
-              · {(fee.rate * 100).toFixed(5)}%
-            </p>
-            <p>
-              {zh
-                ? `按 1 万 USDT 名义多仓，本期预计${fee.rate < 0 ? "收" : "付"} ${formatValue(fee.per_10000, zh)} USDT。`
-                : `A 10,000 USDT long would ${fee.rate < 0 ? "receive" : "pay"} ${formatValue(fee.per_10000, zh)} USDT.`}
-            </p>
-            <small>
-              {binanceFresh ? `Binance ${coin}USDT` : `OKX ${coin}-USDT-SWAP`} ·{" "}
-              {zh ? "预计结算" : "Settlement"} {utc(fee.due)}
-            </small>
-          </>
-        ) : null}
-      </div>
+      <FundingPanel coin={coin} readings={obs?.readings} zh={zh} />
       <Link prefetch={false} className="text-sm text-accent" href={exchangeLink(coin)}>
         {zh ? "查看持仓与交易明细" : "Explore positions and flow"} →
       </Link>

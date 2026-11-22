@@ -11,6 +11,8 @@ from time import monotonic
 import httpx
 from sqlalchemy import text
 
+from app.research import funding_history
+
 SMART = "https://www.binance.com/bapi/futures/v1/public/future/smart-money/signal"
 FUTURES = "https://fapi.binance.com"
 OKX = "https://www.okx.com/api/v5/rubik/stat/contracts"
@@ -226,6 +228,7 @@ async def collect(sf, coins):
             results = await asyncio.gather(*(one(spec) for spec in requests_for(coin)))
             samples = {k: v for k, v, err in results if not err}
             errors = {k: err for k, v, err in results if err}
+            await funding_history.attach(client, sf, coin, samples)
             with sf.begin() as s:
                 publish(s, coin, bucket, samples, errors)
             return errors

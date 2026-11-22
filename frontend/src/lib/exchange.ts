@@ -13,7 +13,13 @@ type Groups = { traders: Group; whales: Group };
 type Ratio = { ratio: number; long_share: number; source_at: string };
 export const windows = ["30m", "1h", "24h", "7D"] as const;
 export type Window = (typeof windows)[number] | "ALL";
-type Funding = Sample<{
+export type FundingHistory = {
+  start: string; end: string; months: number; hours: number | null; n: number; same: number;
+  percentile: number | null; side_pct: number | null;
+  level: "mild" | "moderate" | "high" | "very_high" | null;
+};
+export type Funding = Sample<{
+  history?: FundingHistory | null;
   rate: number;
   payer: "long" | "short" | "none";
   per_10000: number;
