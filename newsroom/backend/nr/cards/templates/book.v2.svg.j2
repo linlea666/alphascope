@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" font-family="{{ font }}">
+  <rect width="1200" height="675" fill="{{ c.bg }}"/>
+  <text x="50" y="64" font-size="34" font-weight="700" fill="{{ c.text }}">{{ title }}</text>
+  <text x="50" y="100" font-size="22" fill="{{ c.muted }}">{{ subject }}</text>
+  <text x="1150" y="64" font-size="26" font-weight="700" fill="{{ c.accent }}" text-anchor="end">{{ brand }}</text>
+  <rect x="50" y="126" width="1100" height="{{ 70 + rows|length * 82 }}" rx="10" fill="{{ c.panel }}"/>
+  {% set xs = [74, 290, 470, 700, 860, 1126] %}
+  {% for h in head %}
+  <text x="{{ xs[loop.index0] }}" y="164" font-size="18" fill="{{ c.muted }}" {% if loop.last %}text-anchor="end"{% endif %}>{{ h }}</text>
+  {% endfor %}
+  {% for r in rows %}
+  <line x1="70" y1="{{ 182 + loop.index0 * 82 }}" x2="1130" y2="{{ 182 + loop.index0 * 82 }}" stroke="{{ c.line }}"/>
+  <text x="74" y="{{ 232 + loop.index0 * 82 }}" font-size="28" font-weight="700" fill="{{ c.text }}">{{ r.coin }}</text>
+  <text x="290" y="{{ 232 + loop.index0 * 82 }}" font-size="24" font-weight="700" fill="{{ c[r.side_tone] }}">{{ r.side }}</text>
+  <text x="470" y="{{ 232 + loop.index0 * 82 }}" font-size="24" fill="{{ c.text }}">{{ r.value }}</text>
+  <text x="700" y="{{ 232 + loop.index0 * 82 }}" font-size="22" fill="{{ c.text }}">{{ r.entry }}</text>
+  <text x="860" y="{{ 232 + loop.index0 * 82 }}" font-size="22" fill="{{ c.text }}">{{ r.mark }}</text>
+  <text x="1126" y="{{ 232 + loop.index0 * 82 }}" font-size="26" font-weight="700" fill="{{ c[r.pnl_tone] }}" text-anchor="end">{{ r.pnl }}</text>
+  {% endfor %}
+  {% if total %}
+  <rect x="50" y="{{ 214 + rows|length * 82 }}" width="1100" height="96" rx="10" fill="{{ c.panel }}" stroke="{{ c[total_tone] }}" stroke-opacity="0.5"/>
+  <text x="74" y="{{ 272 + rows|length * 82 }}" font-size="24" fill="{{ c.muted }}">{{ total_label }}</text>
+  <text x="1126" y="{{ 280 + rows|length * 82 }}" font-size="44" font-weight="700" fill="{{ c[total_tone] }}" text-anchor="end">{{ total }}</text>
+  {% endif %}
+  <text x="50" y="648" font-size="17" fill="{{ c.muted }}">{{ footer }}</text>
+</svg>

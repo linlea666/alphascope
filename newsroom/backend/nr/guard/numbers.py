@@ -21,7 +21,7 @@ HANDLE = re.compile(r"@\w+")
 ADDRESS = re.compile(r"0x[0-9a-fA-F]{3,}(?:…|\.\.\.)?[0-9a-fA-F]*")  # full, or short as 0x9ee…be185
 OKX_REF = re.compile(r"OKX·\d+")
 # boundaries are ASCII-only: Python's \w also matches CJK, and "约1500万" must still yield 1500
-TICKER = re.compile(r"(?<![A-Za-z0-9])\$?\d*[A-Z][A-Z0-9]+(?![A-Za-z0-9])")  # BTC, 1000PEPE, $ETH (cashtags)
+TICKER = re.compile(r"(?<![A-Za-z0-9])(?!(?:MILLION|BILLION|THOUSAND)\b)\$?\d*[A-Z][A-Z0-9]+(?![A-Za-z0-9])")  # BTC, 1000PEPE, $ETH (cashtags)
 ISO_DATE = re.compile(r"(?<!\d)(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)")
 SHORT_DATE = re.compile(r"(?<![\d-])(\d{1,2})-(\d{1,2})(?![\d-])")
 ZH_DATE = re.compile(r"(\d{1,2})月(\d{1,2})日")
@@ -31,7 +31,7 @@ YEAR = re.compile(r"(?<![\d.])(20\d{2})(?=年|\s|$|[,.;)])")
 CLOCK = re.compile(r"(?<!\d)(\d{1,2}):(\d{2})(?!\d)")
 NUMBER = re.compile(
     r"(?<![A-Za-z0-9_.])(?P<cur>\$)?(?P<num>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)\s*"
-    r"(?P<unit>亿美元|万美元|亿|万|美元|个百分点|%|倍|x(?![a-zA-Z])|bn\b|mn\b|[kKmMbB](?![a-zA-Z])|thousand\b|million\b|billion\b)?")
+    r"(?P<unit>亿美元|万美元|亿|万|美元|个百分点|%|倍|x(?![a-zA-Z])|bn\b|mn\b|[kKmMbB](?![a-zA-Z])|(?i:thousand|million|billion)\b)?")
 
 
 CN_DIGITS = {"零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}

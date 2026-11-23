@@ -425,6 +425,8 @@ def contrast_own(f: Facts, event: dict, position: dict | None, ctx: dict, prior:
             for p, n in opp:  # the figures themselves, so a writer can cite them
                 f.usd(f"book.opposite_{p['coin']}_usd", "notional", n, "context.positions.notional_usd")
             f.constraints.add("HEDGE_POSSIBLE")
+    if len(ctx["positions"]) >= 2:
+        book_lines(f, ctx, prior, now)
     # the trade archive on this coin: complete cycles only, wherever the archive starts
     cov = ctx["fill_coverage"]
     if venue == "hyperliquid" and cov and cov["status"] == "synced" and cov["earliest_at"]:
@@ -490,6 +492,49 @@ def contrast_own(f: Facts, event: dict, position: dict | None, ctx: dict, prior:
             if tr.get(col) is not None:
                 f.usd(fid, "pnl", D(tr[col]), f"context.trader.{col}", coverage=lb)
                 f.constraints.add("LEADERBOARD_PNL")
+
+
+BOOK_LINES = 5
+
+
+def book_lines(f: Facts, ctx: dict, prior: dict | None, now: datetime) -> None:
+    """The whole book, position by position (biggest open P&L first, as trackers list it), with its total open P&L:
+    '$NVDA: +$1.24M'."""
+    book = sorted((p for p in ctx["positions"] if D(p["notional_usd"]) > 0),
+                  key=lambda p: (-abs(D(p["upl"] or 0)), -D(p["notional_usd"])))
+    total = Decimal(0)
+    for i, p in enumerate(book[:BOOK_LINES], 1):
+        side = "long" if D(p["szi"]) > 0 else "short"
+        tag = fmt.cashtag(p["coin"])
+        f.add(f"book.pos{i}.coin", "text", tag, {"zh": [tag], "en": [tag]}, "context.positions.coin",
+              label=f"{p['coin']} {side}")
+        f.add(f"book.pos{i}.side", "text", side, {"zh": [SIDE[side]["zh"]], "en": [SIDE[side]["en"]]},
+              "context.positions.szi")
+        f.usd(f"book.pos{i}.notional_usd", "notional", D(p["notional_usd"]), "context.positions.notional_usd")
+        if p["leverage"] is not None:
+            f.add(f"book.pos{i}.leverage", "leverage", D(p["leverage"]), fmt.leverage(D(p["leverage"])),
+                  "context.positions.leverage")
+        for col in ("entry_px", "mark_px"):
+            if p[col] is not None:
+                f.add(f"book.pos{i}.{col}", "price", D(p[col]), fmt.price(D(p[col])), f"context.positions.{col}")
+        if p["upl"] is not None:
+            f.usd(f"book.pos{i}.upl_usd", "unrealized_pnl", D(p["upl"]), "context.positions.upl")
+    for p in book:
+        total += D(p["upl"] or 0)
+    if any(p["upl"] is not None for p in book):
+        f.usd("book.total_upl_usd", "unrealized_pnl", total, "context.positions.upl",
+              derivation="sum of unrealized P&L over all open positions")
+        f.constraints.add("PNL_UNREALIZED")
+    # "opened today" only when we were already watching: a wallet found today has every position "new"
+    since = T(prior["since"]) if prior and prior.get("since") else None
+    if since and now - since > timedelta(days=2):
+        fresh = [p for p in book if p["first_seen_at"] and now - T(p["first_seen_at"]) <= timedelta(hours=24)]
+        f.add("book.opened_24h", "count", len(fresh), fmt.count(len(fresh)), "context.positions.first_seen_at",
+              label="positions that appeared in the last 24 hours: say 'opened today' / '今天新开' only for these")
+        if fresh:
+            tags = [fmt.cashtag(p["coin"]) for p in fresh]
+            f.add("book.opened_24h_coins", "text", tags, {"zh": ["、".join(tags)], "en": [", ".join(tags)]},
+                  "context.positions.first_seen_at")
 
 
 def contrast_crowd(f: Facts, event: dict, position: dict | None, crowd: dict) -> None:

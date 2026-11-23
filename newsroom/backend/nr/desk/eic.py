@@ -8,7 +8,7 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
-from nr import audit
+from nr import audit, settings_store
 from nr.ai.prompts import BEATS
 from nr.ai.runner import call_json
 from nr.ai.schemas import EicEvaluation
@@ -66,6 +66,7 @@ def evaluate_event(sf: sessionmaker, event_id: int, now: datetime, job_id: int |
         if not accounts:  # e.g. OKX material while no OKX Square account is active: nothing to ask a model
             return {"skipped": "no active account covers this event"}
         story = story_so_far(s, ev["story_id"], event_id)
+        desk_language = settings_store.get(s, "desk")["language"]  # the EIC writes for editors only
         if ev["state"] == "candidate":
             transition(s, event_id, "evaluating", actor_kind="ai", reason="editor-in-chief evaluation")
         s.commit()
@@ -82,6 +83,7 @@ def evaluate_event(sf: sessionmaker, event_id: int, now: datetime, job_id: int |
 
     try:
         out = call_json(sf, agent_key="eic", purpose="eic_evaluate", schema=EicEvaluation, semantic=semantic, now=now,
+                        language=desk_language,
                         job_id=job_id, event_id=event_id, transport=transport,
                         task_vars={"event_id": event_id, "event_class": ev["event_class"], "coin": ev["coin"],
                                    "account_ids": ", ".join(map(str, ids))},

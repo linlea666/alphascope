@@ -81,6 +81,11 @@ def count(n: int) -> dict[str, list[str]]:
     return {"zh": [str(n)], "en": [str(n)]}
 
 
+def cashtag(coin: str) -> str:
+    """$NVDA for the venue's xyz:NVDA: the way a post names any perp."""
+    return "$" + coin.split(":")[-1]
+
+
 def headcount(n: int) -> dict[str, list[str]]:
     """A large count the way a post says it: 约1.4万 / ~14,000."""
     if n < 1000:

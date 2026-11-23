@@ -140,3 +140,37 @@ HOUSE = [
            {"lines": "1-2", "emoji": "0-1", "cashtag": True, "closing": "none", "prefer_hooks": ["sheer_size", "top_of_sample"]},
            ["🐋 {short address} just opened a {amount} $HYPE short at {leverage}"]),
 ]
+
+
+# ---- 2026-11 additions: a Lookonchain-style book breakdown, and English voices written the way CT posts read ------
+# New keys / new versions only: seeded styles are never edited in place.
+
+HOUSE_V2 = [
+    _house("portfolio", "zh", "持仓清单",
+           "像链上数据号那样把一个人的整盘仓位摊开：第一句总结他今天做了什么、整体赚亏多少（用 book.total_upl_usd 和 "
+           "book.opened_24h，「今天」只能在 book.opened_24h 支撑时写）；中间每个仓位一行「$币种：±浮盈亏」；链接系统会加在最后一行。",
+           {"lines": "4-7", "emoji": "0-1", "cashtag": True, "closing": "无，最后一行是链接", "link_in_body": True,
+            "prefer_hooks": ["book_in_profit", "opened_many_today", "hedge"]},
+           ["这个交易员今天开了 $NVDA、$BTC、$ETH 多单，浮盈已经 {合计浮盈}！\n\n$NVDA：+{浮盈1}\n$ETH：+{浮盈2}\n$BTC：+{浮盈3}"]),
+    _house("portfolio", "en", "Book breakdown",
+           "Lay the whole book out the way on-chain trackers do: line one sums up what he did and where he stands "
+           "(book.total_upl_usd, book.opened_24h - only say 'today' when book.opened_24h backs it), then one line per "
+           "position '$COIN: +$X', most profitable first. The system puts the link on the last line.",
+           {"lines": "4-7", "emoji": "0-1", "cashtag": True, "closing": "none, the link closes it", "link_in_body": True,
+            "prefer_hooks": ["book_in_profit", "opened_many_today", "hedge"]},
+           ["This trader opened longs on $NVDA, $BTC, and $ETH today and is already up {total} in unrealized profit!\n\n"
+            "$NVDA: +{pnl1}\n$ETH: +{pnl2}\n$BTC: +{pnl3}"]),
+]
+# English house voices, second version: the hooks and closers CT actually uses (WHALE ALERT!!, BREAKING:, JUST IN:)
+HOUSE_EN_V2 = {
+    "en_whale_alert": ["WHALE ALERT!!\n\nThis whale just opened a ${N} MILLION $BTC long\n\nLiquidation at {liq price}"
+                       "\n\nDoes he know something??",
+                       "💥BREAKING:\n\nThis whale just opened a {leverage} $BTC short worth {amount}!\n\nWhat does he know?",
+                       "JUST IN: A whale just opened a massive $ETH long worth {amount} with {leverage} leverage."],
+    "en_degen": ["This whale just went full degen 🎰\n\n~{margin} margin → {amount} $BTC long at {leverage}\nLiquidation: "
+                 "{liq price}, just {distance} away\n\nIron hands or about to get rekt?"],
+    "en_dossier": ["{short address} is back.\n\nLast time he went long $BTC, held {duration} and walked away up {profit}."
+                   "\n\nNow he's short {amount} at {leverage}.\n\nCan he do it twice?"],
+    "en_crowd": ["Whale vs the smart money ⚔️\n\n{short address} is now the #{rank} $ETH short among the ~{N} wallets we "
+                 "track\n\nBut {n} of the proven timers are long\n\nWho's right?"],
+}

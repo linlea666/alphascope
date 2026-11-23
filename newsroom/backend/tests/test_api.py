@@ -197,15 +197,17 @@ def test_prompt_versions_switch_in_bulk_and_only_unused_ones_can_be_deleted(clie
         s.commit()
     h = login(client, "chief")
     r = client.post("/api/ai/agents/prompt-version", json={"prompt_version": 3,
-                                                           "agent_keys": ["reporter", "reporter_breaking", "eic"]}, headers=h)
+                                                           "agent_keys": ["reporter", "reporter_breaking", "editor_zh"]}, headers=h)
     assert r.json()["changed"] == ["reporter", "reporter_breaking"]
-    assert r.json()["skipped"] == [{"agent": "eic", "reason": "no v3; available: v1, v2"}]
+    assert r.json()["skipped"] == [{"agent": "editor_zh", "reason": "no v3; available: v1, v2"}]
+    newest = client.post("/api/ai/agents/prompt-version", json={"agent_keys": ["eic", "editor_en"]}, headers=h).json()
+    assert newest["changed"] == ["eic", "editor_en"]  # no version given: each role's newest
     with sf() as s:
         cur = s.execute(text("""SELECT prompt_version, model_config_id, max_output_tokens FROM ai_agent_profile
                                 WHERE agent_key = 'reporter' AND active""")).one()
     assert cur == (3, model, 2500)  # nothing else about the role changed
-    bad = client.put("/api/ai/agents/eic", json={"prompt_version": 3}, headers=h)
-    assert bad.status_code == 422 and "available: v1, v2" in bad.json()["detail"]
+    bad = client.put("/api/ai/agents/eic", json={"prompt_version": 4}, headers=h)
+    assert bad.status_code == 422 and "available: v1, v2, v3" in bad.json()["detail"]
     assert client.put("/api/ai/agents/eic", json={"max_output_tokens": 3000}, headers=h).status_code == 200
     with sf() as s:
         assert s.execute(text("SELECT model_config_id FROM ai_agent_profile WHERE agent_key = 'eic' AND active")).scalar() == model

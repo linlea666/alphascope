@@ -7,6 +7,7 @@ import { Badge, Empty, KV, PageHeader, Panel, td, th } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { nrGet, nrGetOptional } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
+import { named } from "@/lib/glossary";
 
 const TABS = ["sources", "ai", "agents", "prompts", "styles", "users", "costs", "rules", "jobs", "rpa", "audit"] as const;
 type Tab = (typeof TABS)[number];
@@ -17,8 +18,8 @@ type Model = { id: number; name: string; protocol: string; base_url: string; mod
 type Agent = { id: number; agent_key: string; version: number; display_name: string; role_description: string; model_config_id: number | null;
   fallback_model_config_id: number | null; prompt_key: string; prompt_version: number; max_output_tokens: number; budget_usd_per_task: number;
   active: boolean; model_name: string | null; fallback_name: string | null };
-type Prompt = { id: number; key: string; version: number; system_text: string; user_template: string; notes: string | null; created_at: string;
-  calls: number; active_for: string[] | null; deletable: boolean };
+type Prompt = { id: number; key: string; version: number; language: "zh" | "en" | null; system_text: string; user_template: string;
+  notes: string | null; created_at: string; calls: number; active_for: string[] | null; deletable: boolean };
 const REPORTERS = ["reporter", "reporter_breaking", "reporter_investigator", "reporter_data", "reporter_derivatives", "reporter_historian"];
 type User = { id: number; username: string; display_name: string | null; is_active: boolean; roles: string[]; last_login_at: string | null; locked_until: string | null };
 
@@ -131,14 +132,20 @@ async function Models() {
 
 async function Agents() {
   const t = await getTranslations("settings");
-  const [tx, tp, agents, models, prompts] = await Promise.all([getTranslations("settingsX"), getTranslations("promptsX"),
-    nrGetOptional<Agent[]>("ai/agents"), nrGetOptional<Model[]>("ai/models"), nrGetOptional<Prompt[]>("ai/prompts")]);
+  const [tx, tp, tr, agents, models, prompts] = await Promise.all([getTranslations("settingsX"), getTranslations("promptsX"),
+    getTranslations("roles"), nrGetOptional<Agent[]>("ai/agents"), nrGetOptional<Model[]>("ai/models"), nrGetOptional<Prompt[]>("ai/prompts")]);
   if (!agents || !models || !prompts) return <NoAccess />;
   const modelOpts = [{ value: "", label: "—" }, ...models.map((m) => ({ value: String(m.id), label: `${m.name} · ${m.model}` }))];
   const usable = models.filter((m) => m.enabled);
   const best = usable.find((m) => m.last_test_ok) ?? usable[0];
-  const versionsOf = (key: string) => prompts.filter((p) => p.key === key);
-  const label = (p: Prompt) => `v${p.version}${p.notes && p.notes !== "seed" ? ` · ${p.notes.slice(0, 40)}` : p.notes === "seed" ? ` · ${tp("seed")}` : ""}`;
+  // one entry per version; a version can carry a Chinese and an English text
+  const versionsOf = (key: string) => [...new Set(prompts.filter((p) => p.key === key).map((p) => p.version))];
+  const describe = (key: string, v: number) => {
+    const rows = prompts.filter((p) => p.key === key && p.version === v);
+    const langs = rows.map((p) => (p.language ? tp(`lang.${p.language}`) : tp("lang.shared"))).join(" + ");
+    const note = rows.find((p) => p.notes)?.notes;
+    return `v${v} · ${langs}${note ? ` · ${note === "seed" ? tp("seed") : note.slice(0, 30)}` : ""}`;
+  };
   const active = agents.filter((a) => a.active);
   const allVersions = [...new Set(prompts.filter((p) => REPORTERS.includes(p.key)).map((p) => p.version))].sort((x, y) => y - x);
   return (
@@ -155,64 +162,80 @@ async function Agents() {
         </Panel>
       )}
       <Panel title={tp("switchTitle")} hint={tp("switchHint")}>
-        <div className="mb-3 text-xs text-muted">
-          {active.map((a) => <span key={a.agent_key} className="mr-3 inline-block">{a.agent_key}: v{a.prompt_version}
-            <span className="opacity-60"> ({versionsOf(a.prompt_key).map((p) => `v${p.version}`).reverse().join("/")})</span></span>)}
+        <div className="mb-3 grid gap-1 text-xs text-muted sm:grid-cols-2">
+          {active.map((a) => (
+            <div key={a.agent_key}>{named(tr, a.agent_key).name}：<b className="text-text">v{a.prompt_version}</b>
+              <span className="opacity-60">（{tp("available")} {versionsOf(a.prompt_key).map((v) => `v${v}`).join(" / ")}）</span></div>
+          ))}
         </div>
         <div className="flex flex-wrap gap-2">
+          <Action path="ai/agents/prompt-version" body={{ agent_keys: active.map((a) => a.agent_key) }} tone="primary"
+            confirm={tp("switchLatestConfirm")}>{tp("switchLatest")}</Action>
           {allVersions.map((v) => (
             <Action key={v} path="ai/agents/prompt-version" body={{ prompt_version: v, agent_keys: REPORTERS }}
-              tone={v === allVersions[0] ? "primary" : "default"} confirm={tp("switchConfirm", { v })}>
-              {tp("switchReporters", { v })}
-            </Action>
+              confirm={tp("switchConfirm", { v })}>{tp("switchReporters", { v })}</Action>
           ))}
         </div>
       </Panel>
-      {active.map((a) => (
-        <Panel key={a.id} title={`${a.display_name} (${a.agent_key} v${a.version})`} hint={a.role_description}>
-          <KV k={t("primaryModel")} v={a.model_name ?? "—"} />
-          <KV k={t("fallbackModel")} v={a.fallback_name ?? "—"} />
-          <KV k={t("promptVersion")} v={<>{`${a.prompt_key}@v${a.prompt_version}`}{" "}
-            <Link className="text-xs text-accent" href={`/settings?tab=prompts#${a.prompt_key}`}>{tp("manage")}</Link></>} />
-          <details className="mt-3"><summary className="cursor-pointer text-sm text-accent">{t("newVersion")}</summary>
-            <div className="mt-3">
-              <FieldForm path={`ai/agents/${a.agent_key}`} method="PUT" fields={[
-                { name: "model_config_id", label: `${t("primaryModel")}${a.agent_key === "reporter" || a.agent_key === "eic" ? "" : ` · ${tx("inherit")}`}`,
-                  type: "select", numeric: true, value: a.model_config_id ?? "", options: modelOpts },
-                { name: "fallback_model_config_id", label: t("fallbackModel"), type: "select", numeric: true,
-                  value: a.fallback_model_config_id ?? "", options: modelOpts },
-                { name: "prompt_version", label: t("promptVersion"), type: "select", numeric: true, value: a.prompt_version,
-                  options: versionsOf(a.prompt_key).map((p) => ({ value: String(p.version), label: label(p) })) },
-                { name: "max_output_tokens", label: "max output tokens", type: "number", value: a.max_output_tokens },
-                { name: "budget_usd_per_task", label: "budget / task (USD)", type: "number", value: a.budget_usd_per_task },
-              ]} />
-            </div>
-          </details>
-        </Panel>
-      ))}
+      {active.map((a) => {
+        const role = named(tr, a.agent_key);
+        return (
+          <Panel key={a.id} title={<>{role.name} <span className="text-xs font-normal text-muted">{a.agent_key} · {tp("roleVersion", { v: a.version })}</span></>}
+            hint={role.desc ?? a.role_description}>
+            <KV k={t("primaryModel")} v={a.model_name ?? "—"} />
+            <KV k={t("fallbackModel")} v={a.fallback_name ?? "—"} />
+            <KV k={t("promptVersion")} v={<>{describe(a.prompt_key, a.prompt_version)}{" "}
+              <Link className="text-xs text-accent" href={`/settings?tab=prompts#${a.prompt_key}`}>{tp("manage")}</Link></>} />
+            <details className="mt-3"><summary className="cursor-pointer text-sm text-accent">{tp("editRole")}</summary>
+              <div className="mt-3">
+                <FieldForm path={`ai/agents/${a.agent_key}`} method="PUT" fields={[
+                  { name: "model_config_id", label: `${t("primaryModel")}${a.agent_key === "reporter" || a.agent_key === "eic" ? "" : ` · ${tx("inherit")}`}`,
+                    type: "select", numeric: true, value: a.model_config_id ?? "", options: modelOpts },
+                  { name: "fallback_model_config_id", label: t("fallbackModel"), type: "select", numeric: true,
+                    value: a.fallback_model_config_id ?? "", options: modelOpts },
+                  { name: "prompt_version", label: t("promptVersion"), type: "select", numeric: true, value: a.prompt_version,
+                    options: versionsOf(a.prompt_key).reverse().map((v) => ({ value: String(v), label: describe(a.prompt_key, v) })) },
+                  { name: "max_output_tokens", label: tp("maxTokens"), type: "number", value: a.max_output_tokens },
+                  { name: "budget_usd_per_task", label: tp("budgetTask"), type: "number", value: a.budget_usd_per_task },
+                ]} />
+              </div>
+            </details>
+          </Panel>
+        );
+      })}
     </div>
   );
 }
 async function Prompts({ locale }: { locale: string }) {
-  const [t, tp] = await Promise.all([getTranslations("settings"), getTranslations("promptsX")]);
+  const [t, tp, tr] = await Promise.all([getTranslations("settings"), getTranslations("promptsX"), getTranslations("roles")]);
   const prompts = await nrGetOptional<Prompt[]>("ai/prompts");
   if (!prompts) return <NoAccess />;
   const keys = [...new Set(prompts.map((p) => p.key))];
+  const langName = (l: string | null) => tp(`lang.${l ?? "shared"}`);
   return (
     <div className="space-y-5">
-      <p className="text-xs text-muted">{tp("intro")}</p>
+      <p className="text-sm text-muted">{tp("intro")}</p>
       {keys.map((key) => {
-        const versions = prompts.filter((p) => p.key === key);
+        const rows = prompts.filter((p) => p.key === key);
+        const versions = [...new Set(rows.map((p) => p.version))];
+        const role = named(tr, key);
+        const latest = rows[0];
+        // a version with one language's text and no role on it yet can take the other language's text
+        const other = latest?.language === "zh" ? "en" : latest?.language === "en" ? "zh" : null;
+        const canAdd = Boolean(other && !latest.active_for?.length && latest.calls === 0
+          && !rows.some((p) => p.version === latest.version && p.language === other));
         return (
           <div key={key} id={key}>
-            <Panel title={key} hint={tp("versions", { n: versions.length })}>
+            <Panel title={<>{role.name} <span className="text-xs font-normal text-muted">{key}</span></>}
+              hint={<>{role.desc} · {tp("versions", { n: versions.length })}</>}>
               <table className="w-full text-sm">
-                <thead><tr><th className={th}>{tp("version")}</th><th className={th}>{tp("created")}</th><th className={th}>{tp("notes")}</th>
-                  <th className={th}>{tp("usedBy")}</th><th className={th}>{tp("calls")}</th><th className={th} /></tr></thead>
+                <thead><tr><th className={th}>{tp("version")}</th><th className={th}>{tp("language")}</th><th className={th}>{tp("created")}</th>
+                  <th className={th}>{tp("notes")}</th><th className={th}>{tp("usedBy")}</th><th className={th}>{tp("calls")}</th><th className={th} /></tr></thead>
                 <tbody>
-                  {versions.map((p) => (
-                    <tr key={p.version} className="border-b border-border/60 align-top">
+                  {rows.map((p) => (
+                    <tr key={`${p.version}-${p.language}`} className="border-b border-border/60 align-top">
                       <td className={td}><b>v{p.version}</b></td>
+                      <td className={td}>{langName(p.language)}</td>
                       <td className={`${td} text-xs`}>{fmtTime(p.created_at, locale)}</td>
                       <td className={`${td} max-w-xs whitespace-normal text-xs`}>{p.notes === "seed" ? tp("seed") : p.notes ?? ""}</td>
                       <td className={td}>{p.active_for?.length ? <Badge tone="accent">{tp("current")}</Badge> : null}</td>
@@ -222,9 +245,8 @@ async function Prompts({ locale }: { locale: string }) {
                           <Action path="ai/agents/prompt-version" body={{ prompt_version: p.version, agent_keys: [key] }}>{tp("use")}</Action>
                         )}
                         {p.deletable && (
-                          <Action path={`ai/prompts/${key}/${p.version}`} method="DELETE" tone="danger" confirm={tp("deleteConfirm", { v: p.version })}>
-                            {tp("delete")}
-                          </Action>
+                          <Action path={`ai/prompts/${key}/${p.version}${p.language ? `?language=${p.language}` : ""}`} method="DELETE"
+                            tone="danger" confirm={tp("deleteConfirm", { v: p.version })}>{tp("delete")}</Action>
                         )}
                       </td>
                     </tr>
@@ -232,12 +254,15 @@ async function Prompts({ locale }: { locale: string }) {
                 </tbody>
               </table>
               <p className="mt-2 text-xs text-muted">{tp("deleteRule")}</p>
-              {versions.map((p) => (
-                <details key={p.version} className="mt-3">
-                  <summary className="cursor-pointer text-sm text-accent">{tp("viewEdit", { v: p.version })}</summary>
+              {rows.map((p) => (
+                <details key={`${p.version}-${p.language}`} className="mt-3">
+                  <summary className="cursor-pointer text-sm text-accent">{tp("viewEdit", { v: p.version })} · {langName(p.language)}</summary>
                   <div className="mt-3">
+                    <p className="mb-2 text-xs text-muted">{tp("newVersionNote")}</p>
                     <FieldForm path="ai/prompts" submitLabel={t("newVersion")} successMessage={tp("saved")} fields={[
-                      { name: "key", label: "key", type: "select", value: key, options: [key] },
+                      { name: "key", label: tp("role"), type: "select", value: key, options: [{ value: key, label: role.name }] },
+                      { name: "language", label: tp("language"), type: "select", value: p.language ?? "",
+                        options: [{ value: "zh", label: tp("lang.zh") }, { value: "en", label: tp("lang.en") }, { value: "", label: tp("lang.shared") }] },
                       { name: "notes", label: tp("notes"), placeholder: tp("notesHint"), wide: true },
                       { name: "system_text", label: t("systemText"), type: "textarea", value: p.system_text, required: true },
                       { name: "user_template", label: t("userTemplate"), type: "textarea", value: p.user_template, required: true },
@@ -245,6 +270,22 @@ async function Prompts({ locale }: { locale: string }) {
                   </div>
                 </details>
               ))}
+              {canAdd && other && (
+                <details className="mt-3">
+                  <summary className="cursor-pointer text-sm text-accent">
+                    {tp("addLanguage", { lang: langName(other) })} (v{latest.version})</summary>
+                  <div className="mt-3">
+                    <FieldForm path="ai/prompts" submitLabel={t("save")} successMessage={tp("saved")} fields={[
+                      { name: "key", label: tp("role"), type: "select", value: key, options: [{ value: key, label: role.name }] },
+                      { name: "version", label: tp("version"), type: "select", numeric: true, value: latest.version,
+                        options: [{ value: String(latest.version), label: `v${latest.version}` }] },
+                      { name: "language", label: tp("language"), type: "select", value: other, options: [{ value: other, label: langName(other) }] },
+                      { name: "system_text", label: t("systemText"), type: "textarea", value: "", required: true },
+                      { name: "user_template", label: t("userTemplate"), type: "textarea", value: "", required: true },
+                    ]} />
+                  </div>
+                </details>
+              )}
             </Panel>
           </div>
         );

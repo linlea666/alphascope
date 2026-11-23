@@ -330,7 +330,8 @@
     "health": "Health snapshots",
     "runs": "Sync runs",
     "cursor": "Cursor",
-    "head": "Source head"
+    "head": "Source head",
+    "save": "Save"
   },
   "columns": {
     "title": "Columns",
@@ -454,7 +455,8 @@
     "stylesHint": "None picked: v3 uses the reporter's house style (Settings → Rules → styles), v1/v2 the account's.",
     "prompt": "Prompt version",
     "promptActive": "The role's active version",
-    "promptV3": "written for X (recommended)"
+    "promptV3": "written for X (English prompt)",
+    "promptV4": "native text per language (recommended)"
   },
   "manage": {
     "trash": "Delete",
@@ -489,7 +491,7 @@
     "results": "Results",
     "pending": "Being prepared",
     "howTitle": "What this tests",
-    "how1": "Arms A and B each write one draft; only what you set differs (prompt version / style / model). Default A = v2, B = v3 (written for X).",
+    "how1": "Arms A and B each write one draft; only what you set differs (prompt version / style / model). Default A = v3, B = v4 (a native prompt per language).",
     "how2": "Both drafts come from the same role, model and account style. They are trial drafts: the event is untouched and they cannot go to review.",
     "how3": "Review is blind: which draft is A or B is hidden and the order is random. Check the facts on the right; flag anything misleading.",
     "how4": "Success: B wins ≥ 65%, guard pass rate not below A, no more misleading drafts, ≤ 50% more tokens. Stop if contrast coverage < 40% or B wins < 55%.",
@@ -635,6 +637,65 @@
     "deleteRule": "Built-in versions and versions a role or a draft has used are kept for traceability; stop using them instead.",
     "viewEdit": "View v{v} / save a new version from it",
     "notesHint": "What changed, e.g. shorter hook, emoji allowed",
-    "saved": "Saved as a new version; pick it under AI roles to use it"
+    "saved": "Saved as a new version; pick it under AI roles to use it",
+    "lang": {
+      "zh": "Chinese text",
+      "en": "English text",
+      "shared": "Shared text (both languages)"
+    },
+    "addLanguage": "Add the {lang} to this version",
+    "language": "Language",
+    "langHint": "Shared: both Chinese and English accounts use it",
+    "newVersionNote": "Saving creates a new version number; pick it for a role under AI roles to use it.",
+    "switchLatest": "Every role to its newest version",
+    "switchLatestConfirm": "Switch every role to its newest prompt version?",
+    "available": "available",
+    "roleVersion": "settings v{v}",
+    "editRole": "Change this role (model, prompt version, limits)",
+    "maxTokens": "Max output tokens per call (higher costs more, too low truncates)",
+    "budgetTask": "Budget per task (USD)",
+    "role": "Role"
+  },
+  "roles": {
+    "eic": {
+      "name": "AI editor-in-chief",
+      "desc": "Decides whether an event is worth covering, which account takes it and from what angle. Runs on automatic coverage; its notes are for editors."
+    },
+    "reporter": {
+      "name": "General reporter",
+      "desc": "Writes when no beat reporter is set. Default style: one-liner."
+    },
+    "reporter_breaking": {
+      "name": "Breaking reporter",
+      "desc": "Big opens, adds and flips. Default style: whale alert."
+    },
+    "reporter_investigator": {
+      "name": "Whale investigator",
+      "desc": "A trader's record and backstory, told as a series. Default style: dossier."
+    },
+    "reporter_data": {
+      "name": "Data reporter",
+      "desc": "Rankings, rarity, longs vs shorts. Default style: smart money vs whale."
+    },
+    "reporter_derivatives": {
+      "name": "Derivatives risk reporter",
+      "desc": "Leverage, liquidation prices, adding underwater. Default style: degen desk."
+    },
+    "reporter_historian": {
+      "name": "Running-story reporter",
+      "desc": "Follow-ups and endings of positions we covered. Default style: how it ended."
+    },
+    "editor_zh": {
+      "name": "Chinese editor",
+      "desc": "Runs when you click Polish: makes a Chinese draft read natively."
+    },
+    "editor_en": {
+      "name": "English editor",
+      "desc": "Runs when you click Polish: makes an English draft read like a native US poster wrote it."
+    },
+    "fact_checker": {
+      "name": "Fact checker",
+      "desc": "Runs when you click Fix: rewrites a draft to clear the checker's findings."
+    }
   }
 }

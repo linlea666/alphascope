@@ -28,6 +28,8 @@ DEFAULTS: dict[str, dict] = {
     # four_eyes: the author of the current version may not approve it (turn on once there is more than one editor)
     "review": {"four_eyes": False},
     "columns": {"disabled": []},
+    # the language of everything written for the desk rather than for readers (EIC notes, a draft's angle and why-now)
+    "desk": {"language": "zh"},
     # house style per reporter role ({language} becomes zh / en); an assignment's own style still wins
     "styles": {"by_reporter": {"reporter_breaking": "{language}_whale_alert", "reporter_derivatives": "{language}_degen",
                                "reporter_investigator": "{language}_dossier", "reporter_data": "{language}_crowd",

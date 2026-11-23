@@ -14,7 +14,8 @@ L = {
            "alltime": "累计盈亏", "month": "近30天盈亏", "cycles": "该币完整周期", "wins": "盈利周期",
            "last": "上一笔同方向", "now": "当前仓位", "crowd": "多空对决", "tracked": "我们追踪的地址",
            "longs": "多头", "shorts": "空头", "traders": "人", "timers": "择时高手", "rank": "这笔在同方向排第",
-           "source": "数据：Hyperliquid 链上公开数据 · AlphaScope 追踪"},
+           "source": "数据：Hyperliquid 链上公开数据 · AlphaScope 追踪", "book": "整盘持仓", "total": "合计浮盈亏",
+           "value": "仓位价值", "token": "币种"},
     "en": {"notional": "Position value", "leverage": "Leverage", "upl": "Unrealized P&L", "account": "Account value",
            "liq_dist": "To liquidation", "coin": "Coin", "side": "Side", "size": "Size", "entry": "Avg entry",
            "mark": "Mark", "liq": "Liq. price", "curve": "All-time P&L (leaderboard, incl. unrealized)",
@@ -22,10 +23,11 @@ L = {
            "month": "30-day P&L", "cycles": "Complete cycles", "wins": "Winning", "last": "Last trade this way",
            "now": "Current position", "crowd": "Longs vs shorts", "tracked": "wallets we track", "longs": "Longs",
            "shorts": "Shorts", "traders": "wallets", "timers": "Proven timers", "rank": "This one ranks #",
-           "source": "Data: Hyperliquid on-chain · tracked by AlphaScope"},
+           "source": "Data: Hyperliquid on-chain · tracked by AlphaScope", "book": "Open positions",
+           "total": "Total unrealized P&L", "value": "Value", "token": "Token"},
 }
 V2_REQUIRES = {"dashboard_card": "position.notional_usd", "record_card": "trader.alltime_pnl_usd",
-               "crowd_card": "crowd.same_side_traders"}
+               "crowd_card": "crowd.same_side_traders", "book_card": "book.pos2.notional_usd"}
 
 
 def _facts(packet: dict) -> dict:
@@ -170,15 +172,37 @@ def crowd_inputs(packet: dict, lang: str, brand: str, font: str) -> dict:
             "highlight": highlight}
 
 
-V2_BUILDERS = {"dashboard_card": dashboard_inputs, "record_card": record_inputs, "crowd_card": crowd_inputs}
+def book_inputs(packet: dict, lang: str, brand: str, font: str) -> dict:
+    f, t = _facts(packet), L[lang]
+    rows = []
+    for i in range(1, 6):
+        if f"book.pos{i}.notional_usd" not in f:
+            break
+        side = f[f"book.pos{i}.side"]["value"]
+        lev = _d(f, f"book.pos{i}.leverage", lang)
+        rows.append({"coin": _d(f, f"book.pos{i}.coin", lang), "side": f"{SIDE[lang][side]} {lev or ''}".strip(),
+                     "side_tone": "up" if side == "long" else "down",
+                     "value": _d(f, f"book.pos{i}.notional_usd", lang),
+                     "entry": _short(f, f"book.pos{i}.entry_px", lang) or "—",
+                     "mark": _short(f, f"book.pos{i}.mark_px", lang) or "—",
+                     "pnl": _signed(f, f"book.pos{i}.upl_usd", lang) or "—", "pnl_tone": _tone(f, f"book.pos{i}.upl_usd")})
+    return {**_base(packet, lang, brand, t["book"]), "file": "book", "font": font, "rows": rows,
+            "head": [t["token"], t["side"], t["value"], t["entry"], t["mark"], t["upl"]],
+            "total_label": t["total"], "total": _signed(f, "book.total_upl_usd", lang),
+            "total_tone": _tone(f, "book.total_upl_usd")}
+
+
+V2_BUILDERS = {"dashboard_card": dashboard_inputs, "record_card": record_inputs, "crowd_card": crowd_inputs,
+               "book_card": book_inputs}
 
 
 def pick_card(packet: dict, hook_keys: list[str]) -> str | None:
     """The card that shows what the post leads with; None when the packet cannot fill one."""
     facts = _facts(packet)
     order = (["record_card"] if hook_keys[:1] in (["record"], ["last_time"]) else
-             ["crowd_card"] if hook_keys[:1] in (["against_timers"], ["top_of_sample"]) else [])
-    for name in order + ["dashboard_card", "record_card", "crowd_card"]:
+             ["crowd_card"] if hook_keys[:1] in (["against_timers"], ["top_of_sample"]) else
+             ["book_card"] if hook_keys[:1] in (["book_in_profit"], ["opened_many_today"], ["hedge"]) else [])
+    for name in order + ["dashboard_card", "record_card", "crowd_card", "book_card"]:
         if V2_REQUIRES[name] in facts:
             return name
     return None

@@ -22,7 +22,7 @@ export function TrialPanel({ eventId, venue, accounts, models, styles }: {
   const [acc, setAcc] = useState<number[]>(fits.slice(0, 1).map((a) => a.id));
   const [mods, setMods] = useState<number[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
-  const [prompt, setPrompt] = useState<string>("3");
+  const [prompt, setPrompt] = useState<string>("4");
   const langs = new Set(fits.filter((a) => acc.includes(a.id)).map((a) => a.language));
   const rank = (k: string) => { const i = HOUSE.indexOf(k.slice(3)); return i < 0 ? 99 : i; };
   const shown = styles.filter((s) => langs.has(s.language)).sort((x, y) => rank(x.key) - rank(y.key));
@@ -70,6 +70,7 @@ export function TrialPanel({ eventId, venue, accounts, models, styles }: {
       <label className="block text-xs text-muted">{t("prompt")}
         <select className={input} value={prompt} onChange={(e) => setPrompt(e.target.value)}>
           <option value="">{t("promptActive")}</option>
+          <option value="4">v4 · {t("promptV4")}</option>
           <option value="3">v3 · {t("promptV3")}</option>
           <option value="2">v2</option>
           <option value="1">v1</option>

@@ -33,8 +33,8 @@ class ExperimentIn(BaseModel):
     account_id: int
     model_config_id: int
     n: int = Field(30, ge=4, le=40)
-    a: ArmIn = ArmIn(prompt_version=2)
-    b: ArmIn = ArmIn(prompt_version=3)
+    a: ArmIn = ArmIn(prompt_version=3)
+    b: ArmIn = ArmIn(prompt_version=4)
 
 
 def usable_model(s: Session, model_id: int) -> None:

@@ -59,6 +59,17 @@ def hooks(packet: dict, language: str, memory: dict | None = None, prefer: list[
         add("last_time", 72, f"上一次同方向的仓位{'赚了' if net > 0 else '亏了'} {_d(f, 'contrast.last_same_side_net_usd', language).lstrip('-')}",
             f"his last trade this way {'made' if net > 0 else 'lost'} {_d(f, 'contrast.last_same_side_net_usd', language).lstrip('-')}",
             ["contrast.last_same_side_net_usd", "contrast.last_same_side_held"])
+    if (total := _v(f, "book.total_upl_usd")) is not None and total >= 500_000:
+        winners = sum(1 for i in range(1, 6) if (_v(f, f"book.pos{i}.upl_usd") or 0) > 0)
+        if winners >= 2:
+            add("book_in_profit", 90 if total >= 2_000_000 else 78,
+                f"他同时拿着 {winners} 个盈利仓位，合计浮盈 {_d(f, 'book.total_upl_usd', language)}",
+                f"{winners} winning positions at once, up {_d(f, 'book.total_upl_usd', language)} unrealized",
+                ["book.total_upl_usd"] + [f"book.pos{i}.upl_usd" for i in range(1, 6) if f"book.pos{i}.upl_usd" in f])
+    if (opened := _v(f, "book.opened_24h")) is not None and opened >= 2:
+        add("opened_many_today", 80, f"今天新开了 {int(opened)} 个仓位：{_d(f, 'book.opened_24h_coins', language)}",
+            f"opened {int(opened)} positions today: {_d(f, 'book.opened_24h_coins', language)}",
+            ["book.opened_24h", "book.opened_24h_coins"])
     if memory and memory.get("published"):
         add("sequel", 82, "这是我们报道过的故事的续集", "a sequel to a story we covered", [])
     for fid in ("position.notional_usd", "change.notional_usd"):

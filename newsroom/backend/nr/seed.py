@@ -9,7 +9,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from nr.ai.prompts import SEEDS, SEEDS_V2, SEEDS_V3
-from nr.styles import HOUSE, LIBRARY
+from nr.ai.prompts_v4 import SEEDS_V4
+from nr.styles import HOUSE, HOUSE_EN_V2, HOUSE_V2, LIBRARY
 
 STYLES = [
     {"key": "zh_data_explainer", "language": "zh", "name": "中文数据解读",
@@ -70,7 +71,7 @@ AGENTS = [
 
 def seed(s: Session) -> dict:
     out = {"styles": 0, "accounts": 0, "prompts": 0, "agents": 0}
-    for st in STYLES + LIBRARY + HOUSE:
+    for st in STYLES + LIBRARY + HOUSE + HOUSE_V2:
         out["styles"] += s.execute(text("""
             INSERT INTO editorial_style (key, version, language, name, guide, structure, forbidden, examples)
             VALUES (:k, 1, :l, :n, :g, CAST(:s AS jsonb), CAST(:f AS jsonb), CAST(:e AS jsonb)) ON CONFLICT DO NOTHING"""),
@@ -78,6 +79,12 @@ def seed(s: Session) -> dict:
              "s": json.dumps(st["structure"], ensure_ascii=False), "f": json.dumps(st["forbidden"], ensure_ascii=False),
              "e": json.dumps(st.get("examples", []), ensure_ascii=False)}
         ).rowcount
+    for key, examples in HOUSE_EN_V2.items():  # version 2 of a seeded voice: same guide, the examples CT reads
+        out["styles"] += s.execute(text("""
+            INSERT INTO editorial_style (key, version, language, name, guide, structure, forbidden, examples)
+            SELECT key, 2, language, name, guide, structure, forbidden, CAST(:e AS jsonb) FROM editorial_style
+            WHERE key = :k AND version = 1 ON CONFLICT DO NOTHING"""),
+            {"k": key, "e": json.dumps(examples, ensure_ascii=False)}).rowcount
     for a in ACCOUNTS:
         out["accounts"] += s.execute(text("""
             INSERT INTO editorial_account (handle, display_name, language, timezone, style_key, positioning,
@@ -87,12 +94,14 @@ def seed(s: Session) -> dict:
             {"h": a["handle"], "d": a["display_name"], "l": a["language"], "tz": a["timezone"], "st": a["style_key"],
              "p": a["positioning"], "ap": json.dumps(a["audience_profile"], ensure_ascii=False),
              "pf": a.get("platform", "x"), "v": a["venues"], "lp": a.get("long_post_allowed", False)}).rowcount
-    for key, p in [*SEEDS.items(), *SEEDS_V2.items(), *SEEDS_V3.items()]:
+    prompts = [(k, p["version"], None, p["system"], p["user"]) for k, p in
+               [*SEEDS.items(), *SEEDS_V2.items(), *SEEDS_V3.items()]] + SEEDS_V4
+    for key, version, language, system, user in prompts:
         out["prompts"] += s.execute(text("""
-            INSERT INTO prompt_template (key, version, system_text, user_template, sha256, notes)
-            VALUES (:k, :v, :s, :u, :h, 'seed') ON CONFLICT DO NOTHING"""),
-            {"k": key, "v": p["version"], "s": p["system"], "u": p["user"],
-             "h": hashlib.sha256((p["system"] + p["user"]).encode()).hexdigest()}).rowcount
+            INSERT INTO prompt_template (key, version, language, system_text, user_template, sha256, notes)
+            VALUES (:k, :v, :l, :s, :u, :h, 'seed') ON CONFLICT DO NOTHING"""),
+            {"k": key, "v": version, "l": language, "s": system, "u": user,
+             "h": hashlib.sha256((system + user).encode()).hexdigest()}).rowcount
     for ag in AGENTS:
         exists = s.execute(text("SELECT 1 FROM ai_agent_profile WHERE agent_key = :k"), {"k": ag["agent_key"]}).scalar()
         if not exists:

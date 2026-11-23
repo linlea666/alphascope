@@ -20,7 +20,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
 from nr import settings_store
-from nr.ai.runner import call_json
+from nr.ai.runner import call_json, resolve_prompt
 from nr.ai.schemas import DraftOut, DraftOutV2
 from nr.articles.versions import Draft, current_version, save_version
 from nr.cards.render import render_for_packet
@@ -101,11 +101,12 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
         current = current_version(s, a["article_id"])
         platform_rule = {k: v for k, v in settings_store.get(s, "platforms").get(a["platform"], {}).items() if k != "hosts"}
         agent = {"draft": a["agent_key"] or "reporter", "polish": f"editor_{a['language']}", "fix": "fact_checker"}[mode]
-        prompt = s.execute(text("""SELECT p.system_text FROM ai_agent_profile g JOIN prompt_template p
-                                   ON p.key = g.prompt_key AND p.version = coalesce(:v, g.prompt_version)
-                                   WHERE g.agent_key = :k AND g.active"""), {"k": agent, "v": prompt_version}).scalar()
-        if prompt_version and prompt is None:
+        g = s.execute(text("SELECT prompt_key, prompt_version FROM ai_agent_profile WHERE agent_key = :k AND active"),
+                      {"k": agent}).mappings().first()
+        row = resolve_prompt(s, g["prompt_key"], prompt_version or g["prompt_version"], a["language"]) if g else None
+        if prompt_version and row is None:
             raise HTTPException(422, f"{agent} has no prompt version {prompt_version}")
+        prompt = row["system_text"] if row else None
         v2 = "lede_fact_ids" in (prompt or "")
         v3 = "hooks[0]" in (prompt or "")
         # style: chosen for this run > set on the assignment > the reporter's house style (v3) > the account's
@@ -129,6 +130,11 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
     fact_ids = {f["id"] for f in packet["facts"]}
     budget = char_budget(platform_rule, a["language"], a["long_post_allowed"])
     link = link_post(packet, a["language"]) if a["link_in_thread"] and variant != "baseline" else None
+    url = (packet.get("subject") or {}).get("explorer_url")
+    in_body = bool(url and style and (style["structure"] or {}).get("link_in_body") and variant != "baseline")
+    if in_body:  # the link closes the post itself: X counts it as 23, keep room for it
+        budget -= 14 if a["language"] == "zh" else 26
+        link = None
 
     def semantic(o: DraftOut) -> list[str]:
         errs = [f"unknown fact id {f}" for f in o.facts_used if f not in fact_ids]
@@ -163,7 +169,7 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
                                   for f in current["guard_report"]["findings"]]
     out = call_json(
         sf, agent_key=agent, purpose="draft_generate" if mode == "draft" else f"draft_{mode}", schema=schema,
-        semantic=semantic, now=now, job_id=job_id, prompt_version=prompt_version,
+        semantic=semantic, now=now, job_id=job_id, prompt_version=prompt_version, language=a["language"],
         event_id=a["news_event_id"], article_id=a["article_id"], transport=transport,
         model_override=model_config_id or a["model_config_id"], inherit_models_from=None if agent == "reporter"
         else "reporter",
@@ -174,12 +180,17 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
     o: DraftOut = out.parsed
     card = pick_card(packet, [h["key"] for h in data["hooks"]]) if data.get("hooks") is not None else None
     thread = list(o.thread or [])
-    if link:  # the address and link come from the packet, never from a model; a revision keeps exactly one copy
+    if link or in_body:  # the address and link come from the packet, never from a model; exactly one copy
         key = packet["subject"]["trader_key"]
-        thread = [t for t in thread if key not in t and "hypurrscan.io" not in t] + [link]
+        thread = [t for t in thread if key not in t and "hypurrscan.io" not in t] + ([link] if link else [])
+    body = o.body
+    if in_body:
+        key = packet["subject"]["trader_key"]
+        lines = [ln for ln in body.rstrip().splitlines() if key not in ln and "hypurrscan.io" not in ln]
+        body = "\n".join(lines).rstrip() + "\n\n" + url
     with sf() as s:
         v = save_version(s, a["article_id"], Draft(
-            body=o.body, headline=o.headline_candidates[0], alt_headlines=o.headline_candidates[1:], thread=thread or None,
+            body=body, headline=o.headline_candidates[0], alt_headlines=o.headline_candidates[1:], thread=thread or None,
             angle=o.angle, added_value=o.added_value, difference_from_others=o.difference_from_others,
             why_shareable=o.why_shareable, risks=o.risks, facts_used=o.facts_used,
             why_now=getattr(o, "why_now", ""), open_question=getattr(o, "open_question", None),

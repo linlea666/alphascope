@@ -104,11 +104,24 @@ def log_call(s: Session, *, job_id, agent_key, prompt_ref, cfg, purpose, event_i
          "raw": (raw or "")[:65536] or None, "n": now}).scalar_one()
 
 
+def resolve_prompt(s: Session, key: str, version: int, language: str | None) -> dict | None:
+    """The text for this language, else the shared one, else any text of the version."""
+    row = s.execute(text("""SELECT * FROM prompt_template WHERE key = :k AND version = :v
+                            ORDER BY (language = :l) DESC NULLS LAST, (language IS NULL) DESC, language LIMIT 1"""),
+                    {"k": key, "v": version, "l": language}).mappings().first()
+    return dict(row) if row else None
+
+
+def prompt_ref(prompt: dict) -> str:
+    return f"{prompt['key']}@v{prompt['version']}" + (f".{prompt['language']}" if prompt.get("language") else "")
+
+
 def call_json(sf: sessionmaker, *, agent_key: str, purpose: str, schema: type[BaseModel], task_vars: dict, data: dict,
               semantic: Callable[[BaseModel], list[str]] | None, now: datetime, job_id: int | None = None,
               event_id: int | None = None, article_id: int | None = None, transport: Callable | None = None,
               model_override: int | None = None, inherit_models_from: str | None = None,
-              prompt_version: int | None = None, sleep: Callable[[float], None] | None = None) -> CallOutcome:
+              prompt_version: int | None = None, language: str | None = None,
+              sleep: Callable[[float], None] | None = None) -> CallOutcome:
     transport = transport or default_transport
     with sf() as s:
         if not settings_store.get(s, "ai")["enabled"]:
@@ -127,10 +140,14 @@ def call_json(sf: sessionmaker, *, agent_key: str, purpose: str, schema: type[Ba
             primary, fallback = model_config(s, model_override), None
         if primary is None:
             raise AIUnavailable(f"agent {agent_key} has no enabled model")
-        prompt = s.execute(text("SELECT * FROM prompt_template WHERE key = :k AND version = :v"),
-                           {"k": agent["prompt_key"], "v": prompt_version or agent["prompt_version"]}).mappings().one()
+        prompt = resolve_prompt(s, agent["prompt_key"], prompt_version or agent["prompt_version"], language)
+        if prompt is None:
+            raise AIUnavailable(f"agent {agent_key} has no prompt v{prompt_version or agent['prompt_version']}")
         budgets = settings_store.get(s, "budgets")
-    prompt_ref = f"{prompt['key']}@v{prompt['version']}"
+        desk = settings_store.get(s, "desk")["language"]
+    task_vars = {"desk_language": {"zh": "Chinese", "en": "English"}.get(desk, desk),
+                 "desk_language_zh": {"zh": "中文", "en": "英文"}.get(desk, desk), **task_vars}
+    ref = prompt_ref(prompt)
     task = Template(prompt["user_template"]).safe_substitute(task_vars)
     base_user = user_message(task, data)
     plan = [(primary, False)] + ([(fallback, True)] if fallback and fallback["id"] != primary["id"] else [])
@@ -157,7 +174,7 @@ def call_json(sf: sessionmaker, *, agent_key: str, purpose: str, schema: type[Ba
                 if job_id is not None and spent(s, now, job_id=job_id) + est > Decimal(agent["budget_usd_per_task"]):
                     over.append("per-task budget")
                 if over:
-                    log_call(s, job_id=job_id, agent_key=agent_key, prompt_ref=prompt_ref, cfg=cfg, purpose=purpose,
+                    log_call(s, job_id=job_id, agent_key=agent_key, prompt_ref=ref, cfg=cfg, purpose=purpose,
                              event_id=event_id, article_id=article_id, attempt=attempt, fallback=is_fallback,
                              req_hash=None, result=None, status="budget_blocked", error=", ".join(over), raw=None,
                              now=now)
@@ -187,13 +204,13 @@ def call_json(sf: sessionmaker, *, agent_key: str, purpose: str, schema: type[Ba
                                       [str(exc)[:1500]])
                 err = "; ".join(errors) or None
             with sf() as s:
-                call_id = log_call(s, job_id=job_id, agent_key=agent_key, prompt_ref=prompt_ref, cfg=cfg,
+                call_id = log_call(s, job_id=job_id, agent_key=agent_key, prompt_ref=ref, cfg=cfg,
                                    purpose=purpose, event_id=event_id, article_id=article_id, attempt=attempt,
                                    fallback=is_fallback, req_hash=req_hash, result=result, status=status, error=err,
                                    raw=result.text if result else None, now=now)
                 s.commit()
             if status == "ok":
-                return CallOutcome(parsed, call_id, cfg["model"], prompt_ref, agent_key)
+                return CallOutcome(parsed, call_id, cfg["model"], ref, agent_key)
             last_error = f"{status}: {err}"
             if status == "truncated" and max_tokens == agent["max_output_tokens"] and max_tokens < MAX_TOKENS_CAP:
                 max_tokens = min(max_tokens * 2, MAX_TOKENS_CAP)  # one roomier try before giving up on this model

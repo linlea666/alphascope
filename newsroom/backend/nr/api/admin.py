@@ -25,7 +25,7 @@ from nr.feed import health
 router = APIRouter(prefix="/api", tags=["admin"])
 ADMIN = require_roles("admin")
 CHIEF = require_roles("admin", "editor_in_chief")
-EDITABLE_SETTINGS = ("detect", "gate", "budgets", "ai", "guard", "review", "columns", "styles")
+EDITABLE_SETTINGS = ("detect", "gate", "budgets", "ai", "guard", "review", "columns", "styles", "desk")
 
 
 @router.get("/dashboard")
@@ -304,7 +304,8 @@ class AgentIn(BaseModel):
 
 
 def prompt_versions(s: Session, key: str) -> list[int]:
-    return list(s.execute(text("SELECT version FROM prompt_template WHERE key = :k ORDER BY version"), {"k": key}).scalars())
+    return list(s.execute(text("SELECT DISTINCT version FROM prompt_template WHERE key = :k ORDER BY version"),
+                          {"k": key}).scalars())
 
 
 def _agent_version(s: Session, cur, user_id: int, **changes) -> int:
@@ -343,7 +344,7 @@ def new_agent_version(agent_key: str, body: AgentIn, s: Session = Depends(get_se
 
 
 class PromptSwitchIn(BaseModel):
-    prompt_version: int = Field(ge=1)
+    prompt_version: int | None = Field(None, ge=1)  # None: each role's newest version
     agent_keys: list[str] = Field(min_length=1, max_length=20)
 
 
@@ -354,15 +355,16 @@ def switch_prompt_version(body: PromptSwitchIn, s: Session = Depends(get_session
     changed, skipped = [], []
     for key in dict.fromkeys(body.agent_keys):
         cur = one(s, "SELECT * FROM ai_agent_profile WHERE agent_key = :k AND active", {"k": key})
+        have = prompt_versions(s, cur["prompt_key"]) if cur else []
+        want = body.prompt_version or (have[-1] if have else None)
         if cur is None:
             skipped.append({"agent": key, "reason": "unknown role"})
-        elif cur["prompt_version"] == body.prompt_version:
+        elif cur["prompt_version"] == want:
             skipped.append({"agent": key, "reason": "already on this version"})
-        elif body.prompt_version not in (have := prompt_versions(s, cur["prompt_key"])):
-            skipped.append({"agent": key, "reason": f"no v{body.prompt_version}; available: "
-                                                    f"{', '.join(f'v{v}' for v in have)}"})
+        elif want not in have:
+            skipped.append({"agent": key, "reason": f"no v{want}; available: {', '.join(f'v{v}' for v in have)}"})
         else:
-            _agent_version(s, cur, user.id, prompt_version=body.prompt_version)
+            _agent_version(s, cur, user.id, prompt_version=want)
             changed.append(key)
     audit.record(s, "ai.agent_prompt_switch", "ai_agent", ",".join(changed) or "-", user_id=user.id,
                  after={**body.model_dump(), "changed": changed})
@@ -423,29 +425,37 @@ def list_prompts(s: Session = Depends(get_session), user: CurrentUser = Depends(
                 WHERE a.active AND a.prompt_key = p.key AND a.prompt_version = p.version) AS active_for,
                coalesce(p.notes, '') <> 'seed' AND coalesce(c.calls, 0) = 0
                  AND NOT EXISTS (SELECT 1 FROM ai_agent_profile a WHERE a.prompt_key = p.key AND a.prompt_version = p.version)
-                 AND NOT EXISTS (SELECT 1 FROM article_version v WHERE v.prompt_ref = p.key || '@v' || p.version)
+                 AND NOT EXISTS (SELECT 1 FROM article_version v
+                                 WHERE v.prompt_ref = p.key || '@v' || p.version || coalesce('.' || p.language, ''))
                  AS deletable
         FROM prompt_template p
         LEFT JOIN (SELECT prompt_ref, count(*) AS calls FROM ai_call_log GROUP BY 1) c
-          ON c.prompt_ref = p.key || '@v' || p.version
-        ORDER BY p.key, p.version DESC""")
+          ON c.prompt_ref = p.key || '@v' || p.version || coalesce('.' || p.language, '')
+        ORDER BY p.key, p.version DESC, p.language NULLS FIRST""")
 
 
 @router.delete("/ai/prompts/{key}/{version}")
-def delete_prompt_version(key: str, version: int, s: Session = Depends(get_session), user: CurrentUser = Depends(ADMIN)):
-    p = next((r for r in list_prompts(s, user) if r["key"] == key and r["version"] == version), None)
+def delete_prompt_version(key: str, version: int, language: Literal["zh", "en"] | None = None,
+                          s: Session = Depends(get_session), user: CurrentUser = Depends(ADMIN)):
+    p = next((r for r in list_prompts(s, user) if r["key"] == key and r["version"] == version
+              and r["language"] == language), None)
     if p is None:
         raise HTTPException(404, "prompt version not found")
     if not p["deletable"]:
         raise HTTPException(409, "a seed version, or one a role or a draft has used, is kept so drafts stay traceable")
-    s.execute(text("DELETE FROM prompt_template WHERE key = :k AND version = :v"), {"k": key, "v": version})
-    audit.record(s, "ai.prompt_delete", "prompt", f"{key}@v{version}", user_id=user.id)
+    s.execute(text("""DELETE FROM prompt_template WHERE key = :k AND version = :v
+                      AND coalesce(language, '') = coalesce(:l, '')"""), {"k": key, "v": version, "l": language})
+    audit.record(s, "ai.prompt_delete", "prompt", f"{key}@v{version}" + (f".{language}" if language else ""),
+                 user_id=user.id)
     s.commit()
     return {"ok": True}
 
 
 class PromptIn(BaseModel):
     key: str = Field(max_length=48)
+    language: Literal["zh", "en"] | None = None
+    # add this language's text to an existing version instead of starting a new one
+    version: int | None = Field(None, ge=1)
     system_text: str = Field(min_length=20, max_length=20000)
     user_template: str = Field(min_length=5, max_length=5000)
     notes: str | None = Field(None, max_length=1000)
@@ -455,14 +465,30 @@ class PromptIn(BaseModel):
 def new_prompt_version(body: PromptIn, s: Session = Depends(get_session), user: CurrentUser = Depends(ADMIN)):
     if not s.execute(text("SELECT 1 FROM ai_agent_profile WHERE prompt_key = :k"), {"k": body.key}).scalar():
         raise HTTPException(422, f"no role uses the prompt key {body.key}")
-    v = s.execute(text("SELECT coalesce(max(version), 0) + 1 FROM prompt_template WHERE key = :k"), {"k": body.key}).scalar()
-    s.execute(text("""INSERT INTO prompt_template (key, version, system_text, user_template, sha256, notes, created_by)
-                      VALUES (:k, :v, :s, :u, :h, :n, :by)"""),
-              {"k": body.key, "v": v, "s": body.system_text, "u": body.user_template, "n": body.notes, "by": user.id,
+    if body.version is not None:  # another language's text for a version no role has run yet
+        if body.version not in prompt_versions(s, body.key):
+            raise HTTPException(404, f"{body.key} has no version {body.version}")
+        if s.execute(text("SELECT 1 FROM ai_agent_profile WHERE prompt_key = :k AND prompt_version = :v"),
+                     {"k": body.key, "v": body.version}).scalar():
+            raise HTTPException(409, "a role has used this version: save a new version instead")
+        if s.execute(text("""SELECT 1 FROM prompt_template WHERE key = :k AND version = :v
+                             AND coalesce(language, '') = coalesce(:l, '')"""),
+                     {"k": body.key, "v": body.version, "l": body.language}).scalar():
+            raise HTTPException(409, "this version already has that language: save a new version instead")
+        v = body.version
+    else:
+        v = s.execute(text("SELECT coalesce(max(version), 0) + 1 FROM prompt_template WHERE key = :k"),
+                      {"k": body.key}).scalar()
+    s.execute(text("""INSERT INTO prompt_template (key, version, language, system_text, user_template, sha256, notes,
+                                                   created_by)
+                      VALUES (:k, :v, :l, :s, :u, :h, :n, :by)"""),
+              {"k": body.key, "v": v, "l": body.language, "s": body.system_text, "u": body.user_template,
+               "n": body.notes, "by": user.id,
                "h": hashlib.sha256((body.system_text + body.user_template).encode()).hexdigest()})
-    audit.record(s, "ai.prompt_version", "prompt", f"{body.key}@v{v}", user_id=user.id)
+    ref = f"{body.key}@v{v}" + (f".{body.language}" if body.language else "")
+    audit.record(s, "ai.prompt_version", "prompt", ref, user_id=user.id)
     s.commit()
-    return {"key": body.key, "version": v}
+    return {"key": body.key, "version": v, "language": body.language}
 
 
 @router.get("/ai/costs")
