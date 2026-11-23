@@ -225,3 +225,11 @@ def test_pnl_direction_and_estimate_markers():
     assert codes(phrases.check("浮亏10万美元还在加仓。", packet, [])) == ["PNL_SIGN"]
     assert codes(phrases.check("浮盈10万美元。", packet, [])) == []
     assert codes(phrases.check("~$411K est. margin behind it.", packet, [])) == []
+
+
+def test_time_spans_from_recency_are_not_figures():
+    from nr import settings_store
+    allow = settings_store.DEFAULTS["guard"]["allow_numbers"]
+    assert codes(numbers.check("2,250 ETH gone in the past 24 hours.", FACTS, allow)) == ["UNMATCHED_NUMBER"]  # 2,250 isn't a fact
+    assert codes(numbers.check("Closed in the past 24 hours, 267 BTC left.", FACTS, allow)) == []
+    assert codes(numbers.check("过去24小时加到267枚BTC。", FACTS, allow)) == []
