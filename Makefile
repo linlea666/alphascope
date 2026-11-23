@@ -1,7 +1,7 @@
 PY := backend/.venv/bin/python
 LIMIT ?= 200
 
-.PHONY: setup migrate ingest-leaderboard enrich tiers market swings fills binance positions reconcile timing api worker web-dev web-build test lint shellcheck check
+.PHONY: newsroom-check setup migrate ingest-leaderboard enrich tiers market swings fills binance positions reconcile timing api worker web-dev web-build test lint shellcheck check
 
 setup: ## create venv, install backend + frontend deps, migrate
 	test -d backend/.venv || python3.11 -m venv backend/.venv
@@ -64,3 +64,6 @@ shellcheck:
 	shellcheck -x install.sh start.sh scripts/deploy-common.sh && shellcheck -s sh deploy/alphascope-cli.sh
 
 check: test lint shellcheck web-build
+
+newsroom-check: ## the newsroom's own checks (tests, lint, shellcheck, build)
+	$(MAKE) -C newsroom check

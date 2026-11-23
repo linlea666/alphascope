@@ -1,0 +1,27 @@
+# 由 newsroom/start.sh 根据安装目录生成到 /etc/systemd/system/，不要直接修改那份文件
+[Unit]
+Description=AlphaScope Newsroom API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+Group=@USER@
+# .runtime/current 指向当前后端发布快照
+WorkingDirectory=@NR_DIR@/.runtime/current
+EnvironmentFile=@NR_DIR@/data/newsroom.env
+Environment=PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+ExecStart=/bin/sh -c 'exec @NR_DIR@/.venv/bin/uvicorn nr.main:app --host 127.0.0.1 --port $NEWSROOM_API_PORT --workers 1 --no-access-log'
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+MemoryMax=400M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=@NR_DIR@/data
+
+[Install]
+WantedBy=multi-user.target

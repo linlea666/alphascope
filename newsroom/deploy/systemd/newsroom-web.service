@@ -1,0 +1,26 @@
+# 由 newsroom/start.sh 根据安装目录生成到 /etc/systemd/system/，不要直接修改那份文件
+[Unit]
+Description=AlphaScope Newsroom 网页（Next.js）
+After=network-online.target newsroom-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+Group=@USER@
+WorkingDirectory=@NR_DIR@/.runtime/web
+EnvironmentFile=@NR_DIR@/data/newsroom.env
+Environment=NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
+ExecStart=/bin/sh -c 'HOSTNAME=$NEWSROOM_WEB_HOST PORT=$NEWSROOM_WEB_PORT exec @NR_DIR@/.runtime/node/bin/node server.js'
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+MemoryMax=400M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=@NR_DIR@/.runtime/builds
+
+[Install]
+WantedBy=multi-user.target

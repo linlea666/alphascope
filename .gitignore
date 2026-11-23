@@ -11,3 +11,6 @@ frontend/out/
 .DS_Store
 /.runtime/
 /.venv/
+newsroom/.runtime/
+newsroom/frontend/.next/
+newsroom/.venv/

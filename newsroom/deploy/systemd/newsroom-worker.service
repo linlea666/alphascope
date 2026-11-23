@@ -1,0 +1,29 @@
+# 由 newsroom/start.sh 根据安装目录生成到 /etc/systemd/system/，不要直接修改那份文件
+[Unit]
+Description=AlphaScope Newsroom worker（Feed 同步、检测、事实包、AI 任务队列）
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@USER@
+Group=@USER@
+WorkingDirectory=@NR_DIR@/.runtime/current
+EnvironmentFile=@NR_DIR@/data/newsroom.env
+Environment=PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 MALLOC_ARENA_MAX=2
+ExecStart=@NR_DIR@/.venv/bin/python -m nr.worker
+Restart=always
+RestartSec=10
+TimeoutStopSec=30
+# 同机的 AlphaScope worker 优先：内存上限小、调度权重低
+MemoryMax=500M
+CPUWeight=30
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=@NR_DIR@/data
+
+[Install]
+WantedBy=multi-user.target

@@ -67,7 +67,10 @@ frontend/  Next.js 15 + next-intl（zh/en）+ Tailwind + ECharts
 docs/      产品、架构、数据模型、指标、标签、UX、路线图、可行性评估
 deploy/    systemd 服务模板、命令行包装、反向代理示例
 install.sh 一键安装入口；start.sh 运维入口（status / update / logs / doctor / backup / restore / password）
+newsroom/  独立运行的编辑部子项目（自己的数据库、服务和 newsroom/start.sh），只通过只读 Feed 读取 AlphaScope 数据
 ```
+
+`backend/app/api/feed.py` 是给 newsroom 用的只读 Feed（`/api/v1/feed/*`，需要 `ALPHASCOPE_FEED_TOKEN`，留空即关闭），契约见 [newsroom/docs/03-feed-contract-v1.md](newsroom/docs/03-feed-contract-v1.md)。
 
 ## 数据原则
 
