@@ -52,7 +52,7 @@ case "$cmd" in
             read -r -p '管理员用户名 [admin]: ' name
             as_service -m nr.cli create-admin --username "${name:-admin}"
         fi
-        say "网页只监听本机：在你的电脑上运行  ssh -L $(web_port):127.0.0.1:$(web_port) root@服务器IP  然后打开 http://localhost:$(web_port)/zh"
+        say "网页只监听本机：在你的电脑上运行  ssh -L $(web_port):localhost:$(web_port) root@服务器IP  然后打开 http://localhost:$(web_port)/zh"
         ;;
     update)
         lock_deployment

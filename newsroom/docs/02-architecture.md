@@ -15,7 +15,7 @@
 │   队列线程：build_facts / card_render（确定性）          │
 │             eic_evaluate / draft_generate（AI，独立线程）│
 │ newsroom-api :8620（127.0.0.1）  会话鉴权 + RBAC        │
-│ newsroom-web :3300（默认 127.0.0.1）  BFF 代理 + 页面     │
+│ newsroom-web :3300（默认只监听 localhost）  BFF 代理 + 页面     │
 │ Postgres: newsroom（独立角色）   data/assets 图卡文件     │
 └──────────────────────────────────────────────────────┘
           AI 网关（OpenAI 兼容 / Anthropic 兼容，可配置）

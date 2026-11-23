@@ -142,10 +142,13 @@ ensure_env_file() {
 NEWSROOM_API_PORT=$DEFAULT_API_PORT
 NEWSROOM_WEB_PORT=$DEFAULT_WEB_PORT
 # 网页默认只监听本机：用 SSH 隧道访问，或在前面放带 TLS 的反向代理后改成 0.0.0.0 并设 NEWSROOM_COOKIE_SECURE=true
-NEWSROOM_WEB_HOST=127.0.0.1
+# 用 localhost 而不是 127.0.0.1：Next.js 内部重写请求会访问 localhost，两者必须解析到同一个地址
+NEWSROOM_WEB_HOST=localhost
 NEWSROOM_COOKIE_SECURE=false
 EOF
     fi
+    # 早期版本写的是 127.0.0.1，会让 Next.js 内部重写连不上（页面 500、进程崩溃）
+    [[ "$(env_get NEWSROOM_WEB_HOST)" == 127.0.0.1 ]] && env_set NEWSROOM_WEB_HOST localhost
     env_set NEWSROOM_API_BASE "http://127.0.0.1:$(api_port)"
     env_set NEWSROOM_SECRET_KEY_PATH "$(data_dir)/secret.key"
     env_set NEWSROOM_ASSET_DIR "$(data_dir)/assets"
@@ -269,7 +272,7 @@ verify_services() {
     web=$(web_port)
     for i in $(seq 1 45); do
         if curl -fsS "http://127.0.0.1:$api/healthz" >/dev/null 2>&1 \
-            && curl -fsS -o /dev/null "http://127.0.0.1:$web/zh/login" 2>/dev/null; then
+            && curl -fsS -o /dev/null "http://localhost:$web/zh/login" 2>/dev/null; then
             say "健康检查通过（API :$api，网页 :$web）"
             return 0
         fi

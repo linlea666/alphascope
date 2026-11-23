@@ -18,6 +18,8 @@ DEFAULTS: dict[str, dict] = {
         "tiers_usd": [1_000_000, 5_000_000, 10_000_000, 25_000_000, 50_000_000, 100_000_000],
         "near_liq_min_usd": 1_000_000, "near_liq_bands": [0.03, 0.015, 0.005],
         "candidate_score": 30, "auto_eic_score": 50, "refresh_hours": 48,
+        # older observations still build position state but are no longer news (e.g. the first full sync)
+        "max_event_age_hours": 6,
     },
     "gate": {"max_backlog": 5000, "max_sync_age_minutes": 10, "max_health_age_minutes": 10},
     "budgets": {"global_daily_usd": 5.0, "agent_daily_usd": {"eic": 2.0, "reporter": 3.0}},

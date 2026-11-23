@@ -33,5 +33,5 @@
 - 代价：排版能力有限；复杂长图在 Phase 3 再引入 Playwright，挂在同一渲染接口后面。
 
 ## ADR-8 网页默认只监听本机
-- 决定：`NEWSROOM_WEB_HOST=127.0.0.1`，通过 SSH 隧道或 TLS 反代访问。
+- 决定：`NEWSROOM_WEB_HOST=localhost`，通过 SSH 隧道或 TLS 反代访问。不用 `127.0.0.1`：Next.js 的中间件重写会在内部请求 `localhost`，监听地址必须与之解析一致，否则页面全部 500。
 - 理由：现有服务器没有 HTTPS 反代；会话 cookie 不应在明文 HTTP 上跨公网传输。

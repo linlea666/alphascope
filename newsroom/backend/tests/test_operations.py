@@ -68,3 +68,17 @@ def test_stuck_evaluations_return_to_the_pool(sf):
     assert maintenance.run(sf, NOW)["unstuck_events"] == 1
     with sf() as s:
         assert s.execute(text("SELECT state FROM news_event")).scalar() == "candidate"
+
+
+def test_old_observations_build_state_but_are_not_news(sf):
+    from tests.fakes import T0, ev
+    feed = FakeFeed()
+    # a day-old open, then a fresh add on the same position
+    feed.events = [ev(1, "open", 0, 300, 100000, observed=T0 - timedelta(days=1)),
+                   ev(2, "increase", 300, 320, 100000, observed=T0 + timedelta(hours=2))]
+    feed.contexts[WHALE] = context(positions=[position(szi=320)])
+    r = pipeline(sf, feed)
+    assert r["detect"]["too_old"] == 1 and r["detect"]["events"] == 2
+    with sf() as s:
+        assert s.execute(text("SELECT event_class FROM news_event")).scalars().all() == ["whale_add"]
+        assert s.execute(text("SELECT start_kind FROM position_episode")).scalar() == "open"

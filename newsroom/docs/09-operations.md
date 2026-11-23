@@ -17,9 +17,9 @@ sudo newsroom/start.sh install
 
 ## 3. 访问
 
-网页默认只监听 `127.0.0.1:3300`（登录 cookie 不应在明文 HTTP 上跨公网传输）。
+网页默认只监听本机 `localhost:3300`（登录 cookie 不应在明文 HTTP 上跨公网传输）。
 
-- 推荐：本机执行 `ssh -L 3300:127.0.0.1:3300 root@服务器IP`，浏览器打开 `http://localhost:3300/zh`。
+- 推荐：本机执行 `ssh -L 3300:localhost:3300 root@服务器IP`，浏览器打开 `http://localhost:3300/zh`。
 - 需要公网访问时：在前面放 Caddy / Nginx 并启用 HTTPS，然后把 `NEWSROOM_WEB_HOST=0.0.0.0`、`NEWSROOM_COOKIE_SECURE=true` 写进 `newsroom.env`，`sudo newsroom/start.sh restart`。
 
 ## 4. 首次配置（网页）
