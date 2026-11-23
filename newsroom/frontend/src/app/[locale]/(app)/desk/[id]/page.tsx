@@ -101,7 +101,7 @@ export default async function DeskPage({ params }: { params: Promise<{ id: strin
         <div className="space-y-5">
           <Panel title={t("publish")}>
             <KV k={tc("account")} v={`${a.platform === "okx_square" ? "OKX 广场" : "X"} · @${a.handle} · ${a.account_name}`} />
-            <KV k={t("authorization")} v={<Badge tone={a.authorization_status === "authorized" ? "up" : "warn"}>{a.authorization_status}</Badge>} />
+            <KV k={t("authorization")} v={<Badge tone={a.authorization_status === "authorized" ? "up" : ["revoked", "expired"].includes(a.authorization_status) ? "down" : "neutral"}>{a.authorization_status}</Badge>} />
             <KV k={t("expires")} v={fmtTime(a.authorization_expires_at, locale, account?.timezone)} />
             {account && <p className="mt-2 text-xs text-muted">{account.positioning}</p>}
             <div className="mt-4"><ReviewButtons articleId={a.id} status={a.status} /></div>

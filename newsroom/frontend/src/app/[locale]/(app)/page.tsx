@@ -94,7 +94,7 @@ export default async function DashboardPage() {
                 <tr key={a.id} className="border-b border-border/60">
                   <td className={td}>{a.handle}</td>
                   <td className={`${td} num`}>{a.published_today}/{a.daily_post_budget}</td>
-                  <td className={td}><StateBadge state={a.status} /> <Badge tone={a.authorization_status === "authorized" ? "up" : "warn"}>{a.authorization_status}</Badge></td>
+                  <td className={td}><StateBadge state={a.status} /> <Badge tone={a.authorization_status === "authorized" ? "up" : ["revoked", "expired"].includes(a.authorization_status) ? "down" : "neutral"}>{a.authorization_status}</Badge></td>
                 </tr>
               ))}
             </tbody>

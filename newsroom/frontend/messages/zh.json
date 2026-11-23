@@ -51,7 +51,9 @@
     "download": "下载",
     "test": "测试",
     "version": "版本",
-    "created": "创建"
+    "created": "创建",
+    "saved": "操作成功",
+    "failed": "操作失败"
   },
   "login": {
     "title": "登录编辑部",
@@ -264,8 +266,8 @@
     "budget": "每日发布上限",
     "gap": "最短间隔（分钟）",
     "longPosts": "允许长帖",
-    "auth": "授权状态",
-    "authExpires": "授权到期（ISO 时间）",
+    "auth": "授权状态（可选：只有“已撤销 / 已过期”会阻止发布）",
+    "authExpires": "授权到期（可选，ISO 时间；过期后阻止发布）",
     "authNote": "授权说明",
     "new": "新建账号",
     "edit": "编辑",
@@ -561,6 +563,20 @@
       "underwater_add": "浮亏加仓",
       "near_liquidation": "接近强平",
       "close": "平仓/强平"
+    },
+    "started": "实验已提交：正在抽样并刷新事实，随后排队生成两版稿件。本页会自动刷新。",
+    "noSample": "没有抽到样本",
+    "job": {
+      "queued": "排队中",
+      "running": "抽样中",
+      "failed": "失败，稍后重试",
+      "dead": "失败"
+    },
+    "reason": {
+      "no_recent_events": "最近 48 小时没有该账号交易所的仓位事件",
+      "none_usable": "候选事件都不可用",
+      "gate_blocked": "{n} 个事件刷新后被门禁拦下（数据过期或仓位已不在）",
+      "refresh_limit": "{n} 个事件因刷新次数上限被跳过"
     }
   },
   "rating": {

@@ -16,7 +16,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from nr import audit
 from nr.desk import assignment
 from nr.desk.drafting import generate_draft
-from nr.facts.build import RateLimited, build_event_facts
+from nr.facts.build import build_event_facts
+from nr.facts.builder import BUILDER_VERSION
 from nr.feed.client import FeedClient
 from nr.jobs.queue import enqueue
 
@@ -31,6 +32,7 @@ DIMENSIONS = ("information", "lede", "evidence", "publishable")
 FAMILIES = {"archive": ("contrast.",), "radar": ("radar.prior_positions",), "book": ("book.positions",),
             "crowd": ("crowd.share_of_same_side", "crowd.same_side_rank", "crowd.timing_same_side"),
             "leaderboard": ("trader.alltime_pnl_usd",)}
+FRESH = timedelta(minutes=30)  # a packet of the current builder refreshed this recently is used as it is
 CRITERIA = {"b_win_rate": 0.65, "stop_b_win_rate": 0.55, "stop_contrast_coverage": 0.40, "max_extra_tokens": 0.5}
 
 
@@ -72,6 +74,8 @@ def create(sf: sessionmaker, client: FeedClient, name: str, account_id: int, mod
                               {"x": name}).scalars())
     picked: list[tuple[str, int]] = []
     skipped: dict[str, int] = {}
+    # its own allowance of context calls instead of the hourly budget the radar uses up: at most 3 per sample
+    rebuilds, seen = 3 * n, 0
     stratum_of = {c: k for k, classes, _ in STRATA for c in classes}
     # each stratum takes its quota; a last pass fills what thin strata left over from any class
     passes = [(k, classes, quotas(n)[k]) for k, classes, _ in STRATA] + [("fill", tuple(stratum_of), None)]
@@ -79,16 +83,25 @@ def create(sf: sessionmaker, client: FeedClient, name: str, account_id: int, mod
         want = n - len(picked) if want is None else want
         with sf() as s:
             ids = candidates(s, classes, list(acc), now, taken, want * 4)
+        seen += len(ids)
         got = 0
         for eid in ids:
-            if got >= want or "rate_limited" in skipped:
+            if got >= want:
                 break
-            try:
-                built = build_event_facts(sf, client, eid, now)
-            except RateLimited:
-                skipped["rate_limited"] = 1
-                break
-            if built["gate"] != "pass":
+            with sf() as s:
+                cur = s.execute(text("""SELECT ne.gate_status, ne.facts_refreshed_at, fp.builder_version FROM news_event ne
+                                        JOIN fact_packet fp ON fp.id = ne.current_fact_packet_id WHERE ne.id = :e"""),
+                                {"e": eid}).mappings().first()
+            if cur and cur["builder_version"] == BUILDER_VERSION and cur["facts_refreshed_at"] \
+                    and now - cur["facts_refreshed_at"] < FRESH:
+                gate = cur["gate_status"]
+            elif rebuilds <= 0:
+                skipped["refresh_limit"] = skipped.get("refresh_limit", 0) + 1
+                continue
+            else:
+                rebuilds -= 1
+                gate = build_event_facts(sf, client, eid, now, cfg_limit=10**9)["gate"]
+            if gate != "pass":
                 skipped["gate_blocked"] = skipped.get("gate_blocked", 0) + 1
                 taken.add(eid)
                 continue
@@ -115,7 +128,9 @@ def create(sf: sessionmaker, client: FeedClient, name: str, account_id: int, mod
         audit.record(s, "experiment.create", "experiment", name, user_id=user_id,
                      after={"account_id": account_id, "model_id": model_id, "pairs": len(pairs), "skipped": skipped})
         s.commit()
-    return {"experiment": name, "pairs": len(pairs), "by_stratum": {k: sum(1 for st, _ in picked if st == k)
+    if not pairs:
+        skipped["no_recent_events" if not seen else "none_usable"] = 1
+    return {"experiment": name, "pairs": len(pairs), "candidates": seen, "by_stratum": {k: sum(1 for st, _ in picked if st == k)
                                                                     for k, _, _ in STRATA}, "skipped": skipped}
 
 

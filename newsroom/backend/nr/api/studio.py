@@ -289,7 +289,8 @@ def new_rpa_token(s: Session = Depends(get_session), user: CurrentUser = Depends
 
 @router.get("/rpa/next")
 def rpa_next(authorization: str | None = Header(None), s: Session = Depends(get_session)):
-    """The next due plan on an RPA-enabled, authorized account. Claiming it stops anyone else taking it."""
+    """The next due plan on an active RPA-enabled account whose authorization is not revoked or expired. Claiming it
+    stops anyone else taking it."""
     _rpa(s, authorization)
     if settings_store.emergency_stopped(s):
         return {"plan": None, "reason": "emergency stop"}
@@ -298,7 +299,8 @@ def rpa_next(authorization: str | None = Header(None), s: Session = Depends(get_
         SELECT p.id, p.article_id, p.account_id, acc.handle, p.planned_at
         FROM publication_plan p JOIN editorial_account acc ON acc.id = p.account_id
         WHERE p.status = 'planned' AND p.planned_at <= :t AND acc.rpa_enabled AND acc.status = 'active'
-          AND acc.authorization_status = 'authorized' AND (acc.authorization_expires_at IS NULL OR acc.authorization_expires_at > :t)
+          AND acc.authorization_status NOT IN ('revoked', 'expired')
+          AND (acc.authorization_expires_at IS NULL OR acc.authorization_expires_at > :t)
         ORDER BY p.planned_at LIMIT 1 FOR UPDATE OF p SKIP LOCKED""", {"t": t})
     if p is None:
         return {"plan": None}

@@ -8,7 +8,9 @@ import { fmtTime } from "@/lib/format";
 import type { Account } from "@/lib/types";
 
 type X = { experiment: string; created_at: string; pairs: number; ready: number; failed: number; my_votes: number; votes: number };
-type D = { experiments: X[]; pending: { experiment: string; status: string; last_error: string | null; created_at: string }[] };
+type D = { experiments: X[]; pending: { experiment: string; status: string; last_error: string | null; created_at: string;
+  result: { pairs: number; candidates?: number; skipped: Record<string, number> } | null }[] };
+const REASONS = ["no_recent_events", "none_usable", "gate_blocked", "refresh_limit"] as const;
 
 export default async function ExperimentsPage() {
   const [t, locale] = await Promise.all([getTranslations("experiments"), getLocale()]);
@@ -50,8 +52,18 @@ export default async function ExperimentsPage() {
           {d.pending.length > 0 && (
             <Panel title={t("pending")}>
               {d.pending.map((p, i) => (
-                <div key={i} className="text-sm">{p.experiment} · <Badge tone={p.status === "failed" || p.status === "dead" ? "down" : "warn"}>{p.status}</Badge>
-                  {p.last_error && <div className="text-xs text-down">{p.last_error}</div>}</div>
+                <div key={i} className="mb-2 text-sm">
+                  {p.experiment} · {p.status === "done"
+                    ? <Badge tone="down">{t("noSample")}</Badge>
+                    : <Badge tone={p.status === "failed" || p.status === "dead" ? "down" : "warn"}>{t(`job.${p.status}` as "job.queued")}</Badge>}
+                  <span className="ml-2 text-xs text-muted">{fmtTime(p.created_at, locale)}</span>
+                  {p.result && p.result.pairs === 0 && (
+                    <div className="text-xs text-down">
+                      {REASONS.filter((r) => p.result!.skipped[r]).map((r) => t(`reason.${r}`, { n: p.result!.skipped[r] })).join("；")}
+                    </div>
+                  )}
+                  {p.last_error && <div className="text-xs text-down">{p.last_error}</div>}
+                </div>
               ))}
             </Panel>
           )}
@@ -62,7 +74,7 @@ export default async function ExperimentsPage() {
           </Panel>
         </div>
         <Panel title={t("create")} hint={t("createHint")}>
-          <FieldForm path="experiments" submitLabel={t("start")} fields={[
+          <FieldForm path="experiments" submitLabel={t("start")} successMessage={t("started")} fields={[
             { name: "name", label: t("name"), required: true, value: `contrast-${new Date().toISOString().slice(0, 10)}`, wide: true },
             { name: "account_id", label: t("account"), type: "select", numeric: true, required: true,
               options: accounts.map((a) => ({ value: String(a.id), label: `@${a.handle} (${a.language}, ${a.status})` })) },

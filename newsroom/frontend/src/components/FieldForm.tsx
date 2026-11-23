@@ -19,12 +19,13 @@ export type Field = {
 };
 
 /** A small generic form: collects typed values, sends them through the proxy, shows the result or the error. */
-export function FieldForm({ fields, path, method = "POST", submitLabel, showResult = false }: {
+export function FieldForm({ fields, path, method = "POST", submitLabel, showResult = false, successMessage }: {
   fields: Field[];
   path: string;
   method?: "POST" | "PUT" | "PATCH";
   submitLabel?: string;
   showResult?: boolean;
+  successMessage?: string;
 }) {
   const tc = useTranslations("common");
   const router = useRouter();
@@ -55,7 +56,7 @@ export function FieldForm({ fields, path, method = "POST", submitLabel, showResu
         }
         setBusy(true);
         try {
-          const out = await bff(path, method, body);
+          const out = await bff(path, method, body, { toast: successMessage });
           if (showResult) setResult(JSON.stringify(out, null, 2));
           router.refresh();
         } catch (e) {

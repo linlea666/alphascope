@@ -171,3 +171,19 @@ def test_experiment_api_and_ratings(client, sf):
     got = client.get(f"/api/articles/{art}/ratings", headers=h).json()
     assert len(got) == 1 and got[0]["score"] == 3 and got[0]["mine"] is False
     assert feed  # keeps the fake feed's events alive for the pipeline above
+
+
+def test_sampling_is_not_starved_by_the_hourly_context_budget(sf):
+    nr = newsroom(sf)
+    feed = two_events(sf)
+    with sf() as s:
+        model = s.execute(text("SELECT id FROM ai_model_config WHERE name = 'primary'")).scalar()
+        # the radar has used up this hour's context calls, and the packets are old enough to need a refresh
+        s.execute(text("""INSERT INTO job (kind, status, finished_at) SELECT 'build_facts', 'done', :n
+                          FROM generate_series(1, 300)"""), {"n": NOW})
+        s.execute(text("UPDATE news_event SET facts_refreshed_at = :t"), {"t": NOW - timedelta(hours=2)})
+        s.commit()
+    out = contrast_ab.create(sf, feed.client(), "busy-hour", nr["zh"], model, 4, NOW, nr["chief"], seed=1)
+    assert out["pairs"] == 2 and out["skipped"] == {}
+    empty = contrast_ab.create(sf, feed.client(), "busy-hour", nr["zh"], model, 4, NOW, nr["chief"])
+    assert empty["pairs"] == 0 and empty["skipped"] == {"no_recent_events": 1}  # both events are already in it

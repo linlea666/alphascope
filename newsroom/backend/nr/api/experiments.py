@@ -31,8 +31,11 @@ class ExperimentIn(BaseModel):
 
 @router.get("/experiments")
 def list_experiments(s: Session = Depends(get_session), user: CurrentUser = Depends(JUDGES)):
-    pending = rows(s, """SELECT payload->>'name' AS experiment, status, last_error, created_at FROM job
-                         WHERE kind = 'experiment_create' AND status IN ('queued', 'running', 'failed', 'dead')
+    # requests of the last day that are still being prepared, failed, or produced no pair (with the reason)
+    pending = rows(s, """SELECT payload->>'name' AS experiment, status, last_error, result, created_at FROM job j
+                         WHERE kind = 'experiment_create' AND created_at > now() - interval '1 day'
+                           AND (status <> 'done' OR coalesce((result->>'pairs')::int, 0) = 0)
+                           AND NOT EXISTS (SELECT 1 FROM experiment_pair x WHERE x.experiment = j.payload->>'name')
                          ORDER BY id DESC LIMIT 5""")
     return {"experiments": contrast_ab.experiments(s, user.id), "pending": pending}
 

@@ -51,7 +51,9 @@
     "download": "Download",
     "test": "Test",
     "version": "Version",
-    "created": "Created"
+    "created": "Created",
+    "saved": "Done",
+    "failed": "Failed"
   },
   "login": {
     "title": "Sign in to the newsroom",
@@ -264,8 +266,8 @@
     "budget": "Daily post budget",
     "gap": "Minimum gap (minutes)",
     "longPosts": "Long posts allowed",
-    "auth": "Authorization",
-    "authExpires": "Authorization expires (ISO time)",
+    "auth": "Authorization (optional: only revoked / expired stops publishing)",
+    "authExpires": "Authorization expiry (optional, ISO time; publishing stops after it)",
     "authNote": "Authorization note",
     "new": "New account",
     "edit": "Edit",
@@ -561,6 +563,20 @@
       "underwater_add": "Underwater add",
       "near_liquidation": "Near liquidation",
       "close": "Close / liquidation"
+    },
+    "started": "Experiment submitted: sampling and refreshing facts, then both drafts are queued. This page refreshes itself.",
+    "noSample": "No sample drawn",
+    "job": {
+      "queued": "queued",
+      "running": "sampling",
+      "failed": "failed, will retry",
+      "dead": "failed"
+    },
+    "reason": {
+      "no_recent_events": "No position events for this account's venues in the last 48 hours",
+      "none_usable": "No candidate event was usable",
+      "gate_blocked": "{n} events blocked by the gate after refresh (stale data or position gone)",
+      "refresh_limit": "{n} events skipped at the refresh limit"
     }
   },
   "rating": {

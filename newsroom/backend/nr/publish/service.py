@@ -102,7 +102,9 @@ def publish_blockers(s: Session, account_id: int, now: datetime) -> list[str]:
         out.append("emergency stop is active")
     if acc["status"] != "active":
         out.append(f"account is {acc['status']}")
-    if acc["authorization_status"] != "authorized":
+    # authorization is optional (posts go out by hand, RPA or a browser extension): only an explicit revocation or
+    # an expiry date that has passed stops publishing
+    if acc["authorization_status"] in ("revoked", "expired"):
         out.append(f"account authorization is {acc['authorization_status']}")
     elif acc["authorization_expires_at"] is not None and acc["authorization_expires_at"] <= now:
         out.append("account authorization has expired")

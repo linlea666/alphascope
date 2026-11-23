@@ -266,6 +266,19 @@ def test_expired_authorization_and_emergency_stop_block_publishing(sf):
         assert e.value.status_code == 423 and "emergency" in e.value.detail
 
 
+def test_authorization_is_optional_but_a_revocation_blocks(sf):
+    nr, eid, art = publishable(sf)
+    with sf() as s:
+        s.execute(text("""UPDATE editorial_account SET authorization_status = 'pending', authorization_expires_at = NULL
+                          WHERE id = :a"""), {"a": nr["zh"]})
+        assert pub.publish_blockers(s, nr["zh"], NOW) == []  # active is enough: posting is by hand, RPA or extension
+        s.execute(text("UPDATE editorial_account SET authorization_status = 'revoked' WHERE id = :a"), {"a": nr["zh"]})
+        assert pub.publish_blockers(s, nr["zh"], NOW) == ["account authorization is revoked"]
+        s.execute(text("UPDATE editorial_account SET authorization_status = 'pending', status = 'paused' WHERE id = :a"),
+                  {"a": nr["zh"]})
+        assert pub.publish_blockers(s, nr["zh"], NOW) == ["account is paused"]
+
+
 def test_posted_text_is_guarded_too(sf):
     nr, eid, art = publishable(sf)
     with sf() as s:
