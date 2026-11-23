@@ -18,6 +18,7 @@ from nr.ai.runner import call_json
 from nr.ai.schemas import DraftOut
 from nr.articles.versions import Draft, current_version, save_version
 from nr.desk.eic import packet_for_model
+from nr.guard.xlength import weighted_length
 
 MODES = ("draft", "polish", "fix")
 
@@ -59,6 +60,13 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
         errs = [f"unknown fact id {f}" for f in o.facts_used if f not in fact_ids]
         if o.language != a["language"]:
             errs.append(f"language must be {a['language']}")
+        # same rule as the guard's TOO_LONG, checked here so the model gets one chance to shorten it itself
+        if platform_rule and not o.thread and not a["long_post_allowed"]:
+            n = weighted_length(o.body) if platform_rule["weighted"] else len(o.body)
+            if n > platform_rule["limit"]:
+                errs.append(f"body is {n} {'weighted ' if platform_rule['weighted'] else ''}characters, the limit is "
+                            f"{platform_rule['limit']}" + (" (each CJK character counts 2)" if platform_rule["weighted"]
+                                                           else "") + ": shorten it, or move detail into thread")
         return errs
 
     data = {"fact_packet": packet_for_model(packet),

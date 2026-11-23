@@ -167,6 +167,18 @@ def test_prompt_injection_cannot_change_the_rules(sf):
         assert e.value.status_code == 409
 
 
+def test_an_overlong_x_post_goes_back_to_the_model_once(sf):
+    """DeepSeek wrote 222 Chinese characters (351 weighted) for X; the repair call carries the exact count."""
+    nr = newsroom(sf)
+    eid = candidate_event(sf)
+    evaluate(sf, eid, FakeProvider(eic_output(eid, [(nr["zh"], "数据视角")], silent=[nr["en"]])))
+    ids, _ = accept_all(sf, nr["chief"])
+    prov = FakeProvider(draft_output("zh", ZH * 5), draft_output("zh", ZH))
+    generate_draft(sf, ids[0], NOW, transport=prov)
+    assert len(prov.requests) == 2 and "the limit is 280 (each CJK character counts 2)" in prov.requests[1]["user"]
+    with sf() as s:
+        assert s.execute(text("SELECT body FROM article_version")).scalar() == ZH
+
 def test_human_edits_are_not_overwritten(sf):
     nr = newsroom(sf)
     eid = candidate_event(sf)
