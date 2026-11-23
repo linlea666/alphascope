@@ -86,6 +86,18 @@ def test_eic_must_place_every_account(sf):
         assert s.execute(text("SELECT count(*) FROM eic_evaluation")).scalar() == 0
 
 
+def test_truncated_output_gets_one_roomier_try_on_the_same_model(sf):
+    """DeepSeek thinks by default and the reasoning eats max_tokens; one doubled retry rescues the draft."""
+    nr = newsroom(sf)
+    eid = candidate_event(sf)
+    prov = FakeProvider(ProviderError("truncated", "output hit max_tokens"),
+                        eic_output(eid, [(nr["zh"], "数据视角")], silent=[nr["en"]]))
+    evaluate(sf, eid, prov)
+    assert [r["model"] for r in prov.requests] == [prov.requests[0]["model"]] * 2
+    assert prov.requests[1]["max_tokens"] == 2 * prov.requests[0]["max_tokens"]
+    with sf() as s:
+        assert s.execute(text("SELECT status FROM ai_call_log ORDER BY id")).scalars().all() == ["truncated", "ok"]
+
 def test_invalid_ai_output_never_becomes_a_draft(sf):
     nr = newsroom(sf)
     eid = candidate_event(sf)

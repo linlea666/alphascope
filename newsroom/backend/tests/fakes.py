@@ -137,7 +137,7 @@ class FakeProvider:
 
     def __call__(self, cfg, req):
         from nr.ai.providers.base import ChatResult
-        self.requests.append({"model": cfg["model"], "system": req.system, "user": req.user})
+        self.requests.append({"model": cfg["model"], "system": req.system, "user": req.user, "max_tokens": req.max_tokens})
         out = self.outputs.pop(0) if self.outputs else {"ok": True}
         if isinstance(out, Exception):
             raise out

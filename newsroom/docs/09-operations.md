@@ -25,7 +25,7 @@ sudo newsroom/start.sh install
 ## 4. 首次配置（网页）
 
 1. 系统管理 → AI 模型：选预设或自定义，填密钥和单价（单价为 0 时费用和每日预算都不会生效），保存后点「测试模型」。
-   - DeepSeek 官方：地址 `https://api.deepseek.com`，模型 `deepseek-flash` 或 `deepseek-v4-pro`；思考模式在 extra body 里加 `{"thinking": {"type": "enabled"}, "reasoning_effort": "high"}`。Anthropic 格式的地址是 `https://api.deepseek.com/anthropic`。
+   - DeepSeek 官方：地址 `https://api.deepseek.com`，模型 `deepseek-flash` 或 `deepseek-v4-pro`；extra body 填 `{"thinking": {"type": "disabled"}}` 关闭思考（DeepSeek 默认开启思考，思考内容占用输出上限，稿件会被截断）。Anthropic 格式的地址是 `https://api.deepseek.com/anthropic`。
    - aicodemirror：地址 `https://api.aicodemirror.ai/v1`（程序会自己拼 `/chat/completions` 或 `/responses`），模型名用它文档里列出的（例如 `gpt-6-astra`）。返回「无可用渠道」表示模型名不受支持。
      它的 Cloudflare 目前拦截本服务器 IP（2026-11-23 实测：本机 401、服务器 403），需要服务商放行后才能用。
 2. 系统管理 → AI 角色：用「一键绑定模型」给所有角色选主模型和备用模型，或者逐个设置（每次修改生成新版本）。

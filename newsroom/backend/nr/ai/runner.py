@@ -26,6 +26,7 @@ from nr.crypto import decrypt
 
 _SEMAPHORES: dict[int, threading.BoundedSemaphore] = {}
 _LOCK = threading.Lock()
+MAX_TOKENS_CAP = 16000
 
 
 class AIUnavailable(Exception):
@@ -135,10 +136,10 @@ def call_json(sf: sessionmaker, *, agent_key: str, purpose: str, schema: type[Ba
     plan = [(primary, False)] + ([(fallback, True)] if fallback and fallback["id"] != primary["id"] else [])
     last_error, attempt = "no attempt", 0
     for cfg, is_fallback in plan:
-        user, repaired = base_user, False
+        user, repaired, max_tokens = base_user, False, agent["max_output_tokens"]
         while True:
             attempt += 1
-            req = ChatRequest(system=prompt["system_text"], user=user, max_tokens=agent["max_output_tokens"],
+            req = ChatRequest(system=prompt["system_text"], user=user, max_tokens=max_tokens,
                               json_schema=schema.model_json_schema(), schema_name=schema.__name__)
             est = cost(cfg, (len(req.system) + len(req.user)) // 3, req.max_tokens)
             with sf() as s:
@@ -189,6 +190,9 @@ def call_json(sf: sessionmaker, *, agent_key: str, purpose: str, schema: type[Ba
             if status == "ok":
                 return CallOutcome(parsed, call_id, cfg["model"], prompt_ref, agent_key)
             last_error = f"{status}: {err}"
+            if status == "truncated" and max_tokens == agent["max_output_tokens"] and max_tokens < MAX_TOKENS_CAP:
+                max_tokens = min(max_tokens * 2, MAX_TOKENS_CAP)  # one roomier try before giving up on this model
+                continue
             if result is None or repaired:
                 break  # provider failure, or the repair also failed: move to the fallback model
             repaired = True

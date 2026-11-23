@@ -33,10 +33,14 @@ def call(cfg: dict, req: ChatRequest) -> ChatResult:
         text = choice["message"].get("content") or ""
     except (ValueError, KeyError, IndexError) as exc:
         raise ProviderError("invalid_json", f"unexpected response: {r.text[:300]}") from exc
+    u = d.get("usage") or {}
     if choice.get("finish_reason") == "length":
-        raise ProviderError("truncated", "output hit max_tokens")
+        # thinking models (DeepSeek's default included) spend part of max_tokens on reasoning before any answer
+        reasoning = (u.get("completion_tokens_details") or {}).get("reasoning_tokens")
+        raise ProviderError("truncated", f"output hit max_tokens ({u.get('completion_tokens')} output tokens"
+                            + (f", {reasoning} of them reasoning: turn thinking off or raise max output tokens)"
+                               if reasoning else ")"))
     if choice["message"].get("refusal"):
         raise ProviderError("refused", str(choice["message"]["refusal"])[:300])
-    u = d.get("usage") or {}
     return ChatResult(text, u.get("prompt_tokens"), u.get("completion_tokens"), choice.get("finish_reason"),
                       r.status_code, ms, d.get("model") or cfg["model"])
