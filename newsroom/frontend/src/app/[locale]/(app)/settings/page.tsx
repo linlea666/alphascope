@@ -17,7 +17,9 @@ type Model = { id: number; name: string; protocol: string; base_url: string; mod
 type Agent = { id: number; agent_key: string; version: number; display_name: string; role_description: string; model_config_id: number | null;
   fallback_model_config_id: number | null; prompt_key: string; prompt_version: number; max_output_tokens: number; budget_usd_per_task: number;
   active: boolean; model_name: string | null; fallback_name: string | null };
-type Prompt = { id: number; key: string; version: number; system_text: string; user_template: string; notes: string | null; created_at: string };
+type Prompt = { id: number; key: string; version: number; system_text: string; user_template: string; notes: string | null; created_at: string;
+  calls: number; active_for: string[] | null; deletable: boolean };
+const REPORTERS = ["reporter", "reporter_breaking", "reporter_investigator", "reporter_data", "reporter_derivatives", "reporter_historian"];
 type User = { id: number; username: string; display_name: string | null; is_active: boolean; roles: string[]; last_login_at: string | null; locked_until: string | null };
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
@@ -129,12 +131,16 @@ async function Models() {
 
 async function Agents() {
   const t = await getTranslations("settings");
-  const [tx, agents, models] = await Promise.all([getTranslations("settingsX"), nrGetOptional<Agent[]>("ai/agents"),
-    nrGetOptional<Model[]>("ai/models")]);
-  if (!agents || !models) return <NoAccess />;
+  const [tx, tp, agents, models, prompts] = await Promise.all([getTranslations("settingsX"), getTranslations("promptsX"),
+    nrGetOptional<Agent[]>("ai/agents"), nrGetOptional<Model[]>("ai/models"), nrGetOptional<Prompt[]>("ai/prompts")]);
+  if (!agents || !models || !prompts) return <NoAccess />;
   const modelOpts = [{ value: "", label: "—" }, ...models.map((m) => ({ value: String(m.id), label: `${m.name} · ${m.model}` }))];
   const usable = models.filter((m) => m.enabled);
   const best = usable.find((m) => m.last_test_ok) ?? usable[0];
+  const versionsOf = (key: string) => prompts.filter((p) => p.key === key);
+  const label = (p: Prompt) => `v${p.version}${p.notes && p.notes !== "seed" ? ` · ${p.notes.slice(0, 40)}` : p.notes === "seed" ? ` · ${tp("seed")}` : ""}`;
+  const active = agents.filter((a) => a.active);
+  const allVersions = [...new Set(prompts.filter((p) => REPORTERS.includes(p.key)).map((p) => p.version))].sort((x, y) => y - x);
   return (
     <div className="space-y-5">
       <AiReadiness />
@@ -148,11 +154,26 @@ async function Agents() {
           ]} />
         </Panel>
       )}
-      {agents.filter((a) => a.active).map((a) => (
+      <Panel title={tp("switchTitle")} hint={tp("switchHint")}>
+        <div className="mb-3 text-xs text-muted">
+          {active.map((a) => <span key={a.agent_key} className="mr-3 inline-block">{a.agent_key}: v{a.prompt_version}
+            <span className="opacity-60"> ({versionsOf(a.prompt_key).map((p) => `v${p.version}`).reverse().join("/")})</span></span>)}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {allVersions.map((v) => (
+            <Action key={v} path="ai/agents/prompt-version" body={{ prompt_version: v, agent_keys: REPORTERS }}
+              tone={v === allVersions[0] ? "primary" : "default"} confirm={tp("switchConfirm", { v })}>
+              {tp("switchReporters", { v })}
+            </Action>
+          ))}
+        </div>
+      </Panel>
+      {active.map((a) => (
         <Panel key={a.id} title={`${a.display_name} (${a.agent_key} v${a.version})`} hint={a.role_description}>
           <KV k={t("primaryModel")} v={a.model_name ?? "—"} />
           <KV k={t("fallbackModel")} v={a.fallback_name ?? "—"} />
-          <KV k={t("promptVersion")} v={`${a.prompt_key}@v${a.prompt_version}`} />
+          <KV k={t("promptVersion")} v={<>{`${a.prompt_key}@v${a.prompt_version}`}{" "}
+            <Link className="text-xs text-accent" href={`/settings?tab=prompts#${a.prompt_key}`}>{tp("manage")}</Link></>} />
           <details className="mt-3"><summary className="cursor-pointer text-sm text-accent">{t("newVersion")}</summary>
             <div className="mt-3">
               <FieldForm path={`ai/agents/${a.agent_key}`} method="PUT" fields={[
@@ -160,7 +181,8 @@ async function Agents() {
                   type: "select", numeric: true, value: a.model_config_id ?? "", options: modelOpts },
                 { name: "fallback_model_config_id", label: t("fallbackModel"), type: "select", numeric: true,
                   value: a.fallback_model_config_id ?? "", options: modelOpts },
-                { name: "prompt_version", label: t("promptVersion"), type: "number", value: a.prompt_version },
+                { name: "prompt_version", label: t("promptVersion"), type: "select", numeric: true, value: a.prompt_version,
+                  options: versionsOf(a.prompt_key).map((p) => ({ value: String(p.version), label: label(p) })) },
                 { name: "max_output_tokens", label: "max output tokens", type: "number", value: a.max_output_tokens },
                 { name: "budget_usd_per_task", label: "budget / task (USD)", type: "number", value: a.budget_usd_per_task },
               ]} />
@@ -171,26 +193,62 @@ async function Agents() {
     </div>
   );
 }
-
 async function Prompts({ locale }: { locale: string }) {
-  const t = await getTranslations("settings");
+  const [t, tp] = await Promise.all([getTranslations("settings"), getTranslations("promptsX")]);
   const prompts = await nrGetOptional<Prompt[]>("ai/prompts");
   if (!prompts) return <NoAccess />;
-  const latest = new Map<string, Prompt>();
-  prompts.forEach((p) => { if (!latest.has(p.key)) latest.set(p.key, p); });
+  const keys = [...new Set(prompts.map((p) => p.key))];
   return (
     <div className="space-y-5">
-      {[...latest.values()].map((p) => (
-        <Panel key={p.key} title={`${p.key} v${p.version}`} hint={`${fmtTime(p.created_at, locale)} · ${p.notes ?? ""}`}>
-          <FieldForm path="ai/prompts" submitLabel={t("newVersion")} fields={[
-            { name: "key", label: "key", value: p.key, required: true },
-            { name: "notes", label: "notes" },
-            { name: "system_text", label: t("systemText"), type: "textarea", value: p.system_text, required: true },
-            { name: "user_template", label: t("userTemplate"), type: "textarea", value: p.user_template, required: true },
-          ]} />
-          <p className="mt-2 text-xs text-muted">{prompts.filter((x) => x.key === p.key).map((x) => `v${x.version}`).join(" · ")}</p>
-        </Panel>
-      ))}
+      <p className="text-xs text-muted">{tp("intro")}</p>
+      {keys.map((key) => {
+        const versions = prompts.filter((p) => p.key === key);
+        return (
+          <div key={key} id={key}>
+            <Panel title={key} hint={tp("versions", { n: versions.length })}>
+              <table className="w-full text-sm">
+                <thead><tr><th className={th}>{tp("version")}</th><th className={th}>{tp("created")}</th><th className={th}>{tp("notes")}</th>
+                  <th className={th}>{tp("usedBy")}</th><th className={th}>{tp("calls")}</th><th className={th} /></tr></thead>
+                <tbody>
+                  {versions.map((p) => (
+                    <tr key={p.version} className="border-b border-border/60 align-top">
+                      <td className={td}><b>v{p.version}</b></td>
+                      <td className={`${td} text-xs`}>{fmtTime(p.created_at, locale)}</td>
+                      <td className={`${td} max-w-xs whitespace-normal text-xs`}>{p.notes === "seed" ? tp("seed") : p.notes ?? ""}</td>
+                      <td className={td}>{p.active_for?.length ? <Badge tone="accent">{tp("current")}</Badge> : null}</td>
+                      <td className={td}>{p.calls}</td>
+                      <td className={`${td} space-x-2 text-xs`}>
+                        {!p.active_for?.length && (
+                          <Action path="ai/agents/prompt-version" body={{ prompt_version: p.version, agent_keys: [key] }}>{tp("use")}</Action>
+                        )}
+                        {p.deletable && (
+                          <Action path={`ai/prompts/${key}/${p.version}`} method="DELETE" tone="danger" confirm={tp("deleteConfirm", { v: p.version })}>
+                            {tp("delete")}
+                          </Action>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="mt-2 text-xs text-muted">{tp("deleteRule")}</p>
+              {versions.map((p) => (
+                <details key={p.version} className="mt-3">
+                  <summary className="cursor-pointer text-sm text-accent">{tp("viewEdit", { v: p.version })}</summary>
+                  <div className="mt-3">
+                    <FieldForm path="ai/prompts" submitLabel={t("newVersion")} successMessage={tp("saved")} fields={[
+                      { name: "key", label: "key", type: "select", value: key, options: [key] },
+                      { name: "notes", label: tp("notes"), placeholder: tp("notesHint"), wide: true },
+                      { name: "system_text", label: t("systemText"), type: "textarea", value: p.system_text, required: true },
+                      { name: "user_template", label: t("userTemplate"), type: "textarea", value: p.user_template, required: true },
+                    ]} />
+                  </div>
+                </details>
+              ))}
+            </Panel>
+          </div>
+        );
+      })}
     </div>
   );
 }

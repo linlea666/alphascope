@@ -613,5 +613,28 @@
       "wrong_angle": "wrong angle",
       "misleading": "misleading"
     }
+  },
+  "promptsX": {
+    "seed": "built-in",
+    "manage": "Manage prompts",
+    "switchTitle": "Switch prompt version",
+    "switchHint": "Point the general reporter and the five beat reporters at one version; a role without it is skipped with the reason. Only the prompt changes.",
+    "switchReporters": "All reporters to v{v}",
+    "switchConfirm": "Switch every reporter to prompt v{v}? Automatic drafts will use it.",
+    "intro": "Each role has its own prompt. Versions are never edited: saving creates a new version and the old ones stay, so every post traces back to its prompt. A version no role and no draft ever used can be deleted.",
+    "versions": "{n} versions",
+    "version": "Version",
+    "created": "Created",
+    "notes": "Notes",
+    "usedBy": "In use",
+    "calls": "Calls",
+    "current": "current",
+    "use": "Use it",
+    "delete": "Delete",
+    "deleteConfirm": "Delete prompt v{v}? This cannot be undone.",
+    "deleteRule": "Built-in versions and versions a role or a draft has used are kept for traceability; stop using them instead.",
+    "viewEdit": "View v{v} / save a new version from it",
+    "notesHint": "What changed, e.g. shorter hook, emoji allowed",
+    "saved": "Saved as a new version; pick it under AI roles to use it"
   }
 }

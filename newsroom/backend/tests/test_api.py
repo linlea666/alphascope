@@ -186,3 +186,38 @@ def test_ai_status_names_unbound_roles_and_one_click_binds_them(client, sf):
     eic = [a for a in client.get("/api/ai/agents", headers=h).json() if a["agent_key"] == "eic"]
     assert sorted(a["version"] for a in eic) == [1, 2]  # versioned, the old profile is kept
     assert client.post("/api/ai/agents/bind", json={"model_config_id": 999}, headers=h).status_code == 422
+
+
+def test_prompt_versions_switch_in_bulk_and_only_unused_ones_can_be_deleted(client, sf):
+    from tests.helpers import newsroom
+    newsroom(sf)
+    with sf() as s:
+        s.execute(text("UPDATE user_role SET role = 'admin' WHERE user_id = (SELECT id FROM app_user WHERE username = 'chief')"))
+        model = s.execute(text("SELECT model_config_id FROM ai_agent_profile WHERE agent_key = 'reporter'")).scalar()
+        s.commit()
+    h = login(client, "chief")
+    r = client.post("/api/ai/agents/prompt-version", json={"prompt_version": 3,
+                                                           "agent_keys": ["reporter", "reporter_breaking", "eic"]}, headers=h)
+    assert r.json()["changed"] == ["reporter", "reporter_breaking"]
+    assert r.json()["skipped"] == [{"agent": "eic", "reason": "no v3; available: v1, v2"}]
+    with sf() as s:
+        cur = s.execute(text("""SELECT prompt_version, model_config_id, max_output_tokens FROM ai_agent_profile
+                                WHERE agent_key = 'reporter' AND active""")).one()
+    assert cur == (3, model, 2500)  # nothing else about the role changed
+    bad = client.put("/api/ai/agents/eic", json={"prompt_version": 3}, headers=h)
+    assert bad.status_code == 422 and "available: v1, v2" in bad.json()["detail"]
+    assert client.put("/api/ai/agents/eic", json={"max_output_tokens": 3000}, headers=h).status_code == 200
+    with sf() as s:
+        assert s.execute(text("SELECT model_config_id FROM ai_agent_profile WHERE agent_key = 'eic' AND active")).scalar() == model
+    # a new version nobody used can go; a seed or a version a role has pointed at stays
+    v = client.post("/api/ai/prompts", json={"key": "reporter", "system_text": "x" * 30, "user_template": "write $language"},
+                    headers=h).json()["version"]
+    assert client.post("/api/ai/prompts", json={"key": "nobody", "system_text": "x" * 30, "user_template": "write it"},
+                       headers=h).status_code == 422
+    listed = {(p["key"], p["version"]): p for p in client.get("/api/ai/prompts", headers=h).json()}
+    assert listed[("reporter", v)]["deletable"] and not listed[("reporter", 3)]["deletable"]
+    assert listed[("reporter", 3)]["active_for"] == ["reporter"]
+    assert client.delete("/api/ai/prompts/reporter/3", headers=h).status_code == 409
+    assert client.delete(f"/api/ai/prompts/reporter/{v}", headers=h).status_code == 200
+    with sf() as s, pytest.raises(Exception, match="has been used"):
+        s.execute(text("DELETE FROM prompt_template WHERE key = 'reporter' AND version = 3"))

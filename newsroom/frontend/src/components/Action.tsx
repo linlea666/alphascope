@@ -9,7 +9,7 @@ import { button as buttonCls, primary as primaryCls } from "./ui";
 export function Action({ path, body, method = "POST", children, confirm, prompt, tone = "default", onDone }: {
   path: string;
   body?: unknown;
-  method?: "POST" | "PUT" | "PATCH";
+  method?: "POST" | "PUT" | "PATCH" | "DELETE";
   children: ReactNode;
   confirm?: string;
   prompt?: { label: string; field: string };
