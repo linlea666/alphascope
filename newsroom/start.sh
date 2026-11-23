@@ -53,7 +53,11 @@ case "$cmd" in
         fi
         systemctl restart "${SERVICES[@]}"
         verify_services
-        say "网页只监听本机：在你的电脑上运行  ssh -L $(web_port):localhost:$(web_port) root@服务器IP  然后打开 http://localhost:$(web_port)/zh"
+        if [[ "$(env_get NEWSROOM_WEB_HOST)" == 0.0.0.0 ]]; then
+            say "网页地址：http://$(hostname -I | awk '{print $1}'):$(web_port)/zh（明文 HTTP，建议日后加 HTTPS）"
+        else
+            say "网页只监听本机：在你的电脑上运行  ssh -L $(web_port):localhost:$(web_port) root@服务器IP  然后打开 http://localhost:$(web_port)/zh"
+        fi
         ;;
     update)
         lock_deployment

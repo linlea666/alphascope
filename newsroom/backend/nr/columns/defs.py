@@ -38,7 +38,8 @@ def _usd(f: Facts, fid: str, v, source: str, kind: str = "notional", **x) -> Non
 
 def copy_vs_board(s: Session, c: FeedClient, now: datetime, params: dict) -> list[ColumnIssue]:
     window = params.get("window", "30d")
-    d = c.research("copy_board", "/copy/board", {"window": window, "limit": 20}, "rows", "copy_board.row")
+    # AlphaScope backtests a capped pool, so look down the board for traders that have one
+    d = c.research("copy_board", "/copy/board", {"window": window, "limit": 100}, "rows", "copy_board.row")
     it = ColumnIssue("copy_vs_board", f"{week_key(now)}-{window}", title_zh=f"榜单收益 vs 跟单回测（{window}）",
                      title_en=f"Board ROI vs copy backtest ({window})", params={"window": window})
     f = it.facts
@@ -67,6 +68,8 @@ def copy_vs_board(s: Session, c: FeedClient, now: datetime, params: dict) -> lis
     if gaps:
         pct_fact(f, "median_gap", sorted(gaps)[len(gaps) // 2], "derived: median(board ROI - copy return)")
     count_fact(f, "traders", len(rows), "copy_board.rows")
+    count_fact(f, "board_size_checked", len(d["rows"]), "copy_board.rows",
+               label="board places checked; only traders AlphaScope backtests are shown")
     chart(f, "榜单 ROI 与跟单回测", "Board ROI vs copy backtest", chart_rows)
     return [it]
 
@@ -205,8 +208,10 @@ def funding_divergence(s: Session, c: FeedClient, now: datetime, params: dict) -
         f = it.facts
         f.constraints |= {"SCREEN_NOT_SIGNAL", "MATCHED_CONTROL", "OBSERVED_SAMPLE"}
         if d["funding"]["rate"] is not None:
-            pct_fact(f, "funding.rate", d["funding"]["rate"], "exchange_observation.funding.rate",
-                     label="Binance funding rate per settlement")
+            rate = D(d["funding"]["rate"])
+            shown = f"{rate * 100:.4f}%"  # funding rates are tiny: two decimals would read as 0%
+            f.add("funding.rate", "percent", rate, {"zh": [shown], "en": [shown]}, "exchange_observation.funding.rate",
+                  label="Binance funding rate per settlement")
         pct_fact(f, "funding.percentile", pc, "funding history rank (prior 12 months)")
         time_fact(f, "funding.at", d["funding"]["source_at"], "exchange_observation.funding.source_at")
         text_fact(f, "frame.venue", latest["venue"], "research_frame.venue")
@@ -328,36 +333,53 @@ def weekly_scorecard(s: Session, c: FeedClient, now: datetime, params: dict) -> 
     return [it]
 
 
-# ---- P3 long/short duel -----------------------------------------------------------------------------------------
+# ---- P3 long/short duel ------------------------------------------------------------------------------------------
+
+GROUPS = {("hyperliquid", "all"): ("Hyperliquid 观测钱包", "Hyperliquid wallets"),
+          ("okx", "all"): ("OKX 带单员", "OKX lead traders"),
+          ("all", "timing"): ("择时显著交易员", "Timing-significant traders"),
+          ("okx", "okx_board"): ("OKX 7 日榜上带单员", "OKX 7d board traders")}
+MIN_GROUP = 10  # fewer traders than this is an anecdote, not a group
+
 
 def long_short_duel(s: Session, c: FeedClient, now: datetime, params: dict) -> list[ColumnIssue]:
     out = []
     for coin in params.get("coins", COINS):
-        d = c.research("funding", "/research/funding", {"coin": coin, "hours": 168}, "frames", "funding.frame")
+        d = c.research("groups", "/market/groups", {"coin": coin}, "rows", "groups.row")
         it = ColumnIssue("long_short_duel", f"{week_key(now)}-{coin}", coin=coin, title_zh=f"{coin} 多空对决",
                          title_en=f"{coin} long/short duel")
         f = it.facts
-        f.constraints |= {"MATCHED_CONTROL", "OBSERVED_SAMPLE", "SCREEN_NOT_SIGNAL"}
-        frames = [fr for fr in d["frames"] if fr["divergence"] is not None and (fr["smart_n"] or 0) >= 5]
-        if len(frames) < 24:
-            it.blocking.append({"code": "INSUFFICIENT_SAMPLE", "detail": f"{len(frames)} usable hourly frames"})
-            out.append(it)
-            continue
-        latest = frames[0]
-        divs = [D(fr["divergence"]) for fr in frames]
-        pct_fact(f, "now.specialists_long", latest["smart_long"], "research_frame.metrics.smart.long_share")
-        pct_fact(f, "now.control_long", latest["control_long"], "research_frame.metrics.control.long_share")
-        count_fact(f, "now.specialists_n", latest["smart_n"], "research_frame.metrics.smart.n")
-        count_fact(f, "now.control_n", latest["control_n"], "research_frame.metrics.control.n")
-        time_fact(f, "now.at", latest["bucket_ts"], "research_frame.bucket_ts")
-        pct_fact(f, "week.mean_divergence", abs(sum(divs) / len(divs)), "mean of hourly divergence, 7 days")
-        text_fact(f, "week.lean", "specialists more long" if sum(divs) > 0 else "specialists more short",
-                  "sign of mean divergence")
-        count_fact(f, "week.frames", len(frames), "research_frame")
-        count_fact(f, "week.hours_specialists_longer", sum(x > 0 for x in divs), "research_frame")
-        chart(f, f"{coin} 专家组 vs 对照组 多头占比", f"{coin} specialists vs control: share long",
-              [{"label": {"zh": "专家组", "en": "Specialists"}, "fact_ids": ["now.specialists_long"]},
-               {"label": {"zh": "对照组", "en": "Control"}, "fact_ids": ["now.control_long"]}])
+        f.constraints |= {"OBSERVED_SAMPLE", "GROUPS_OVERLAP"}
+        latest = d["latest"]
+        now_rows = {(r["venue"], r["cohort"]): r for r in d["rows"] if r["bucket_ts"] == latest}
+        old_rows = {(r["venue"], r["cohort"]): r for r in d["rows"] if r["bucket_ts"] != latest}
+        chart_rows, used = [], 0
+        for key, (zh, en) in GROUPS.items():
+            r = now_rows.get(key)
+            n = (r["long_traders"] + r["short_traders"]) if r else 0
+            if n < MIN_GROUP:
+                continue
+            used += 1
+            g = f"{key[0]}_{key[1]}"
+            f.add(f"{g}.name", "text", zh, {"zh": [zh], "en": [en]}, "market_snapshot venue/cohort")
+            count_fact(f, f"{g}.traders", n, "market_snapshot long_traders + short_traders")
+            pct_fact(f, f"{g}.long_share", D(r["long_traders"]) / D(n), "market_snapshot (traders net long / all)")
+            gross = D(r["long_ntl"]) + D(r["short_ntl"])
+            if gross:
+                pct_fact(f, f"{g}.long_notional_share", D(r["long_ntl"]) / gross, "market_snapshot long_ntl / gross")
+            o = old_rows.get(key)
+            on = (o["long_traders"] + o["short_traders"]) if o else 0
+            if on >= MIN_GROUP:
+                pct_fact(f, f"{g}.long_share_week_ago", D(o["long_traders"]) / D(on), "market_snapshot 7 days earlier")
+            chart_rows.append({"label_fact": f"{g}.name", "fact_ids": [f"{g}.long_share", f"{g}.long_notional_share"]})
+        if latest:
+            time_fact(f, "snapshot.at", latest, "market_snapshot.bucket_ts")
+            if (b := stale(latest, now, 3, "hourly snapshot")):
+                it.blocking.append(b)
+        if used < 2:
+            it.blocking.append({"code": "INSUFFICIENT_SAMPLE", "detail": f"{used} groups with at least {MIN_GROUP} traders"})
+        count_fact(f, "groups", used, "market_snapshot")
+        chart(f, f"{coin} 各群体多头占比（人数 / 名义价值）", f"{coin} share long by group (traders / notional)", chart_rows)
         out.append(it)
     return out
 

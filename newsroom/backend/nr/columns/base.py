@@ -25,6 +25,7 @@ COLUMN_CONSTRAINTS = {
     "PUBLISHED_OUTCOMES": "Outcomes are read from later observations of the same positions; prices since publication "
                           "are mark prices at observation.",
     "HINDSIGHT": "This is a look back with information that was not available at the time.",
+    "GROUPS_OVERLAP": "Groups overlap (a cohort is part of its venue's sample); compare them side by side, never add them.",
 }
 CONSTRAINT_TEXT.update(COLUMN_CONSTRAINTS)
 

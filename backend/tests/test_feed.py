@@ -219,7 +219,7 @@ def test_at_risk_and_health(client, sf):
 def test_feed_is_get_only_and_read_only(client, sf):
     from app.api.feed import feed_session, router
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 12 and all(r.methods == {"GET"} and r.path.startswith("/api/v1/feed/") for r in routes)
+    assert len(routes) == 13 and all(r.methods == {"GET"} and r.path.startswith("/api/v1/feed/") for r in routes)
     with sf() as s:
         gen = feed_session(s)
         session = next(gen)
@@ -273,3 +273,12 @@ def test_research_column_endpoints(client, sf):
     row = cl["rows"][0]
     assert keys("closed.row") <= set(row) and row["prior_streak"] == 3 and row["prior_known"] is True
     assert row["realized_pnl"] == "-390"
+    with sf() as s:
+        for venue, lt, st in (("hyperliquid", 60, 40), ("okx", 30, 70)):
+            s.execute(text("""INSERT INTO market_snapshot (bucket_ts, venue, cohort, coin, observed, long_traders,
+                short_traders, long_ntl, short_ntl, lev10_long_ntl, lev10_short_ntl, lev20_long_ntl, lev20_short_ntl,
+                liq_known_ntl, opens, closes) VALUES (:t, :v, 'all', 'BTC', 100, :l, :s, 1, 1, 0, 0, 0, 0, 0, 0, 0)"""),
+                {"t": now.replace(minute=0, second=0, microsecond=0), "v": venue, "l": lt, "s": st})
+        s.commit()
+    gr = client.get("/api/v1/feed/market/groups", params={"coin": "BTC"}, headers=AUTH).json()
+    assert keys("groups") <= set(gr) and len(gr["rows"]) == 2 and keys("groups.row") <= set(gr["rows"][0])

@@ -422,3 +422,18 @@ def closed_cycles(hours: int = Query(48, ge=1, le=168), min_streak: int = Query(
             row = {k: v for k, v in r.items() if k != "wallet_id"}
             out.append(plain({**row, "prior_streak": streak, "prior_known": known}))
     return {"schema": SCHEMA, "as_of": now, "hours": hours, "rows": out}
+
+
+@router.get("/market/groups")
+def trader_groups(coin: str = Query("BTC", max_length=48), s: Session = Depends(feed_session)):
+    """Long / short split of each trader group in the latest hourly snapshot, and seven days earlier: Hyperliquid
+    wallets, OKX lead traders and the AlphaScope cohorts. Groups overlap (a cohort is part of its venue)."""
+    now = datetime.now(UTC)
+    latest = s.execute(text("SELECT max(bucket_ts) FROM market_snapshot WHERE coin = :c"), {"c": coin}).scalar()
+    out = []
+    if latest:
+        out = rows(s, """
+            SELECT venue, cohort, bucket_ts, long_traders, short_traders, long_ntl, short_ntl, observed
+            FROM market_snapshot WHERE coin = :c AND bucket_ts IN (:t, :w) ORDER BY bucket_ts DESC, venue, cohort""",
+            {"c": coin, "t": latest, "w": latest - timedelta(days=7)})
+    return {"schema": SCHEMA, "as_of": now, "coin": coin, "latest": latest, "rows": out}

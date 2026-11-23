@@ -351,6 +351,22 @@ REQUIRED: dict[str, list[str]] = {
         "coverage_status",
         "truncated"
     ],
+    "groups": [
+        "schema",
+        "as_of",
+        "coin",
+        "latest",
+        "rows"
+    ],
+    "groups.row": [
+        "venue",
+        "cohort",
+        "bucket_ts",
+        "long_traders",
+        "short_traders",
+        "long_ntl",
+        "short_ntl"
+    ],
 }
 
 

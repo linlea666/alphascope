@@ -179,3 +179,25 @@ def test_schedule_runs_on_the_right_days(sf):
     assert {"weekly_scorecard", "copy_vs_board", "liq_ladder", "streak_breaker", "funding_divergence"} <= set(queued)
     assert "recap" not in queued and "dossier" not in queued
     assert schedule.tick(sf, monday) == []  # already queued
+
+
+def test_long_short_duel_needs_real_groups(sf):
+    newsroom(sf)
+    feed = feed_with_health()
+    t = iso(NOW.replace(minute=0, second=0, microsecond=0))
+    def row(v, c, lt, st):
+        return {"venue": v, "cohort": c, "bucket_ts": t, "long_traders": lt, "short_traders": st, "long_ntl": str(lt * 1000),
+                "short_ntl": str(st * 1000), "observed": 100}
+    feed.research["/market/groups"] = {"schema": "feed.v1", "as_of": t, "coin": "BTC", "latest": t,
+                                       "rows": [row("hyperliquid", "all", 600, 400), row("okx", "all", 300, 700),
+                                                row("all", "timing", 3, 2)]}
+    issue = run(sf, feed, "long_short_duel", {"coins": ["BTC"]})["issues"][0]
+    assert issue["gate"] == "pass"
+    facts = {f["id"]: f for f in packet_of(sf, issue["event_id"])[1]["facts"]}
+    assert facts["hyperliquid_all.long_share"]["display"]["zh"][0] == "60%" and "all_timing.traders" not in facts
+    assert facts["groups"]["value"] == 2
+    feed.research["/market/groups"]["rows"] = [row("hyperliquid", "all", 600, 400)]
+    with feed.client() as c:
+        from nr.columns.run import build_column
+        again = build_column(sf, c, "long_short_duel", NOW, {"coins": ["ETH"]})["issues"][0]
+    assert again["gate"] == "blocked"
