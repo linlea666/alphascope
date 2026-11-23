@@ -34,6 +34,8 @@ export function FieldForm({ fields, path, method = "POST", submitLabel, showResu
   const [busy, setBusy] = useState(false);
   return (
     <form
+      // inputs are uncontrolled: when the saved values change (after a save and refresh), remount so they show them
+      key={JSON.stringify(fields.map((fd) => fd.value ?? null))}
       className="grid gap-3 md:grid-cols-2"
       action={async (f) => {
         setError(null);

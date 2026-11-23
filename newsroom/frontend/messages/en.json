@@ -254,7 +254,7 @@
   },
   "accounts": {
     "title": "Accounts",
-    "subtitle": "The number of accounts follows content value and audience, not volume. Publishing is manual; paused or unauthorized accounts cannot record posts.",
+    "subtitle": "The number of accounts follows content value and audience, not volume. An active account is ready to work; authorization is optional. Paused accounts get no coverage and cannot record posts, nor can accounts whose authorization is revoked or expired.",
     "handle": "X handle",
     "name": "Name",
     "positioning": "Positioning",
