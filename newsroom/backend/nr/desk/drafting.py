@@ -37,7 +37,7 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
             WHERE asg.id = :i"""), {"i": assignment_id}).mappings().first()
         if a is None or a["status"] not in ("accepted", "drafting") or a["article_id"] is None:
             raise HTTPException(409, "only accepted assignments are drafted")
-        if a["gate_status"] != "pass":
+        if a["gate_status"] != "pass" and a["source"] != "trial":  # a trial may run on any event; it can't be approved
             return {"skipped": "event gate is not passing"}
         packet = s.execute(text("SELECT content FROM fact_packet WHERE id = :p"), {"p": a["current_fact_packet_id"]}
                            ).scalar_one()

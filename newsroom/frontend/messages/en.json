@@ -16,7 +16,8 @@
     "assignments": "Desk",
     "calendar": "Calendar",
     "columns": "Columns",
-    "public": "Public"
+    "public": "Public",
+    "drafts": "AI drafts"
   },
   "common": {
     "save": "Save",
@@ -410,5 +411,46 @@
     "guide": "Writing guide",
     "forbidden": "Phrases to avoid (comma-separated)",
     "inherit": "Empty: use the base reporter's model"
+  },
+  "drafts": {
+    "title": "AI drafts",
+    "subtitle": "Every recent AI version: model, guard verdict, cost and latency. Failures are listed with their reason, such as no model configured or a gateway block.",
+    "waiting": "AI jobs waiting",
+    "failures": "Recent failures",
+    "noModel": "No working AI model yet: add and test one under Settings → AI models, then select it in AI roles.",
+    "days": "Days",
+    "allModels": "All models",
+    "allGuard": "Any guard result",
+    "current": "Current version",
+    "trial": "Trial",
+    "open": "Open",
+    "refreshing": "Generating; this page refreshes itself"
+  },
+  "trial": {
+    "title": "Quick trial",
+    "hint": "Pick accounts and models and generate drafts right away. Works on paused accounts and blocked events; a trial never changes the event and cannot go to review.",
+    "accounts": "Accounts",
+    "models": "Models (none = the role's default; several = one draft each to compare)",
+    "angle": "Angle (optional)",
+    "run": "Generate trial drafts",
+    "done": "Queued; results appear in the articles below",
+    "banner": "This is a trial draft: edit, compare and export it, but it cannot go to review. To use it, assign the event to this account."
+  },
+  "manage": {
+    "trash": "Delete",
+    "restore": "Restore",
+    "trashReason": "Reason (optional)",
+    "trashView": "Trash",
+    "export": "Export Markdown",
+    "bulk": "Bulk actions",
+    "submit": "Submit for review",
+    "kill": "Kill",
+    "selected": "Selected",
+    "origin": "Origin",
+    "any": "Any",
+    "trialOnly": "Trials only",
+    "realOnly": "Real only",
+    "deleted": "Deleted",
+    "versions": "Versions"
   }
 }

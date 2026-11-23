@@ -41,6 +41,10 @@ def post_id_for(s: Session, platform: str, handle: str, url: str) -> str:
 
 def submit(s: Session, article_id: int, user_id: int) -> None:
     art = versions.load(s, article_id)
+    if art["deleted_at"] is not None:
+        raise HTTPException(409, "the article is in the trash")
+    if s.execute(text("SELECT source FROM assignment WHERE id = :i"), {"i": art["assignment_id"]}).scalar() == "trial":
+        raise HTTPException(409, "a trial draft cannot go to review: assign the event to the account to use it")
     if art["status"] not in ("draft_ready", "changes_requested") or not art["current_version_id"]:
         raise HTTPException(409, f"article is {art['status']}")
     versions.set_status(s, article_id, "in_review")

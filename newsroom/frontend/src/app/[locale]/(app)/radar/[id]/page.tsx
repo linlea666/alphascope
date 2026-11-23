@@ -1,6 +1,8 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { Action } from "@/components/Action";
 import { AssignForm } from "@/components/AssignForm";
+import { AutoRefresh } from "@/components/AutoRefresh";
+import { TrialPanel } from "@/components/TrialPanel";
 import { ClassLabel, GateBadge, StateBadge } from "@/components/badges";
 import { FactsTable } from "@/components/FactsTable";
 import { Badge, Empty, KV, PageHeader, Panel, td, th } from "@/components/ui";
@@ -19,15 +21,18 @@ type Detail = {
   history: { from_state: string | null; to_state: string; at: string; actor_kind: string; username: string | null; reason: string | null }[];
   evaluations: { id: number; decision: string; priority: string; created_at: string; output: { explanation: string; newsworthiness: { factor: string; assessment: string; fact_ids: string[] }[]; recommended_accounts: { account_id: number; angle: string; reason: string; format: string; urgency: string }[]; silent_accounts: { account_id: number; reason: string }[]; follow_up: { watch_for: string[]; story: string }; risk_flags: string[] } }[];
   assignments: { id: number; account_id: number; handle: string; language: string; angle: string; reason: string; format: string; source: string; status: string; needs_human: boolean }[];
-  articles: { id: number; handle: string; language: string; status: string; headline: string | null; guard_status: string | null; fact_packet_version: number | null; origin: string | null }[];
+  articles: { id: number; handle: string; platform: string; language: string; status: string; headline: string | null; guard_status: string | null;
+    fact_packet_version: number | null; origin: string | null; model: string | null; source: string | null; deleted_at: string | null; versions: number }[];
+  pending_drafts: number;
   story: { id: number; story_key: string } | null;
   corrections: { id: number; status: string; material: boolean; changed_facts: string[]; detected_at: string }[];
 };
 
 export default async function EventPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [t, locale, d, accounts] = await Promise.all([getTranslations("events"), getLocale(), nrGet<Detail>(`events/${id}`),
-    nrGet<Account[]>("accounts")]);
+  const [t, tt, tdr, locale, d, accounts, models] = await Promise.all([getTranslations("events"), getTranslations("trial"),
+    getTranslations("drafts"), getLocale(), nrGet<Detail>(`events/${id}`), nrGet<Account[]>("accounts"),
+    nrGet<{ id: number; name: string; model: string; last_test_ok: boolean | null }[]>("ai/model-options")]);
   const e = d.event;
   const handle = (aid: number) => accounts.find((a) => a.id === aid)?.handle ?? aid;
   const bd = e.score_breakdown;
@@ -103,16 +108,24 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
               <AssignForm eventId={e.id} accounts={accounts.filter((a) => a.status === "active").map((a) => ({ id: a.id, handle: a.handle, language: a.language }))} />
             )}
           </Panel>
-          <Panel title={t("articles")}>
+          <Panel title={tt("title")}>
+            <TrialPanel eventId={e.id} venue={e.venue} models={models}
+              accounts={accounts.map((a) => ({ id: a.id, handle: a.handle, platform: a.platform, venues: a.venues ?? [], status: a.status, language: a.language }))} />
+          </Panel>
+          <Panel title={t("articles")} actions={<AutoRefresh active={d.pending_drafts > 0} label={`${tdr("refreshing")} (${d.pending_drafts})`} />}>
             {d.articles.length === 0 ? <Empty>—</Empty> : (
               <table className="w-full text-sm">
                 <tbody>
                   {d.articles.map((a) => (
-                    <tr key={a.id} className="border-b border-border/60">
+                    <tr key={a.id} className={`border-b border-border/60 ${a.deleted_at ? "opacity-50" : ""}`}>
                       <td className={td}><Link className="text-accent" href={`/desk/${a.id}`}>{t("openDesk")} #{a.id}</Link></td>
-                      <td className={td}>@{a.handle} · {a.language}</td>
+                      <td className={td}>{a.platform === "okx_square" ? "OKX 广场" : "X"} @{a.handle} · {a.language}</td>
                       <td className={`${td} max-w-sm truncate`}>{a.headline}</td>
-                      <td className={td}><StateBadge state={a.status} /> {a.guard_status && <Badge tone={a.guard_status === "pass" ? "up" : "down"}>{a.guard_status}</Badge>}</td>
+                      <td className={td}>
+                        <StateBadge state={a.status} /> {a.source === "trial" && <Badge tone="warn">{tdr("trial")}</Badge>}
+                        {a.guard_status && <Badge tone={a.guard_status === "pass" ? "up" : "down"}>{a.guard_status}</Badge>}
+                        <span className="text-xs text-muted"> v×{a.versions}{a.model ? ` · ${a.model}` : ""}</span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

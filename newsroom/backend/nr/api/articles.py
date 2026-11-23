@@ -34,9 +34,18 @@ def _account_of(s: Session, article_id: int) -> int:
 def list_articles(s: Session = Depends(get_session), user: CurrentUser = Depends(active_user),
                   account_id: int | None = None, status: str | None = None, language: str | None = None,
                   q: str | None = Query(None, max_length=200), event_class: str | None = None,
-                  since: datetime | None = None, limit: int = Query(100, le=500), offset: int = 0):
+                  since: datetime | None = None, origin: str | None = None, guard: str | None = None,
+                  model: str | None = Query(None, max_length=128), trial: bool | None = None, trash: bool = False,
+                  limit: int = Query(100, le=500), offset: int = 0):
     """The content library: every draft is kept and searchable (headline and body of the current version)."""
-    where, p = ["true"], {"n": limit, "o": offset}
+    where, p = ["a.deleted_at IS NOT NULL" if trash else "a.deleted_at IS NULL"], {"n": limit, "o": offset}
+    for col, val in (("v.origin", origin), ("v.guard_status", guard), ("v.model", model)):
+        if val:
+            where.append(f"{col} = :{col.split('.')[1]}")
+            p[col.split(".")[1]] = val
+    if trial is not None:
+        where.append(("" if trial else "NOT ") + "EXISTS (SELECT 1 FROM assignment t WHERE t.id = a.assignment_id "
+                     "AND t.source = 'trial')")
     vis = visible_accounts(s, user)
     if vis is not None:
         where.append("a.account_id = ANY(:vis)")
@@ -56,21 +65,27 @@ def list_articles(s: Session = Depends(get_session), user: CurrentUser = Depends
         p["q"] = f"%{q}%"
     cond = " AND ".join(where)
     base = f"""FROM article a JOIN news_event e ON e.id = a.news_event_id JOIN editorial_account acc ON acc.id = a.account_id
-               LEFT JOIN article_version v ON v.id = a.current_version_id WHERE {cond}"""
+               LEFT JOIN article_version v ON v.id = a.current_version_id
+               LEFT JOIN assignment asg ON asg.id = a.assignment_id WHERE {cond}"""
     return {"total": s.execute(text(f"SELECT count(*) {base}"), p).scalar(),
             "rows": rows(s, f"""SELECT a.id, a.news_event_id, a.account_id, acc.handle, a.language, a.status, a.updated_at,
                                        e.event_class, e.coin, v.headline, v.angle, v.origin, v.guard_status,
-                                       v.fact_packet_version, v.version_no
+                                       v.fact_packet_version, v.version_no, v.model, asg.source, a.deleted_at,
+                                       a.deleted_reason, acc.platform,
+                                       (SELECT count(*) FROM article_version x WHERE x.article_id = a.id) AS versions
                                 {base} ORDER BY a.updated_at DESC LIMIT :n OFFSET :o""", p)}
 
 
 @router.get("/articles/{article_id}")
 def article_detail(article_id: int, s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
     check_account(s, user, _account_of(s, article_id), "view")
-    art = one(s, """SELECT a.*, acc.handle, acc.display_name AS account_name, acc.long_post_allowed,
+    art = one(s, """SELECT a.*, acc.handle, acc.display_name AS account_name, acc.long_post_allowed, acc.platform,
                            acc.authorization_status, acc.authorization_expires_at, e.current_fact_packet_id,
-                           e.current_fact_version, e.gate_status, e.event_class, e.coin
+                           e.current_fact_version, e.gate_status, e.event_class, e.coin, asg.source,
+                           (SELECT count(*) FROM job j WHERE j.kind = 'draft_generate' AND j.status IN ('queued', 'running')
+                              AND (j.payload->>'assignment_id')::bigint = a.assignment_id) AS pending_jobs
                     FROM article a JOIN editorial_account acc ON acc.id = a.account_id
+                    LEFT JOIN assignment asg ON asg.id = a.assignment_id
                     JOIN news_event e ON e.id = a.news_event_id WHERE a.id = :a""", {"a": article_id})
     return {"article": art,
             "versions": rows(s, """SELECT v.id, v.version_no, v.origin, v.parent_version_id, u.username AS author,

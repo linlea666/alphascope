@@ -366,3 +366,179 @@ def new_style_version(body: StyleIn, s: Session = Depends(get_session), user: Cu
     audit.record(s, "style.version", "style", f"{body.key}@v{v}", user_id=user.id)
     s.commit()
     return {"key": body.key, "version": v}
+
+
+# ---- trial drafts: try models on any event without touching its workflow -------------------------------------------
+
+class TrialIn(BaseModel):
+    account_ids: list[int] = Field(min_length=1, max_length=6)
+    model_ids: list[int] = Field(default_factory=list, max_length=6)
+    angle: str = Field("", max_length=300)
+
+
+@router.post("/events/{event_id}/trial")
+def trial_drafts(event_id: int, body: TrialIn, s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
+    """One trial article per account (reused on later trials), one AI draft per chosen model (or the role's default).
+    Works on paused accounts and blocked events; trials never change the event and cannot be submitted for review."""
+    from nr.desk import assignment
+    ev = one(s, "SELECT state FROM news_event WHERE id = :e", {"e": event_id})
+    if ev is None:
+        raise HTTPException(404, "event not found")
+    if ev["state"] == "archived":
+        raise HTTPException(409, "event is archived")
+    if body.model_ids:
+        known = set(s.execute(text("SELECT id FROM ai_model_config WHERE enabled AND id = ANY(:i)"),
+                              {"i": body.model_ids}).scalars())
+        if missing := set(body.model_ids) - known:
+            raise HTTPException(422, f"unknown or disabled models {sorted(missing)}")
+    out = []
+    for acc in dict.fromkeys(body.account_ids):
+        check_account(s, user, acc, "draft")
+        aid = s.execute(text("""SELECT id FROM assignment WHERE news_event_id = :e AND account_id = :a AND source = 'trial'
+                                AND status IN ('accepted', 'drafting') ORDER BY id DESC LIMIT 1"""),
+                        {"e": event_id, "a": acc}).scalar()
+        if aid is None:
+            aid = assignment.create(s, event_id, acc, source="trial", status="accepted", user_id=user.id,
+                                    angle=body.angle, reason="trial")
+        art = s.execute(text("SELECT id FROM article WHERE assignment_id = :a"), {"a": aid}).scalar() \
+            or assignment.accept(s, aid, user.id)
+        models = body.model_ids or [None]
+        jobs = [enqueue(s, "draft_generate", {"assignment_id": aid, "user_id": user.id, "mode": "draft",
+                                              "model_config_id": m, "compare": len(models) > 1},
+                        dedupe_key=f"draft:{aid}:trial:{m}", priority=35) for m in models]
+        out.append({"account_id": acc, "article_id": art, "jobs": jobs})
+    audit.record(s, "article.trial", "news_event", event_id, user_id=user.id, after=body.model_dump())
+    s.commit()
+    return {"articles": out}
+
+
+# ---- trash, bulk actions, export, AI draft overview ---------------------------------------------------------------
+
+def _article(s: Session, article_id: int) -> dict:
+    a = one(s, "SELECT id, account_id, status, deleted_at, current_version_id FROM article WHERE id = :a", {"a": article_id})
+    if a is None:
+        raise HTTPException(404, "article not found")
+    return a
+
+
+def trash_article(s: Session, user: CurrentUser, article_id: int, reason: str) -> None:
+    a = _article(s, article_id)
+    check_account(s, user, a["account_id"], "draft")
+    if a["status"] in ("published", "retracted"):
+        raise HTTPException(409, "published articles are retracted, not deleted")
+    s.execute(text("""UPDATE article SET deleted_at = now(), deleted_by = :u, deleted_reason = :r,
+                             status = CASE WHEN status IN ('in_review', 'approved') THEN 'killed' ELSE status END,
+                             updated_at = now() WHERE id = :a"""), {"u": user.id, "r": reason, "a": article_id})
+    s.execute(text("UPDATE publication_plan SET status = 'cancelled' WHERE article_id = :a AND status IN ('planned', 'claimed')"),
+              {"a": article_id})
+    audit.record(s, "article.trash", "article", article_id, user_id=user.id, account_id=a["account_id"], reason=reason)
+
+
+def restore_article(s: Session, user: CurrentUser, article_id: int) -> None:
+    a = _article(s, article_id)
+    check_account(s, user, a["account_id"], "draft")
+    s.execute(text("""UPDATE article SET deleted_at = NULL, deleted_by = NULL, deleted_reason = NULL, updated_at = now(),
+                             status = CASE WHEN status = 'killed' THEN
+                                 CASE WHEN current_version_id IS NULL THEN 'drafting' ELSE 'draft_ready' END ELSE status END
+                      WHERE id = :a"""), {"a": article_id})
+    audit.record(s, "article.restore", "article", article_id, user_id=user.id, account_id=a["account_id"])
+
+
+class TrashIn(BaseModel):
+    reason: str = Field("", max_length=500)
+
+
+@router.post("/articles/{article_id}/trash")
+def trash(article_id: int, body: TrashIn, s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
+    trash_article(s, user, article_id, body.reason)
+    s.commit()
+    return {"ok": True}
+
+
+@router.post("/articles/{article_id}/restore")
+def restore(article_id: int, s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
+    restore_article(s, user, article_id)
+    s.commit()
+    return {"ok": True}
+
+
+class BulkIn(BaseModel):
+    ids: list[int] = Field(min_length=1, max_length=200)
+    action: Literal["trash", "restore", "submit", "kill"]
+    reason: str = Field("", max_length=500)
+
+
+@router.post("/articles/bulk")
+def bulk(body: BulkIn, s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
+    """Each article is handled on its own: one refusal does not undo the others."""
+    done, failed = [], []
+    for aid in dict.fromkeys(body.ids):
+        try:
+            with s.begin_nested():
+                if body.action == "trash":
+                    trash_article(s, user, aid, body.reason)
+                elif body.action == "restore":
+                    restore_article(s, user, aid)
+                elif body.action == "submit":
+                    check_account(s, user, _article(s, aid)["account_id"], "draft")
+                    pub.submit(s, aid, user.id)
+                else:
+                    check_account(s, user, _article(s, aid)["account_id"], "review")
+                    pub.kill(s, aid, user.id, body.reason)
+            done.append(aid)
+        except HTTPException as exc:
+            failed.append({"id": aid, "error": exc.detail if isinstance(exc.detail, str) else str(exc.detail)})
+    s.commit()
+    return {"done": done, "failed": failed}
+
+
+@router.get("/articles/{article_id}/export")
+def export_article(article_id: int, s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
+    """The current version as Markdown, with the facts it cites and the guard verdict."""
+    from fastapi.responses import PlainTextResponse
+    a = _article(s, article_id)
+    check_account(s, user, a["account_id"], "view")
+    v = one(s, """SELECT v.*, acc.handle, acc.platform, p.content FROM article ar JOIN article_version v ON v.id = ar.current_version_id
+                  JOIN editorial_account acc ON acc.id = ar.account_id JOIN fact_packet p ON p.id = v.fact_packet_id
+                  WHERE ar.id = :a""", {"a": article_id})
+    if v is None:
+        raise HTTPException(404, "no version yet")
+    facts = {f["id"]: f for f in v["content"]["facts"]}
+    lines = [f"# {v['headline'] or '(no headline)'}", "", f"@{v['handle']} · {v['platform']} · v{v['version_no']} · "
+             f"{v['origin']}{' · ' + v['model'] if v['model'] else ''} · guard {v['guard_status']}", "", v["body"]]
+    lines += [f"\n{t}" for t in (v["thread"] or [])]
+    lines += ["", "## Facts cited", *[f"- {fid}: {(facts.get(fid) or {}).get('display', {}).get('zh', ['?'])[0]}"
+                                     for fid in v["facts_used"]]]
+    if v["guard_report"]["findings"]:
+        lines += ["", "## Guard findings", *[f"- [{f['code']}] {f['text']} — {f['detail']}"
+                                            for f in v["guard_report"]["findings"]]]
+    return PlainTextResponse("\n".join(lines), headers={"content-disposition": f'attachment; filename="article-{article_id}.md"'})
+
+
+@router.get("/drafts/ai")
+def ai_drafts(s: Session = Depends(get_session), user: CurrentUser = Depends(active_user),
+              days: int = Query(7, ge=1, le=90), model: str | None = None, guard: str | None = None):
+    vis = visible_accounts(s, user)
+    since = now() - timedelta(days=days)
+    p = {"since": since, "vis": vis, "model": model, "guard": guard}
+    return {
+        "versions": rows(s, f"""
+            SELECT v.id, v.article_id, v.version_no, v.model, v.agent_key, v.prompt_ref, v.headline, v.body, v.guard_status,
+                   (v.guard_report->>'x_length')::int AS length, v.created_at, (ar.current_version_id = v.id) AS is_current,
+                   ar.status AS article_status, ar.deleted_at IS NOT NULL AS deleted, asg.source, acc.handle, acc.platform,
+                   e.id AS event_id, e.event_class, e.coin, c.cost_usd, c.latency_ms
+            FROM article_version v JOIN article ar ON ar.id = v.article_id JOIN editorial_account acc ON acc.id = ar.account_id
+            JOIN news_event e ON e.id = ar.news_event_id LEFT JOIN assignment asg ON asg.id = ar.assignment_id
+            LEFT JOIN ai_call_log c ON c.id = v.ai_call_id
+            WHERE v.origin = 'ai' AND v.created_at > :since {"AND ar.account_id = ANY(:vis)" if vis is not None else ""}
+                  {"AND v.model = :model" if model else ""} {"AND v.guard_status = :guard" if guard else ""}
+            ORDER BY v.id DESC LIMIT 300""", p),
+        "failures": rows(s, """
+            SELECT c.created_at, c.purpose, c.model, c.status, c.error, c.article_id, c.news_event_id
+            FROM ai_call_log c WHERE c.status <> 'ok' AND c.created_at > :since ORDER BY c.id DESC LIMIT 50""",
+            {"since": since}),
+        "waiting": rows(s, """SELECT kind, count(*) AS n, max(last_error) AS last_error FROM job
+                              WHERE kind IN ('eic_evaluate', 'draft_generate') AND status IN ('queued', 'running')
+                              GROUP BY kind"""),
+        "models": rows(s, "SELECT DISTINCT model FROM article_version WHERE origin = 'ai' AND model IS NOT NULL"),
+    }

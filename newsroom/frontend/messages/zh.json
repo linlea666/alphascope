@@ -16,7 +16,8 @@
     "assignments": "任务台",
     "calendar": "发布日历",
     "columns": "栏目",
-    "public": "公开页"
+    "public": "公开页",
+    "drafts": "AI 稿件"
   },
   "common": {
     "save": "保存",
@@ -410,5 +411,46 @@
     "guide": "写作指南",
     "forbidden": "禁用表达（逗号分隔）",
     "inherit": "留空则使用通用记者的模型"
+  },
+  "drafts": {
+    "title": "AI 稿件",
+    "subtitle": "最近所有 AI 生成的版本：模型、守卫结果、费用和耗时。生成失败的原因也在这里，比如没配模型或被网关拦截。",
+    "waiting": "排队等待的 AI 任务",
+    "failures": "最近失败",
+    "noModel": "还没有可用的 AI 模型：到系统管理 → AI 模型 添加并测试，再在 AI 角色里选上。",
+    "days": "天数",
+    "allModels": "全部模型",
+    "allGuard": "全部守卫结果",
+    "current": "当前版本",
+    "trial": "试写",
+    "open": "打开",
+    "refreshing": "生成中，页面会自动刷新"
+  },
+  "trial": {
+    "title": "快速试写",
+    "hint": "选账号和模型，马上生成草稿看效果。可用于暂停的账号和被阻断的事件；试写不会改变事件状态，也不能提交审核。",
+    "accounts": "账号",
+    "models": "模型（不选则用角色默认模型；选多个会各写一版对比）",
+    "angle": "角度（可选）",
+    "run": "生成试写稿",
+    "done": "已排队，结果会出现在下面的稿件里",
+    "banner": "这是试写稿：可以修改、对比、导出，但不能提交审核。要正式使用，请在事件页把它分派给这个账号。"
+  },
+  "manage": {
+    "trash": "删除",
+    "restore": "恢复",
+    "trashReason": "删除原因（可选）",
+    "trashView": "回收站",
+    "export": "导出 Markdown",
+    "bulk": "批量操作",
+    "submit": "提交审核",
+    "kill": "作废",
+    "selected": "已选",
+    "origin": "来源",
+    "any": "全部",
+    "trialOnly": "只看试写",
+    "realOnly": "只看正式",
+    "deleted": "已删除",
+    "versions": "版本数"
   }
 }

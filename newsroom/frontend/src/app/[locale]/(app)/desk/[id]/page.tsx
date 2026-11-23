@@ -1,6 +1,8 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { ClassLabel, StateBadge } from "@/components/badges";
+import { Action } from "@/components/Action";
 import { AiStudio } from "@/components/AiStudio";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import { DeskEditor } from "@/components/DeskEditor";
 import { ScheduleForm } from "@/components/ScheduleForm";
 import { FactsTable } from "@/components/FactsTable";
@@ -14,7 +16,8 @@ import type { Account, Me, Packet, Version } from "@/lib/types";
 type ArticleDetail = {
   article: { id: number; news_event_id: number; account_id: number; handle: string; account_name: string; language: string; status: string;
     current_version_id: number | null; current_fact_packet_id: number; platform: string; current_fact_version: number; gate_status: string;
-    event_class: string; coin: string; authorization_status: string; authorization_expires_at: string | null; stale_reason: string | null };
+    event_class: string; coin: string; authorization_status: string; authorization_expires_at: string | null; stale_reason: string | null;
+    deleted_at: string | null; deleted_reason: string | null; source: string | null; pending_jobs: number };
   versions: Version[];
   publications: { id: number; x_url: string; published_at: string; status: string; matches_version: boolean }[];
   audit: { at: string; action: string; username: string | null; reason: string | null }[];
@@ -26,7 +29,8 @@ const EDITABLE = ["drafting", "draft_ready", "changes_requested", "stale", "in_r
 
 export default async function DeskPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [t, tc, ts, locale] = await Promise.all([getTranslations("desk"), getTranslations("common"), getTranslations("studio"), getLocale()]);
+  const [t, tc, ts, tm, tt, tdr, locale] = await Promise.all([getTranslations("desk"), getTranslations("common"), getTranslations("studio"),
+    getTranslations("manage"), getTranslations("trial"), getTranslations("drafts"), getLocale()]);
   const d = await nrGetOptional<ArticleDetail>(`articles/${id}`);
   if (!d) return <Empty>{tc("noAccess")}</Empty>;
   const a = d.article;
@@ -49,8 +53,17 @@ export default async function DeskPage({ params }: { params: Promise<{ id: strin
         title={<span>{t("title")} · #{a.id} @{a.handle}</span>}
         subtitle={<span><Link className="text-accent" href={`/radar/${a.news_event_id}`}>#{a.news_event_id}</Link> <ClassLabel cls={a.event_class} /> · {a.coin} · {a.language}</span>}
       >
-        <StateBadge state={a.status} />
+        <div className="flex flex-wrap items-center gap-2">
+          <StateBadge state={a.status} />
+          <AutoRefresh active={a.pending_jobs > 0} label={`${tdr("refreshing")} (${a.pending_jobs})`} />
+          <a className="text-sm text-accent" href={`/api/bff/articles/${a.id}/export`}>{tm("export")}</a>
+          {perms.has("draft") && !["published", "retracted"].includes(a.status) && (a.deleted_at
+            ? <Action path={`articles/${a.id}/restore`}>{tm("restore")}</Action>
+            : <Action path={`articles/${a.id}/trash`} body={{ reason: "" }} prompt={{ label: tm("trashReason"), field: "reason" }} tone="danger">{tm("trash")}</Action>)}
+        </div>
       </PageHeader>
+      {a.source === "trial" && <div className="mb-3 rounded border border-warn/40 bg-warn/10 px-4 py-2 text-sm text-warn">{tt("banner")}</div>}
+      {a.deleted_at && <div className="mb-3 rounded border border-down/40 bg-down/10 px-4 py-2 text-sm">{tm("deleted")} · {fmtTime(a.deleted_at, locale)} {a.deleted_reason}</div>}
       <p className="mb-4 text-xs text-muted">{t("aiNote")}</p>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)_minmax(0,1fr)]">
         <Panel title={t("facts")}>
@@ -72,10 +85,10 @@ export default async function DeskPage({ params }: { params: Promise<{ id: strin
         <div className="space-y-5">
           <Panel title={t("draft")}>
             <DeskEditor articleId={a.id} status={a.status} current={current} versions={d.versions} facts={packet.facts}
-              currentPacketId={a.current_fact_packet_id} editable={perms.has("draft") && EDITABLE.includes(a.status)} />
+              currentPacketId={a.current_fact_packet_id} editable={perms.has("draft") && EDITABLE.includes(a.status) && !a.deleted_at} />
           </Panel>
           <Panel title={ts("aiActions")}>
-            <AiStudio articleId={a.id} models={models} editable={perms.has("draft") && EDITABLE.includes(a.status)} />
+            <AiStudio articleId={a.id} models={models} editable={perms.has("draft") && EDITABLE.includes(a.status) && !a.deleted_at} />
           </Panel>
         </div>
         <div className="space-y-5">

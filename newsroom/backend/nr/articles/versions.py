@@ -78,6 +78,8 @@ def save_version(s: Session, article_id: int, d: Draft, *, origin: str, user_id:
                  ai_call_id: int | None = None, agent_key: str | None = None, prompt_ref: str | None = None,
                  model: str | None = None, fact_packet_id: int | None = None, make_current: bool | None = None) -> dict:
     art = load(s, article_id)
+    if art["deleted_at"] is not None:
+        raise HTTPException(409, "the article is in the trash: restore it first")
     if art["status"] not in EDITABLE:
         raise HTTPException(409, f"article is {art['status']}")
     packet_id = fact_packet_id or art["current_fact_packet_id"]

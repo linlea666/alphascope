@@ -77,11 +77,17 @@ def event_detail(event_id: int, s: Session = Depends(get_session), user: Current
         "assignments": rows(s, """SELECT a.*, acc.handle, acc.language FROM assignment a
                                   JOIN editorial_account acc ON acc.id = a.account_id WHERE a.news_event_id = :e
                                   ORDER BY a.id""", {"e": event_id}),
-        "articles": rows(s, """SELECT ar.id, ar.account_id, acc.handle, ar.language, ar.status, ar.current_version_id,
-                                      v.headline, v.guard_status, v.fact_packet_version, v.origin
+        "articles": rows(s, """SELECT ar.id, ar.account_id, acc.handle, acc.platform, ar.language, ar.status,
+                                      ar.current_version_id, ar.deleted_at, asg.source, v.headline, v.guard_status,
+                                      v.fact_packet_version, v.origin, v.model,
+                                      (SELECT count(*) FROM article_version x WHERE x.article_id = ar.id) AS versions
                                FROM article ar JOIN editorial_account acc ON acc.id = ar.account_id
+                               LEFT JOIN assignment asg ON asg.id = ar.assignment_id
                                LEFT JOIN article_version v ON v.id = ar.current_version_id
-                               WHERE ar.news_event_id = :e ORDER BY ar.id""", {"e": event_id}),
+                               WHERE ar.news_event_id = :e ORDER BY ar.deleted_at NULLS FIRST, ar.id""", {"e": event_id}),
+        "pending_drafts": s.execute(text("""SELECT count(*) FROM job j JOIN assignment a ON a.id = (j.payload->>'assignment_id')::bigint
+                                            WHERE j.kind = 'draft_generate' AND j.status IN ('queued', 'running')
+                                              AND a.news_event_id = :e"""), {"e": event_id}).scalar(),
         "story": one(s, "SELECT * FROM news_story WHERE id = :s", {"s": ev["story_id"]}) if ev["story_id"] else None,
         "corrections": rows(s, "SELECT * FROM correction_record WHERE news_event_id = :e ORDER BY id DESC",
                             {"e": event_id}),
