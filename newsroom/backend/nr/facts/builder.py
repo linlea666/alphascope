@@ -15,7 +15,7 @@ from decimal import Decimal
 from nr.facts import fmt
 
 SCHEMA = "fp.v1"
-BUILDER_VERSION = "facts-2"
+BUILDER_VERSION = "facts-3"
 SCORE_VERSION = "s1"
 HOLDING_CLASSES = ("whale_open", "flip", "whale_add", "underwater_add", "near_liquidation", "notable_trader_move")
 MAJOR_COINS = ("BTC", "ETH", "SOL", "HYPE")
@@ -610,7 +610,7 @@ def material_changes(old: dict | None, new: dict) -> list[str]:
     count or classification, a size change of 10% or more. Mark-driven values alone never count."""
     if old is None:
         return ["<new>"]
-    out = []
+    out = ["<builder>"] if old.get("builder_version") != new.get("builder_version") else []  # new facts to carry
     if old["event"] != new["event"]:
         out.append("<event>")
     if old["gate"] != new["gate"]:

@@ -57,7 +57,7 @@
 
 `book.*`、`crowd.*` 随别人的仓位和价格变化，不触发新的事实包版本（`VOLATILE_PREFIXES`）；其余新出现的对照事实属于实质变化。
 
-写作辅助事实（facts-2 追加）：`change.recency`（刚刚 / 过去几小时 / 过去24小时，写稿时按当时重算）、`crowd.sample_traders`（我们追踪的地址数，“约1.4万”）、`trader.pnl_series`（排行榜累计盈亏曲线，只用于图卡，不发给模型）。展示串第一位是取整后的写法（2812万美元、267枚BTC、6.35万）。`subject.trader_ref` 是短地址 `0x9ee…be185`，`subject.explorer_url` 是 Hypurrscan 链接。
+写作辅助事实（facts-3 追加；构建器版本变化本身算实质变化，旧事件下次刷新就会带上新事实）：`change.recency`（刚刚 / 过去几小时 / 过去24小时，写稿时按当时重算）、`crowd.sample_traders`（我们追踪的地址数，“约1.4万”）、`trader.pnl_series`（排行榜累计盈亏曲线，只用于图卡，不发给模型）。展示串第一位是取整后的写法（2812万美元、267枚BTC、6.35万）。`subject.trader_ref` 是短地址 `0x9ee…be185`，`subject.explorer_url` 是 Hypurrscan 链接。
 
 ## 2. 事实守卫（硬门，不可绕过）
 

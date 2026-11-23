@@ -111,3 +111,10 @@ def test_radar_memory_compares_with_earlier_positions_on_the_coin(sf):
     assert Decimal(fact(pk, "radar.vs_largest_prior_peak")["value"]) == 6
     assert fact(pk, "radar.since")["coverage"]["since"].startswith((T0 - timedelta(days=5)).date().isoformat())
     assert "RADAR_SINCE" in codes(pk)
+
+
+def test_a_builder_upgrade_rebuilds_the_packet():
+    from nr.facts.builder import material_changes
+    old = {"builder_version": "facts-2", "event": {}, "gate": {}, "facts": []}
+    assert material_changes(old, {**old, "builder_version": "facts-3"}) == ["<builder>"]
+    assert material_changes(old, dict(old)) == []
