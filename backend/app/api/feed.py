@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.api.common import venue_clause
 from app.api.market import LIQ_TOLERANCE
 from app.config import Settings, get_settings
 from app.db import get_session
@@ -313,17 +314,17 @@ def okx_dropouts(days: int = Query(30, ge=1, le=180), max_best_rank: int = Query
 
 
 @router.get("/market/structure")
-def market_structure(coin: str = Query("BTC", max_length=48), s: Session = Depends(feed_session)):
+def market_structure(coin: str = Query("BTC", max_length=48), venue: Venue = "all", s: Session = Depends(feed_session)):
     """Entry and liquidation structure of the observed sample for one coin (venue-reported liquidation prices only)."""
     from app.api.market import positioning_structure
     now = datetime.now(UTC)
-    data = positioning_structure(session=s, coin=coin, venue="all", cohort="all", min_lev=0, entry_span=40,
+    data = positioning_structure(session=s, coin=coin, venue=venue, cohort="all", min_lev=0, entry_span=40,
                                  liq_span=30, bins=60)
     for side in ("long", "short"):
         near = (data.get("liquidations") or {}).get(side, {}).get("nearest") if data.get("ref") else None
         if near:
             near["trader_key"] = near.pop("address", None)
-    return {"schema": SCHEMA, "as_of": now, "coverage": plain(stats.coverage(s, "all", "all", now)),
+    return {"schema": SCHEMA, "as_of": now, "venue": venue, "coverage": plain(stats.coverage(s, venue, "all", now)),
             **plain(data)}
 
 
@@ -377,24 +378,25 @@ def funding_and_divergence(coin: str = Query("BTC", max_length=12), hours: int =
 
 
 @router.get("/cycles/holding")
-def holding_profile(days: int = Query(90, ge=7, le=365), s: Session = Depends(feed_session)):
+def holding_profile(days: int = Query(90, ge=7, le=365), venue: Venue = "all", s: Session = Depends(feed_session)):
     """How long complete closed cycles were held, winners against losers (net of fees), per scale."""
     now = datetime.now(UTC)
-    out = rows(s, """
+    out = rows(s, f"""
         SELECT scale, (realized_pnl - fees > 0) AS winner, count(*) AS n,
                percentile_cont(0.25) WITHIN GROUP (ORDER BY holding_hours) AS p25,
                percentile_cont(0.5) WITHIN GROUP (ORDER BY holding_hours) AS median,
                percentile_cont(0.75) WITHIN GROUP (ORDER BY holding_hours) AS p75,
-               count(DISTINCT wallet_id) AS traders
-        FROM position_cycle
+               count(DISTINCT c.wallet_id) AS traders
+        FROM position_cycle c JOIN wallet w ON w.id = c.wallet_id
         WHERE scale IN ('scalp', 'short', 'swing', 'macro') AND closed_at > :since AND complete AND status <> 'open'
+              {venue_clause(venue)}
         GROUP BY 1, 2 ORDER BY 1, 2""", {"since": now - timedelta(days=days)})
-    return {"schema": SCHEMA, "as_of": now, "days": days, "rows": out}
+    return {"schema": SCHEMA, "as_of": now, "days": days, "venue": venue, "rows": out}
 
 
 @router.get("/cycles/closed")
 def closed_cycles(hours: int = Query(48, ge=1, le=168), min_streak: int = Query(0, ge=0, le=50),
-                  limit: int = Query(200, ge=1, le=1000), s: Session = Depends(feed_session)):
+                  limit: int = Query(200, ge=1, le=1000), venue: Venue = "all", s: Session = Depends(feed_session)):
     """Complete cycles closed recently, with the winning streak that preceded each (complete cycles only, net of fees)
     and whether that streak's start is known (a loss before it). Cycles are keyed naturally: rebuilds change ids."""
     now = datetime.now(UTC)
@@ -404,7 +406,7 @@ def closed_cycles(hours: int = Query(48, ge=1, le=168), min_streak: int = Query(
                c.realized_pnl, c.fees, f.status AS coverage_status, f.truncated, f.earliest_fill_at
         FROM position_cycle c JOIN wallet w ON w.id = c.wallet_id LEFT JOIN fill_sync f ON f.wallet_id = c.wallet_id
         WHERE c.scale IN ('scalp', 'short', 'swing', 'macro') AND c.closed_at > :since AND c.complete
-          AND c.status <> 'open'
+          AND c.status <> 'open'""" + venue_clause(venue) + """
         ORDER BY c.closed_at DESC LIMIT :n"""), {"since": now - timedelta(hours=hours), "n": limit}).mappings().all()
     out = []
     for r in recent:

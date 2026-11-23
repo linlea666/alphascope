@@ -259,16 +259,18 @@ def test_research_column_endpoints(client, sf):
     assert cb["rows"][0]["copy_ret"] == "0.41" and cb["rows"][0]["approx_equity"] is True
     do = client.get("/api/v1/feed/okx/dropouts", headers=AUTH).json()
     assert keys("dropouts") <= set(do) and keys("dropouts.row") <= set(do["rows"][0]) and do["rows"][0]["best_rank"] == 4
-    st = client.get("/api/v1/feed/market/structure", params={"coin": "BTC"}, headers=AUTH).json()
+    st = client.get("/api/v1/feed/market/structure", params={"coin": "BTC", "venue": "hyperliquid"}, headers=AUTH).json()
     assert keys("structure") <= set(st)
     fc = client.get("/api/v1/feed/research/forecasts", headers=AUTH).json()
     assert keys("forecasts") <= set(fc) and fc["status"] == "shadow"
     fu = client.get("/api/v1/feed/research/funding", headers=AUTH).json()
     assert keys("funding") <= set(fu)
-    ho = client.get("/api/v1/feed/cycles/holding", headers=AUTH).json()
+    assert client.get("/api/v1/feed/cycles/holding", params={"venue": "okx"}, headers=AUTH).json()["rows"] == []
+    ho = client.get("/api/v1/feed/cycles/holding", params={"venue": "hyperliquid"}, headers=AUTH).json()
     assert keys("holding") <= set(ho) and {r["winner"] for r in ho["rows"]} == {True, False}
     assert keys("holding.row") <= set(ho["rows"][0])
-    cl = client.get("/api/v1/feed/cycles/closed", params={"min_streak": 3}, headers=AUTH).json()
+    assert client.get("/api/v1/feed/cycles/closed", params={"min_streak": 3, "venue": "okx"}, headers=AUTH).json()["rows"] == []
+    cl = client.get("/api/v1/feed/cycles/closed", params={"min_streak": 3, "venue": "hyperliquid"}, headers=AUTH).json()
     assert keys("closed") <= set(cl) and len(cl["rows"]) == 1
     row = cl["rows"][0]
     assert keys("closed.row") <= set(row) and row["prior_streak"] == 3 and row["prior_known"] is True
