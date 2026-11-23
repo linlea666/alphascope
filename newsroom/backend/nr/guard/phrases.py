@@ -30,6 +30,8 @@ WHOLE_MARKET = re.compile(r"全市场|全网|所有交易者|所有人|整个市
 IDENTITY = re.compile(r"(疑似|可能|或为|据传|应该是|大概率是|就是)\S{0,10}(机构|基金|交易所|做市商|内幕|项目方|团队)|内幕|知情人|"
                       r"\binsiders?\b|\binside information\b|\b(?:is|was) (?:likely|probably|reportedly) (?:a|an|the) "
                       r"(?:fund|institution|exchange|market maker)\b|\bbelongs to\b|\bowned by\b|\bcontrolled by\b", re.I)
+# "高1.2倍" reads as 2.2 times in Chinese; a ratio fact of 1.2 means "是…的1.2倍"
+RATIO_AS_INCREASE = re.compile(r"(?:高出|多出|大出|增加|增长|上涨|翻|高|多|大)了?\s*\d+(?:\.\d+)?\s*倍")
 ADVICE = re.compile(r"稳赚|必涨|必跌|包赚|建议(?:买入|卖出|做多|做空|跟单|抄底)|赶紧(?:买|跟)|无脑|\bguaranteed\b|\bcan'?t lose\b|"
                     r"\bshould (?:buy|sell|long|short)\b|(?<!not )\bfinancial advice\b", re.I)
 
@@ -101,6 +103,8 @@ def check(text: str, packet: dict, forbidden: list[str]) -> list[Finding]:
             flag("WHOLE_MARKET_CLAIM", start, m, "the data is an observed sample, not the whole market")
         for m in IDENTITY.finditer(sent):
             flag("IDENTITY_CLAIM", start, m, "do not guess who controls the account or imply inside information")
+        for m in RATIO_AS_INCREASE.finditer(sent):
+            flag("RATIO_AS_INCREASE", start, m, "'高/多 X 倍' reads as X+1 times: write '是…的X倍'")
         for m in ADVICE.finditer(sent):
             flag("ADVICE_OR_GUARANTEE", start, m, "no trading advice or guaranteed outcomes")
         for phrase in forbidden:

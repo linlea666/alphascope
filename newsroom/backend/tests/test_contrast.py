@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from sqlalchemy import text
 
-from nr.guard import numbers
+from nr.guard import numbers, phrases
 from tests.fakes import T0, WHALE, FakeFeed, context, cycle, ev, iso, position
 from tests.pipeline import pipeline
 from tests.test_detection import codes, events, fact, packet
@@ -59,6 +59,13 @@ def test_book_crowd_and_archive_contrasts_carry_their_coverage(sf):
     body = ("这笔3000万美元BTC多单是该地址档案中最大BTC周期的3倍，在样本BTC多单中排第2，占同侧名义的15%；"
             "上一笔BTC多单持有48小时，净赚5000美元。同时持有ETH空单1500万美元。择时显著的交易员4人做多、3人做空。")
     assert numbers.check(body, pk["facts"], []) == []
+    # the archive start can be cited by month; an ambiguous "高X倍" is stopped
+    since = fact(pk, "contrast.archive_since")["value"][5:7].lstrip("0")
+    assert numbers.check(f"该地址{since}月以来最大的BTC多单", pk["facts"], []) == []
+    assert [f.code for f in numbers.check("2月以来最大", pk["facts"], [])] == ["UNMATCHED_DATE"]
+    found = phrases.check("这笔多单比此前最大周期高3倍。", pk, [])
+    assert [f.code for f in found] == ["RATIO_AS_INCREASE"]
+    assert phrases.check("这笔多单是此前最大周期的3倍。", pk, []) == []
 
 
 def test_crowd_is_optional_and_never_makes_a_new_packet_version(sf):

@@ -411,6 +411,8 @@ def contrast_own(f: Facts, event: dict, position: dict | None, ctx: dict, prior:
                   "truncated": bool(cov["truncated"]), "note": "complete closed cycles on this coin in the archive"}
             if cov["truncated"]:
                 f.constraints.add("ARCHIVE_PARTIAL")
+            f.add("contrast.archive_since", "time", T(cov["earliest_at"]), fmt.when(T(cov["earliest_at"])),
+                  "context.fill_coverage.earliest_at", coverage=hc, label="the trade archive starts here")
             f.add("contrast.coin_cycles", "count", len(done), fmt.count(len(done)), "context.cycles", coverage=hc)
             wins = sum(1 for c in done if D(c["realized_pnl"]) - D(c["fees"]) > 0)
             f.add("contrast.coin_winning_cycles", "count", wins, fmt.count(wins), "context.cycles", coverage=hc,

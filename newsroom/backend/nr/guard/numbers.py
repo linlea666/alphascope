@@ -25,6 +25,7 @@ TICKER = re.compile(r"(?<![A-Za-z0-9])\$?\d*[A-Z][A-Z0-9]+(?![A-Za-z0-9])")  # B
 ISO_DATE = re.compile(r"(?<!\d)(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)")
 SHORT_DATE = re.compile(r"(?<![\d-])(\d{1,2})-(\d{1,2})(?![\d-])")
 ZH_DATE = re.compile(r"(\d{1,2})月(\d{1,2})日")
+ZH_MONTH = re.compile(r"(?<![\d-])(\d{1,2})月(?![\d日])")  # "9月以来": a month on its own
 EN_DATE = re.compile(r"\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+(\d{1,2})\b", re.I)
 YEAR = re.compile(r"(?<![\d.])(20\d{2})(?=年|\s|$|[,.;)])")
 CLOCK = re.compile(r"(?<!\d)(\d{1,2}):(\d{2})(?!\d)")
@@ -134,6 +135,7 @@ def check(text: str, facts: list[dict], allow: list[str]) -> list[Finding]:
     findings: list[Finding] = []
     times = fact_times(facts)
     days = {(t.month, t.day) for t in times}
+    months = {t.month for t in times}
     years = {t.year for t in times}
     clocks = {(t.hour, t.minute) for t in times}
     work = text
@@ -153,6 +155,10 @@ def check(text: str, facts: list[dict], allow: list[str]) -> list[Finding]:
             if not ok:
                 findings.append(Finding("UNMATCHED_DATE", m.span(), m.group(0), "date not in the fact packet"))
             work = _blank(work, [m.span()])
+    for m in list(ZH_MONTH.finditer(work)):
+        if int(m.group(1)) not in months:
+            findings.append(Finding("UNMATCHED_DATE", m.span(), m.group(0), "month not in the fact packet"))
+        work = _blank(work, [m.span()])
     for m in list(CLOCK.finditer(work)):
         if (int(m.group(1)), int(m.group(2))) not in clocks:
             findings.append(Finding("UNMATCHED_TIME", m.span(), m.group(0), "time not in the fact packet"))
