@@ -219,9 +219,57 @@ def test_at_risk_and_health(client, sf):
 def test_feed_is_get_only_and_read_only(client, sf):
     from app.api.feed import feed_session, router
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 5 and all(r.methods == {"GET"} and r.path.startswith("/api/v1/feed/") for r in routes)
+    assert len(routes) == 12 and all(r.methods == {"GET"} and r.path.startswith("/api/v1/feed/") for r in routes)
     with sf() as s:
         gen = feed_session(s)
         session = next(gen)
         with pytest.raises(Exception, match="read-only"):
             session.execute(text("INSERT INTO ingest_run (kind, status, started_at) VALUES ('x', 'running', now())"))
+
+
+def test_research_column_endpoints(client, sf):
+    from datetime import date
+    now = datetime.now(UTC)
+    with sf() as s:
+        okx = _wallet(s, OKX, venue="okx")
+        hl = _wallet(s, HL)
+        run = s.execute(text("""INSERT INTO okx_leaderboard_run (business_date, time_window, status, pages_done, unique_count,
+                                                                 new_traders, started_at, source)
+                                VALUES (:d, '30d', 'complete', 1, 1, 0, now(), 'test') RETURNING id"""),
+                        {"d": date.today()}).scalar_one()
+        s.execute(text("""INSERT INTO okx_leaderboard_row (run_id, wallet_id, rank, pnl, pnl_ratio)
+                          VALUES (:r, :w, 1, 50000, 3.2)"""), {"r": run, "w": okx})
+        s.execute(text("""INSERT INTO copy_backtest (wallet_id, window_days, params_key, computed_at, capital, ret, mdd,
+                                                     trades, liquidations, costs, n_decisions, approx_equity)
+                          VALUES (:w, 30, 'default-v2', now(), 10000, 0.41, -0.2, 12, 0, 5, 24, true)"""), {"w": okx})
+        s.execute(text("""INSERT INTO okx_presence (wallet_id, time_window, first_seen_at, last_seen_at, seen_days, streak,
+                                                    currently_seen, best_rank, last_rank)
+                          VALUES (:w, '7d', now() - interval '20 days', now() - interval '3 days', 15, 0, false, 4, 9)"""),
+                  {"w": okx})
+        for i, net in enumerate([-50, 100, 200, 300, -400]):  # oldest first: loss, three wins, then the losing close
+            s.execute(text("""
+                INSERT INTO position_cycle (wallet_id, coin, version, direction, opened_at, closed_at, status, complete,
+                  scale, holding_hours, max_size, max_notional, n_fills, n_decisions, realized_pnl, fees)
+                VALUES (:w, 'BTC', 'p1', 'long', :o, :c, 'closed', true, 'swing', 30, 1, 100000, 2, 2, :pnl, 10)"""),
+                {"w": hl, "o": now - timedelta(days=20 - i * 3),
+                 "c": now - timedelta(hours=2) if i == 4 else now - timedelta(days=19 - i * 3), "pnl": net + 10})
+        s.commit()
+    cb = client.get("/api/v1/feed/copy/board", params={"window": "30d"}, headers=AUTH).json()
+    assert keys("copy_board") <= set(cb) and keys("copy_board.row") <= set(cb["rows"][0])
+    assert cb["rows"][0]["copy_ret"] == "0.41" and cb["rows"][0]["approx_equity"] is True
+    do = client.get("/api/v1/feed/okx/dropouts", headers=AUTH).json()
+    assert keys("dropouts") <= set(do) and keys("dropouts.row") <= set(do["rows"][0]) and do["rows"][0]["best_rank"] == 4
+    st = client.get("/api/v1/feed/market/structure", params={"coin": "BTC"}, headers=AUTH).json()
+    assert keys("structure") <= set(st)
+    fc = client.get("/api/v1/feed/research/forecasts", headers=AUTH).json()
+    assert keys("forecasts") <= set(fc) and fc["status"] == "shadow"
+    fu = client.get("/api/v1/feed/research/funding", headers=AUTH).json()
+    assert keys("funding") <= set(fu)
+    ho = client.get("/api/v1/feed/cycles/holding", headers=AUTH).json()
+    assert keys("holding") <= set(ho) and {r["winner"] for r in ho["rows"]} == {True, False}
+    assert keys("holding.row") <= set(ho["rows"][0])
+    cl = client.get("/api/v1/feed/cycles/closed", params={"min_streak": 3}, headers=AUTH).json()
+    assert keys("closed") <= set(cl) and len(cl["rows"]) == 1
+    row = cl["rows"][0]
+    assert keys("closed.row") <= set(row) and row["prior_streak"] == 3 and row["prior_known"] is True
+    assert row["realized_pnl"] == "-390"

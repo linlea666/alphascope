@@ -259,3 +259,166 @@ def health(s: Session = Depends(feed_session)):
         {"d": now - timedelta(hours=24)}).mappings().one()))
     sources["copy_score"] = {"computed_at": s.execute(text("SELECT max(computed_at) FROM copy_score")).scalar()}
     return {"schema": SCHEMA, "as_of": now, "rules": HEALTH_RULES, "sources": sources}
+
+
+# ---- research columns (newsroom docs/11): read-only views over tables AlphaScope already computes ----
+
+COPY_PARAMS = "default-v2"  # app/factors/copy_run.PARAMS_KEY
+
+
+@router.get("/copy/board")
+def copy_vs_board(window: Literal["7d", "30d", "90d"] = "30d", limit: int = Query(20, ge=1, le=100),
+                  s: Session = Depends(feed_session)):
+    """The latest complete OKX board for a window next to the copy backtest of the same traders and window: the
+    official ROI against what following the trades would have returned (assumptions in `assumptions`)."""
+    now = datetime.now(UTC)
+    days = int(window[:-1])
+    run = s.execute(text("""SELECT id, business_date, completed_at FROM okx_leaderboard_run
+                            WHERE time_window = :w AND status = 'complete' ORDER BY business_date DESC, id DESC LIMIT 1"""),
+                    {"w": window}).mappings().first()
+    out = rows(s, """
+        SELECT r.rank, w.address AS trader_key, w.display_name, r.pnl, r.pnl_ratio, r.win_rate, r.max_drawdown, r.asset,
+               b.ret AS copy_ret, b.mdd AS copy_mdd, b.leader_ret, b.retention, b.trades, b.liquidations,
+               b.approx_equity, b.computed_at AS backtest_at
+        FROM okx_leaderboard_row r JOIN wallet w ON w.id = r.wallet_id
+        LEFT JOIN copy_backtest b ON b.wallet_id = r.wallet_id AND b.window_days = :d AND b.params_key = :p
+        WHERE r.run_id = :run ORDER BY r.rank LIMIT :n""",
+        {"d": days, "p": COPY_PARAMS, "run": run["id"], "n": limit}) if run else []
+    return {"schema": SCHEMA, "as_of": now, "window": window, "run": plain(dict(run)) if run else None,
+            "assumptions": {"params_key": COPY_PARAMS, "ratio": "100%", "delay_seconds": 30, "fee_bp": 4.5,
+                            "slippage_bp": 3, "leverage_cap": 10, "okx_equity": "current lead assets"},
+            "rows": out}
+
+
+@router.get("/okx/dropouts")
+def okx_dropouts(days: int = Query(30, ge=1, le=180), max_best_rank: int = Query(50, ge=1, le=500),
+                 limit: int = Query(30, ge=1, le=100), s: Session = Depends(feed_session)):
+    """Traders who were on the 7d board and are no longer, with what their position history shows since."""
+    now = datetime.now(UTC)
+    out = rows(s, """
+        SELECT w.address AS trader_key, w.display_name, p.first_seen_at, p.last_seen_at, p.seen_days, p.streak,
+               p.best_rank, p.last_rank, t.history_status,
+               (SELECT count(*) FROM okx_position o WHERE o.wallet_id = p.wallet_id AND o.close_type <> 'partClose'
+                  AND o.close_time > p.last_seen_at) AS closes_since,
+               (SELECT sum(o.realized_pnl) FROM okx_position o WHERE o.wallet_id = p.wallet_id
+                  AND o.close_type <> 'partClose' AND o.close_time > p.last_seen_at) AS realized_since,
+               (SELECT count(*) FROM okx_position o WHERE o.wallet_id = p.wallet_id AND o.liquidated
+                  AND o.close_time > p.last_seen_at) AS liquidations_since,
+               (SELECT max(o.close_time) FROM okx_position o WHERE o.wallet_id = p.wallet_id) AS last_close
+        FROM okx_presence p JOIN wallet w ON w.id = p.wallet_id LEFT JOIN okx_trader t ON t.wallet_id = p.wallet_id
+        WHERE p.time_window = '7d' AND NOT p.currently_seen AND p.last_seen_at > :since AND p.best_rank <= :r
+        ORDER BY p.best_rank, p.last_seen_at DESC LIMIT :n""",
+        {"since": now - timedelta(days=days), "r": max_best_rank, "n": limit})
+    return {"schema": SCHEMA, "as_of": now, "days": days, "rows": out}
+
+
+@router.get("/market/structure")
+def market_structure(coin: str = Query("BTC", max_length=48), s: Session = Depends(feed_session)):
+    """Entry and liquidation structure of the observed sample for one coin (venue-reported liquidation prices only)."""
+    from app.api.market import positioning_structure
+    now = datetime.now(UTC)
+    data = positioning_structure(session=s, coin=coin, venue="all", cohort="all", min_lev=0, entry_span=40,
+                                 liq_span=30, bins=60)
+    for side in ("long", "short"):
+        near = (data.get("liquidations") or {}).get(side, {}).get("nearest") if data.get("ref") else None
+        if near:
+            near["trader_key"] = near.pop("address", None)
+    return {"schema": SCHEMA, "as_of": now, "coverage": plain(stats.coverage(s, "all", "all", now)),
+            **plain(data)}
+
+
+@router.get("/research/forecasts")
+def forecast_ledger(coin: str = Query("BTC", max_length=12), days: int = Query(30, ge=1, le=180),
+                    s: Session = Depends(feed_session)):
+    """Pre-registered forecasts (shadow mode) and how they scored against the baseline, failures included."""
+    from app.research.forward import skill
+    now = datetime.now(UTC)
+    raw = s.execute(text("""
+        SELECT model, horizon, issued_at, outcome->>'status' AS status, (outcome->>'p_brier')::float AS brier,
+               (outcome->>'baseline_brier')::float AS base_brier
+        FROM research_forecast WHERE coin = :c AND issued_at > :since ORDER BY model, horizon, issued_at"""),
+        {"c": coin, "since": now - timedelta(days=days)}).mappings().all()
+    groups: dict = {}
+    for r in raw:
+        groups.setdefault((r["model"], r["horizon"]), []).append(r)
+    scores = []
+    for (model, horizon), items in groups.items():
+        done = [r for r in items if r["status"] == "settled"]
+        k = skill([(r["brier"], r["base_brier"]) for r in done], horizon)
+        scores.append({"model": model, "horizon": horizon, "issued": len(items), "settled": len(done),
+                       "missing": sum(r["status"] == "missing" for r in items),
+                       "brier": sum(r["brier"] for r in done) / len(done) if done else None,
+                       "base_brier": sum(r["base_brier"] for r in done) / len(done) if done else None,
+                       "beat_baseline": sum(r["brier"] < r["base_brier"] for r in done),
+                       "skill_p": k["p"], "blocks": k["blocks"]})
+    return {"schema": SCHEMA, "as_of": now, "coin": coin, "days": days, "status": "shadow", "scores": scores}
+
+
+@router.get("/research/funding")
+def funding_and_divergence(coin: str = Query("BTC", max_length=12), hours: int = Query(24, ge=1, le=168),
+                           s: Session = Depends(feed_session)):
+    """Latest funding reading with its rank against the prior year, and the specialist-vs-matched-control long share
+    from hourly research frames (an observed sample; a screen, not a tradable signal)."""
+    now = datetime.now(UTC)
+    obs = s.execute(text("""SELECT bucket, payload->'readings'->'funding'->'data' AS funding FROM exchange_observation
+                            WHERE coin = :c ORDER BY bucket DESC LIMIT 1"""), {"c": coin}).mappings().first()
+    frames = rows(s, """
+        SELECT bucket_ts, venue, (metrics->'smart'->>'n')::int AS smart_n, metrics->'smart'->>'long_share' AS smart_long,
+               (metrics->'control'->>'n')::int AS control_n, metrics->'control'->>'long_share' AS control_long,
+               metrics->>'divergence' AS divergence, (metrics->>'n')::int AS sample_n
+        FROM research_frame WHERE coin = :c AND bucket_ts > :since ORDER BY bucket_ts DESC, venue""",
+        {"c": coin, "since": now - timedelta(hours=hours)})
+    f = (obs or {}).get("funding") or {}
+    return {"schema": SCHEMA, "as_of": now, "coin": coin,
+            "funding": {"bucket": obs["bucket"] if obs else None, "rate": f.get("rate"), "source_at": f.get("source_at"),
+                        "level": (f.get("history") or {}).get("level"),
+                        "percentile": (f.get("history") or {}).get("percentile")},
+            "frames": frames}
+
+
+@router.get("/cycles/holding")
+def holding_profile(days: int = Query(90, ge=7, le=365), s: Session = Depends(feed_session)):
+    """How long complete closed cycles were held, winners against losers (net of fees), per scale."""
+    now = datetime.now(UTC)
+    out = rows(s, """
+        SELECT scale, (realized_pnl - fees > 0) AS winner, count(*) AS n,
+               percentile_cont(0.25) WITHIN GROUP (ORDER BY holding_hours) AS p25,
+               percentile_cont(0.5) WITHIN GROUP (ORDER BY holding_hours) AS median,
+               percentile_cont(0.75) WITHIN GROUP (ORDER BY holding_hours) AS p75,
+               count(DISTINCT wallet_id) AS traders
+        FROM position_cycle
+        WHERE scale IN ('scalp', 'short', 'swing', 'macro') AND closed_at > :since AND complete AND status <> 'open'
+        GROUP BY 1, 2 ORDER BY 1, 2""", {"since": now - timedelta(days=days)})
+    return {"schema": SCHEMA, "as_of": now, "days": days, "rows": out}
+
+
+@router.get("/cycles/closed")
+def closed_cycles(hours: int = Query(48, ge=1, le=168), min_streak: int = Query(0, ge=0, le=50),
+                  limit: int = Query(200, ge=1, le=1000), s: Session = Depends(feed_session)):
+    """Complete cycles closed recently, with the winning streak that preceded each (complete cycles only, net of fees)
+    and whether that streak's start is known (a loss before it). Cycles are keyed naturally: rebuilds change ids."""
+    now = datetime.now(UTC)
+    recent = s.execute(text("""
+        SELECT c.wallet_id, w.address AS trader_key, w.venue, w.display_name, c.coin, c.direction, c.opened_at,
+               c.version, c.closed_at, c.status, c.scale, c.holding_hours, c.entry_px, c.exit_px, c.max_notional,
+               c.realized_pnl, c.fees, f.status AS coverage_status, f.truncated, f.earliest_fill_at
+        FROM position_cycle c JOIN wallet w ON w.id = c.wallet_id LEFT JOIN fill_sync f ON f.wallet_id = c.wallet_id
+        WHERE c.scale IN ('scalp', 'short', 'swing', 'macro') AND c.closed_at > :since AND c.complete
+          AND c.status <> 'open'
+        ORDER BY c.closed_at DESC LIMIT :n"""), {"since": now - timedelta(hours=hours), "n": limit}).mappings().all()
+    out = []
+    for r in recent:
+        nets = s.execute(text("""SELECT realized_pnl - fees FROM position_cycle
+                                 WHERE wallet_id = :w AND complete AND status <> 'open' AND closed_at < :t
+                                 ORDER BY closed_at DESC LIMIT 200"""), {"w": r["wallet_id"], "t": r["closed_at"]}
+                         ).scalars().all()
+        streak, known = 0, False
+        for net in nets:
+            if net <= 0:
+                known = True
+                break
+            streak += 1
+        if streak >= min_streak:
+            row = {k: v for k, v in r.items() if k != "wallet_id"}
+            out.append(plain({**row, "prior_streak": streak, "prior_known": known}))
+    return {"schema": SCHEMA, "as_of": now, "hours": hours, "rows": out}
