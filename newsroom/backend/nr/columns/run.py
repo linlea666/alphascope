@@ -99,8 +99,8 @@ def store(s: Session, it: ColumnIssue, now: datetime) -> dict:
         on_new_packet(s, eid, prev["id"] if prev else None, pid, changed)
     gate = content["gate"]["status"]
     s.execute(text("""UPDATE news_event SET gate_status = :g, blocking_issues = CAST(:b AS jsonb), facts_refreshed_at = :n,
-                             updated_at = now() WHERE id = :e"""),
-              {"g": gate, "b": json.dumps(blocking), "n": now, "e": eid})
+                             venue = :v, updated_at = now() WHERE id = :e"""),
+              {"g": gate, "b": json.dumps(blocking), "n": now, "v": venue, "e": eid})
     state = s.execute(text("SELECT state FROM news_event WHERE id = :e"), {"e": eid}).scalar_one()
     target = ("blocked" if state in ("detected", "candidate", "evaluated", "assigned") else None) if gate == "blocked" \
         else ("candidate" if state in ("detected", "blocked") else None)
