@@ -98,6 +98,22 @@ def test_truncated_output_gets_one_roomier_try_on_the_same_model(sf):
     with sf() as s:
         assert s.execute(text("SELECT status FROM ai_call_log ORDER BY id")).scalars().all() == ["truncated", "ok"]
 
+def test_the_schema_is_in_the_prompt_unless_the_api_enforces_it(sf):
+    """DeepSeek in json_object mode guessed the fields (missing language, risks as a string) because it never saw them."""
+    nr = newsroom(sf)
+    eid = candidate_event(sf)
+    out = eic_output(eid, [(nr["zh"], "数据视角")], silent=[nr["en"]])
+    prov = FakeProvider(out)
+    evaluate(sf, eid, prov)
+    assert '"recommended_accounts"' in prov.requests[0]["user"] and "JSON Schema" in prov.requests[0]["user"]
+    with sf() as s:
+        s.execute(text("UPDATE ai_model_config SET json_mode = 'json_schema'"))
+        s.execute(text("UPDATE news_event SET state = 'candidate'"))
+        s.commit()
+    prov = FakeProvider(out)
+    evaluate(sf, eid, prov)
+    assert "JSON Schema" not in prov.requests[0]["user"]
+
 def test_invalid_ai_output_never_becomes_a_draft(sf):
     nr = newsroom(sf)
     eid = candidate_event(sf)

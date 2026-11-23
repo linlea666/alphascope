@@ -136,7 +136,12 @@ def call_json(sf: sessionmaker, *, agent_key: str, purpose: str, schema: type[Ba
     plan = [(primary, False)] + ([(fallback, True)] if fallback and fallback["id"] != primary["id"] else [])
     last_error, attempt = "no attempt", 0
     for cfg, is_fallback in plan:
-        user, repaired, max_tokens = base_user, False, agent["max_output_tokens"]
+        # only json_schema mode sends the schema on the wire; every other mode must read it in the prompt
+        first = base_user if cfg["json_mode"] == "json_schema" else (
+            base_user + "\n\nReply with one JSON object that validates against this JSON Schema "
+            "(every required field, exact types, no extra fields):\n"
+            + json.dumps(schema.model_json_schema(), ensure_ascii=False, separators=(",", ":")))
+        user, repaired, max_tokens = first, False, agent["max_output_tokens"]
         while True:
             attempt += 1
             req = ChatRequest(system=prompt["system_text"], user=user, max_tokens=max_tokens,
@@ -196,7 +201,7 @@ def call_json(sf: sessionmaker, *, agent_key: str, purpose: str, schema: type[Ba
             if result is None or repaired:
                 break  # provider failure, or the repair also failed: move to the fallback model
             repaired = True
-            user = base_user + "\n\nYour previous reply was rejected. Errors:\n" + json.dumps(
+            user = first + "\n\nYour previous reply was rejected. Errors:\n" + json.dumps(
                 errors, ensure_ascii=False) + "\nReply again with one JSON object that fixes every error."
     raise AIFailed(last_error)
 
