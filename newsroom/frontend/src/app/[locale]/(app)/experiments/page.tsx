@@ -14,8 +14,13 @@ const REASONS = ["no_recent_events", "none_usable", "gate_blocked", "refresh_lim
 
 export default async function ExperimentsPage() {
   const [t, locale] = await Promise.all([getTranslations("experiments"), getLocale()]);
-  const [d, accounts, models] = await Promise.all([nrGet<D>("experiments"), nrGet<Account[]>("accounts"),
-    nrGet<{ id: number; name: string; model: string; last_test_ok: boolean | null }[]>("ai/model-options")]);
+  const [d, accounts, models, styleRows] = await Promise.all([nrGet<D>("experiments"), nrGet<Account[]>("accounts"),
+    nrGet<{ id: number; name: string; model: string; last_test_ok: boolean | null }[]>("ai/model-options"),
+    nrGet<{ key: string; name: string; language: string }[]>("styles")]);
+  const styleOpts = [{ value: "", label: t("styleDefault") },
+    ...[...new Map(styleRows.map((s) => [s.key, s])).values()].map((s) => ({ value: s.key, label: `${s.name} (${s.key})` }))];
+  const promptOpts = ["3", "2", "1"].map((v) => ({ value: v, label: `v${v}` }));
+  const modelOpts = models.map((m) => ({ value: String(m.id), label: `${m.name} · ${m.model}${m.last_test_ok ? " ✓" : m.last_test_ok === false ? ` ⚠ ${t("modelFailed")}` : ""}` }));
   const busy = d.pending.some((p) => p.status === "queued" || p.status === "running") || d.experiments.some((x) => x.ready + x.failed < x.pairs);
   return (
     <>
@@ -75,13 +80,18 @@ export default async function ExperimentsPage() {
         </div>
         <Panel title={t("create")} hint={t("createHint")}>
           <FieldForm path="experiments" submitLabel={t("start")} successMessage={t("started")} fields={[
-            { name: "name", label: t("name"), required: true, value: `contrast-${new Date().toISOString().slice(0, 10)}`, wide: true },
+            { name: "name", label: t("nameOptional"), placeholder: t("nameAuto"), wide: true },
             { name: "account_id", label: t("account"), type: "select", numeric: true, required: true,
               options: accounts.map((a) => ({ value: String(a.id), label: `@${a.handle} (${a.language}, ${a.status})` })) },
             { name: "model_config_id", label: t("model"), type: "select", numeric: true, required: true,
-              value: String(models.find((m) => m.last_test_ok)?.id ?? models[0]?.id ?? ""),
-              options: models.map((m) => ({ value: String(m.id), label: `${m.name} · ${m.model}${m.last_test_ok ? " ✓" : ""}` })) },
+              value: String(models.find((m) => m.last_test_ok)?.id ?? models[0]?.id ?? ""), options: modelOpts },
             { name: "n", label: t("n"), type: "number", value: 30 },
+            { name: "a.prompt_version", label: t("aPrompt"), type: "select", numeric: true, value: "2", options: promptOpts },
+            { name: "a.style_key", label: t("aStyle"), type: "select", value: "", options: styleOpts },
+            { name: "b.prompt_version", label: t("bPrompt"), type: "select", numeric: true, value: "3", options: promptOpts },
+            { name: "b.style_key", label: t("bStyle"), type: "select", value: "", options: styleOpts },
+            { name: "b.model_config_id", label: t("bModel"), type: "select", numeric: true, value: "",
+              options: [{ value: "", label: t("sameModel") }, ...modelOpts] },
           ]} />
         </Panel>
       </div>

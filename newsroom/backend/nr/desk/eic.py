@@ -53,7 +53,7 @@ def story_so_far(s: Session, story_id: int | None, event_id: int) -> list[dict]:
 def packet_for_model(packet: dict) -> dict:
     return {"subject": packet["subject"], "event": packet["event"], "constraints": packet["constraints"],
             "facts": [{k: f.get(k) for k in ("id", "kind", "value", "display", "label", "coverage", "derivation")}
-                      for f in packet["facts"]]}
+                      for f in packet["facts"] if f["kind"] != "series"]}  # curves are for cards, not for writing
 
 
 def evaluate_event(sf: sessionmaker, event_id: int, now: datetime, job_id: int | None = None,

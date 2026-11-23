@@ -275,7 +275,8 @@
     "userId": "User ID",
     "brand": "Brand",
     "platform": "Platform",
-    "venues": "Venues covered (comma-separated: hyperliquid, okx; X accounts: hyperliquid)"
+    "venues": "Venues covered (comma-separated: hyperliquid, okx; X accounts: hyperliquid)",
+    "linkInThread": "Add the full address and link as the thread's last post"
   },
   "publications": {
     "title": "Publications",
@@ -448,7 +449,12 @@
     "angle": "Angle (optional)",
     "run": "Generate trial drafts",
     "done": "Queued; results appear in the articles below",
-    "banner": "This is a trial draft: edit, compare and export it, but it cannot go to review. To use it, assign the event to this account."
+    "banner": "This is a trial draft: edit, compare and export it, but it cannot go to review. To use it, assign the event to this account.",
+    "styles": "Styles (pick several to compare side by side)",
+    "stylesHint": "None picked: v3 uses the reporter's house style (Settings → Rules → styles), v1/v2 the account's.",
+    "prompt": "Prompt version",
+    "promptActive": "The role's active version",
+    "promptV3": "written for X (recommended)"
   },
   "manage": {
     "trash": "Delete",
@@ -483,12 +489,12 @@
     "results": "Results",
     "pending": "Being prepared",
     "howTitle": "What this tests",
-    "how1": "A: the current way (position data only, prompt v1). B: contrast facts (vs the trader's own past, the rest of their book and the sample's holders of the coin), story memory and prompt v2.",
+    "how1": "Arms A and B each write one draft; only what you set differs (prompt version / style / model). Default A = v2, B = v3 (written for X).",
     "how2": "Both drafts come from the same role, model and account style. They are trial drafts: the event is untouched and they cannot go to review.",
     "how3": "Review is blind: which draft is A or B is hidden and the order is random. Check the facts on the right; flag anything misleading.",
     "how4": "Success: B wins ≥ 65%, guard pass rate not below A, no more misleading drafts, ≤ 50% more tokens. Stop if contrast coverage < 40% or B wins < 55%.",
     "create": "Start an experiment",
-    "createHint": "Samples recent events (48h) by class: opens/adds, underwater adds, near liquidation, closes. Facts are refreshed first, then both drafts are queued.",
+    "createHint": "Samples recent events (48h) by class, refreshes their facts, then queues both arms. Use it to compare prompts, styles or models.",
     "start": "Start",
     "account": "Account (style and platform rules)",
     "model": "Model (same for both)",
@@ -532,8 +538,8 @@
     "extraTokens": "Extra tokens for B",
     "extraTokensSub": "limit 50%",
     "arms": "A vs B",
-    "armA": "A current",
-    "armB": "B enriched",
+    "armA": "Arm A",
+    "armB": "Arm B",
     "guardPass": "Guard first-pass rate",
     "misleadingCount": "Flagged misleading",
     "tokens": "Tokens",
@@ -577,7 +583,18 @@
       "none_usable": "No candidate event was usable",
       "gate_blocked": "{n} events blocked by the gate after refresh (stale data or position gone)",
       "refresh_limit": "{n} events skipped at the refresh limit"
-    }
+    },
+    "nameOptional": "Name (optional)",
+    "nameAuto": "Leave empty for a unique name",
+    "styleDefault": "Default: v3 the reporter's style, v1/v2 the account's",
+    "modelFailed": "failed its last test",
+    "aPrompt": "Arm A prompt",
+    "aStyle": "Arm A style",
+    "bPrompt": "Arm B prompt",
+    "bStyle": "Arm B style",
+    "bModel": "Arm B model (for a model comparison)",
+    "sameModel": "Same as above",
+    "armsTitle": "Arms"
   },
   "rating": {
     "title": "Rate this version",

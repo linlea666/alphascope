@@ -4,7 +4,8 @@ import { Link } from "@/i18n/routing";
 import { nrGetOptional } from "@/lib/api";
 
 type Arm = { drafts: number; errors: number; guard_pass: number | null; misleading: number; mean_scores: Record<string, number | null>; tokens: number };
-type R = { experiment: string; pairs: number; ready: number; votes: number; voters: number; b_win_rate: number | null;
+type ArmCfg = { prompt_version: number; variant?: string; style_key?: string | null; model_config_id?: number | null };
+type R = { experiment: string; arms_config: { a: ArmCfg; b: ArmCfg }; pairs: number; ready: number; votes: number; voters: number; b_win_rate: number | null;
   arms: { a: Arm; b: Arm }; contrast_coverage: number | null; families: Record<string, number>; extra_tokens_b: number | null;
   by_stratum: Record<string, number>; checks: Record<string, boolean | null>; stop: string[]; verdict: "pass" | "stop" | "open" };
 
@@ -33,6 +34,11 @@ export default async function ResultsPage({ params }: { params: Promise<{ name: 
       </div>
       <div className="grid gap-5 xl:grid-cols-2">
         <Panel title={t("arms")}>
+          <div className="mb-3 space-y-1 text-xs text-muted">
+            {(["a", "b"] as const).map((k) => { const c = r.arms_config[k]; return (
+              <div key={k}>{k === "a" ? t("armA") : t("armB")}：v{c.prompt_version}{c.variant ? ` (${c.variant})` : ""}
+                {" · "}{c.style_key ?? t("styleDefault")}{c.model_config_id ? ` · model #${c.model_config_id}` : ""}</div>); })}
+          </div>
           <table className="w-full text-sm">
             <thead><tr><th className={th} /><th className={th}>{t("armA")}</th><th className={th}>{t("armB")}</th></tr></thead>
             <tbody>

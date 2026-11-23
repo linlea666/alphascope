@@ -27,6 +27,7 @@ export default async function AccountsPage() {
     { name: "min_gap_minutes", label: t("gap"), type: "number", value: a?.min_gap_minutes ?? 60 },
     { name: "allowed_event_classes", label: t("classes"), type: "list", value: a?.allowed_event_classes ?? [], placeholder: CLASSES, wide: true },
     { name: "long_post_allowed", label: t("longPosts"), type: "checkbox", value: a?.long_post_allowed },
+    { name: "link_in_thread", label: t("linkInThread"), type: "checkbox", value: a?.link_in_thread ?? true },
     { name: "rpa_enabled", label: "RPA", type: "checkbox", value: a?.rpa_enabled },
     { name: "authorization_status", label: t("auth"), type: "select", options: ["pending", "authorized", "expired", "revoked"], value: a?.authorization_status ?? "pending" },
     { name: "authorization_expires_at", label: t("authExpires"), value: a?.authorization_expires_at, placeholder: "2027-06-30T00:00:00Z" },

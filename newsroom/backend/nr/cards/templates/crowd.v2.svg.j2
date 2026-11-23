@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" font-family="{{ font }}">
+  <rect width="1200" height="675" fill="{{ c.bg }}"/>
+  <text x="50" y="64" font-size="34" font-weight="700" fill="{{ c.text }}">{{ title }}</text>
+  <text x="50" y="100" font-size="22" fill="{{ c.muted }}">{{ subtitle }}</text>
+  <text x="1150" y="64" font-size="26" font-weight="700" fill="{{ c.accent }}" text-anchor="end">{{ brand }}</text>
+  <rect x="50" y="126" width="1100" height="{{ 300 if timers else 220 }}" rx="10" fill="{{ c.panel }}"/>
+  {% for b in bars %}
+  <text x="70" y="{{ 176 + loop.index0 * 84 }}" font-size="22" font-weight="700" fill="{{ c[b.tone] }}">{{ b.label }}</text>
+  <rect x="190" y="{{ 152 + loop.index0 * 84 }}" width="{{ [b.w, 4]|max }}" height="34" rx="4" fill="{{ c[b.tone] }}" fill-opacity="0.85"/>
+  <text x="{{ 200 + [b.w, 4]|max }}" y="{{ 176 + loop.index0 * 84 }}" font-size="22" font-weight="700" fill="{{ c.text }}">{{ b.value }}</text>
+  <text x="190" y="{{ 212 + loop.index0 * 84 }}" font-size="17" fill="{{ c.muted }}">{{ b.count }} {{ traders }}</text>
+  {% endfor %}
+  {% if timers %}
+  <text x="70" y="364" font-size="19" fill="{{ c.muted }}">{{ timers_label }}</text>
+  <rect x="190" y="380" width="{{ [timers.w_long, 2]|max }}" height="22" fill="{{ c.up }}"/>
+  <rect x="{{ 190 + timers.w_long }}" y="380" width="{{ [760 - timers.w_long, 2]|max }}" height="22" fill="{{ c.down }}"/>
+  <text x="190" y="372" font-size="18" fill="{{ c.up }}">{{ timers.long }}</text>
+  <text x="950" y="372" font-size="18" fill="{{ c.down }}" text-anchor="end">{{ timers.short }}</text>
+  {% endif %}
+  {% if highlight %}
+  <rect x="50" y="{{ 446 if timers else 366 }}" width="1100" height="80" rx="10" fill="{{ c.panel }}" stroke="{{ c.accent }}"/>
+  <text x="80" y="{{ 497 if timers else 417 }}" font-size="28" font-weight="700" fill="{{ c.accent }}">{{ highlight }}</text>
+  {% endif %}
+  <text x="50" y="648" font-size="17" fill="{{ c.muted }}">{{ footer }}</text>
+</svg>

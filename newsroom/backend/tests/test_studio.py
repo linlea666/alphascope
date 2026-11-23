@@ -136,7 +136,7 @@ def test_style_versions_and_columns_api(client, sf):
     nr = newsroom(sf)  # noqa: F841
     h = login(client, "chief")
     with sf() as s:
-        assert s.execute(text("SELECT count(DISTINCT key) FROM editorial_style")).scalar() == 26
+        assert s.execute(text("SELECT count(DISTINCT key) FROM editorial_style")).scalar() == 38  # 2 seeds + 12 x 2 library + 6 x 2 house
     r = client.post("/api/styles", headers=h, json={"key": "zh_breaking", "language": "zh", "name": "突发快讯 v2",
                                                     "guide": "更短：两句以内，先写事实，再写风险。", "forbidden": ["重磅"]})
     assert r.json()["version"] == 2

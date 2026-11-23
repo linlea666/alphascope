@@ -23,7 +23,7 @@ MAJOR_COINS = ("BTC", "ETH", "SOL", "HYPE")
 # (sizes and notionals are not here: a 10% move in either is material, whatever caused it)
 VOLATILE = {"position.mark_px", "position.unrealized_pnl_usd", "position.liq_distance", "position.observed_at", "episode.path",
             "trader.account_value_usd"}
-VOLATILE_PREFIXES = ("crowd.", "book.")  # snapshots of other traders and other coins: context, not the story
+VOLATILE_PREFIXES = ("crowd.", "book.", "change.recency", "trader.pnl_series")  # snapshots of other traders and other coins: context, not the story
 CONSTRAINT_TEXT = {
     "OBSERVED_SAMPLE": "Data covers AlphaScope's observed sample of traders, not the whole exchange.",
     "NO_IDENTITY": "Who controls the account is unknown; do not guess or imply an identity.",
@@ -58,7 +58,25 @@ def T(v) -> datetime | None:
 
 
 def short_ref(trader_key: str) -> str:
-    return f"OKX·{trader_key[-6:]}" if trader_key.startswith("okx:") else f"{trader_key[:6]}…{trader_key[-4:]}"
+    """0x9ee…be185: enough to recognise and search, short enough for a post."""
+    return f"OKX·{trader_key[-6:]}" if trader_key.startswith("okx:") else f"{trader_key[:5]}…{trader_key[-5:]}"
+
+
+def explorer_url(trader_key: str, venue: str) -> str | None:
+    return f"https://hypurrscan.io/address/{trader_key}" if venue == "hyperliquid" and trader_key.startswith("0x") \
+        else None
+
+
+def recency(seen: datetime, now: datetime) -> tuple[str, dict] | None:
+    """How long ago, in a post's words. Refreshed when a draft is written; the guard holds "刚刚" to 3 hours."""
+    age = now - seen
+    if age <= timedelta(hours=1):
+        return "just_now", {"zh": ["刚刚"], "en": ["just now"]}
+    if age <= timedelta(hours=6):
+        return "hours", {"zh": ["过去几小时"], "en": ["in the past few hours"]}
+    if age <= timedelta(hours=24):
+        return "day", {"zh": ["过去24小时"], "en": ["in the past 24 hours"]}
+    return None
 
 
 def clean_name(name: str | None) -> str | None:
@@ -155,6 +173,10 @@ def build(event: dict, episode: dict, source_events: list[dict], ctx: dict | Non
                   "source_event.mark_px", unit="USD")
         if len(source_events) > 1:
             f.add("change.observations", "count", len(source_events), fmt.count(len(source_events)), "source_event")
+        seen = max(T(e["observed_at"]) for e in source_events)
+        if r := recency(seen, now):
+            f.add("change.recency", "text", r[0], r[1], "source_event.observed_at", as_of=seen.isoformat(),
+                  label="how long ago the change was seen; use these words instead of a clock time")
 
     # --- the episode (how much we know about its start)
     if episode["start_kind"] in ("first_seen", "reconstructed"):
@@ -359,6 +381,7 @@ def build(event: dict, episode: dict, source_events: list[dict], ctx: dict | Non
                    "source_event_ids": [e["source_event_id"] for e in source_events],
                    "context_as_of": ctx["as_of"] if ctx else None},
         "subject": {"trader_ref": subject_ref, "trader_key": event["trader_key"], "venue": venue,
+                    "explorer_url": explorer_url(event["trader_key"], venue),
                     "identity": "public_label" if event.get("public_label") else "unknown"},
         "event": {"class": cls, "coin": coin, "direction": event["direction"], "escalation_level": event["escalation_level"],
                   "liquidation_status": liq_status},
@@ -443,7 +466,7 @@ def contrast_own(f: Facts, event: dict, position: dict | None, ctx: dict, prior:
         eps = prior["episodes"]
         f.add("radar.since", "time", since, fmt.when(since), "trader first observed", coverage=rc)
         f.add("radar.prior_positions", "count", len(eps), fmt.count(len(eps)), "position_episode", coverage=rc,
-              label=f"earlier {coin} positions of this trader seen by the radar")
+              label=f"earlier {coin} positions of this wallet since we started tracking it (radar.since)")
         same = [e for e in eps if e["direction"] == direction]
         f.add("radar.prior_same_side", "count", len(same), fmt.count(len(same)), "position_episode", coverage=rc,
               label=f"of which {direction}")
@@ -453,6 +476,12 @@ def contrast_own(f: Facts, event: dict, position: dict | None, ctx: dict, prior:
             if size and peak > 0:
                 f.add("radar.vs_largest_prior_peak", "ratio", size / peak, fmt.multiple(size / peak),
                       "position.notional_usd / radar.largest_prior_peak_usd", unit="x", coverage=rc)
+    # the venue's all-time P&L curve, for cards only (never sent to a model)
+    curve = ctx.get("pnl_series") or []
+    if venue == "hyperliquid" and len(curve) >= 5:
+        f.add("trader.pnl_series", "series", [{"t": p["t"], "pnl": p["pnl"]} for p in curve],
+              {"zh": [f"{len(curve)} 个点"], "en": [f"{len(curve)} points"]}, "context.pnl_series",
+              label="all-time P&L curve from the venue's portfolio history (includes unrealized)")
     # the venue's leaderboard figures (they include unrealized P&L)
     tr = ctx["trader"]
     if venue == "hyperliquid" and tr.get("leaderboard_fetched_at"):
@@ -475,6 +504,9 @@ def contrast_crowd(f: Facts, event: dict, position: dict | None, crowd: dict) ->
     cc = {"as_of": crowd["as_of"], "venue": crowd["venue"], "fresh_traders": crowd["coverage"].get("fresh"),
           "note": "traders in the sample whose last poll is fresh"}
     f.constraints.add("CROWD_SAMPLE")
+    if fresh := crowd["coverage"].get("fresh"):
+        f.add("crowd.sample_traders", "count", int(fresh), fmt.headcount(int(fresh)), "coin_positions.coverage.fresh",
+              coverage=cc, label=f"wallets we track on {crowd['venue']} right now: say 'among the ~N wallets we track'")
     f.add("crowd.as_of", "time", T(crowd["as_of"]), fmt.when(T(crowd["as_of"])), "coin_positions.as_of", coverage=cc)
     for fid, row in (("crowd.same_side", same), ("crowd.opposite_side", opp)):
         if row:
@@ -486,7 +518,7 @@ def contrast_crowd(f: Facts, event: dict, position: dict | None, crowd: dict) ->
         for fid, row in (("crowd.timing_same_side", same), ("crowd.timing_opposite_side", opp)):
             n = int(row["timing_traders"]) if row else 0
             f.add(fid, "count", n, fmt.count(n), "coin_positions.sides.timing_traders", coverage=cc,
-                  label="traders with a statistically significant timing record (q < 0.1)")
+                  label="wallets with a statistically proven timing record (q < 0.1), e.g. '择时高手' / 'proven timers'")
             f.usd(f"{fid}_notional_usd", "notional", D(row["timing_notional"]) if row else Decimal(0),
                   "coin_positions.sides.timing_notional", coverage=cc)
     if position and same:
@@ -500,7 +532,7 @@ def contrast_crowd(f: Facts, event: dict, position: dict | None, crowd: dict) ->
         if me:
             f.add("crowd.same_side_rank", "count", int(me["rank"]), fmt.count(int(me["rank"])),
                   "coin_positions.largest.rank", coverage=cc,
-                  label=f"rank by notional among {direction} positions on this coin in the sample (1 = largest)")
+                  label=f"rank by size among all {direction} positions on this coin in the wallets we track (1 = largest)")
 
 
 def _score(event, episode, f: Facts, ctx, record_strong, ratio, liq_status, now) -> tuple[Decimal, dict]:

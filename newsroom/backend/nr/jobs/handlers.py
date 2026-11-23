@@ -55,7 +55,8 @@ def handle(sf: sessionmaker, deps: Deps, job: dict, now: datetime) -> dict:
         from nr.desk.drafting import generate_draft
         return generate_draft(sf, p["assignment_id"], now, job_id=job["id"], transport=deps.provider,
                               user_id=p.get("user_id"), mode=p.get("mode", "draft"),
-                              model_config_id=p.get("model_config_id"), compare=p.get("compare", False))
+                              model_config_id=p.get("model_config_id"), compare=p.get("compare", False),
+                              style_key=p.get("style_key"), prompt_version=p.get("prompt_version"))
     if kind == "column_build":
         from nr.columns.run import build_column
         with deps.feed() as c:
@@ -63,7 +64,8 @@ def handle(sf: sessionmaker, deps: Deps, job: dict, now: datetime) -> dict:
     if kind == "experiment_create":
         from nr.experiments.contrast_ab import create
         with deps.feed() as c:
-            return create(sf, c, p["name"], p["account_id"], p["model_config_id"], p["n"], now, p["user_id"])
+            return create(sf, c, p["name"], p["account_id"], p["model_config_id"], p["n"], now, p["user_id"],
+                          arms=p.get("arms"))
     if kind == "card_render":
         from nr.cards.render import render_for_packet
         return render_for_packet(sf, p["fact_packet_id"], p["template"], p["language"], p.get("brand", "default"))

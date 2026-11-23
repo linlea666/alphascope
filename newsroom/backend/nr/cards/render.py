@@ -109,7 +109,10 @@ NOTE_CODES["en"].update({"OBSERVED_SAMPLE": "AlphaScope observed sample, not the
 
 
 def render_svg(inputs: dict) -> str:
-    """Fact cards share one layout (templates differ in which facts they show); charts have their own."""
+    """Fact cards share one layout (templates differ in which facts they show); charts have their own; v2 cards name
+    their file."""
+    if "file" in inputs:
+        return ENV.get_template(f"{inputs['file']}.v2.svg.j2").render(**inputs)
     name = "chart" if "bars" in inputs else "card"
     return ENV.get_template(f"{name}.{TEMPLATE_VERSION}.svg.j2").render(**inputs)
 
@@ -184,7 +187,8 @@ def _when(iso: str, lang: str) -> str:
 
 
 def render_for_packet(sf: sessionmaker, packet_id: int, template: str, language: str, brand: str = "default") -> dict:
-    if template not in TEMPLATES and template not in CHART_TEMPLATES:
+    from nr.cards.v2 import V2_BUILDERS, V2_REQUIRES
+    if template not in TEMPLATES and template not in CHART_TEMPLATES and template not in V2_BUILDERS:
         raise ValueError(f"unknown template {template}")
     with sf() as s:
         row = s.execute(text("SELECT content, content_hash, version FROM fact_packet WHERE id = :i"),
@@ -192,9 +196,11 @@ def render_for_packet(sf: sessionmaker, packet_id: int, template: str, language:
         packet = {**row["content"], "hash": row["content_hash"], "version": row["version"]}
         name = "AlphaScope" if brand == "default" else brand
         facts = {f["id"] for f in packet["facts"]}
-        if template == "chart_card" and "chart" not in facts or template == "lifecycle_card" and "episode.path" not in facts:
+        if template == "chart_card" and "chart" not in facts or template == "lifecycle_card" and "episode.path" not in facts \
+                or template in V2_REQUIRES and V2_REQUIRES[template] not in facts:
             raise ValueError(f"this packet has nothing for {template}")
-        inputs = (chart_inputs(packet, language, name) if template == "chart_card" else
+        inputs = (V2_BUILDERS[template](packet, language, name, cjk_font()) if template in V2_BUILDERS else
+                  chart_inputs(packet, language, name) if template == "chart_card" else
                   lifecycle_inputs(packet, language, name) if template == "lifecycle_card" else
                   card_inputs(packet, template, language, name))
         data_hash = hashlib.sha256(json.dumps(inputs, sort_keys=True, ensure_ascii=False).encode()).hexdigest()

@@ -28,6 +28,10 @@ DEFAULTS: dict[str, dict] = {
     # four_eyes: the author of the current version may not approve it (turn on once there is more than one editor)
     "review": {"four_eyes": False},
     "columns": {"disabled": []},
+    # house style per reporter role ({language} becomes zh / en); an assignment's own style still wins
+    "styles": {"by_reporter": {"reporter_breaking": "{language}_whale_alert", "reporter_derivatives": "{language}_degen",
+                               "reporter_investigator": "{language}_dossier", "reporter_data": "{language}_crowd",
+                               "reporter_historian": "{language}_outcome", "reporter": "{language}_one_liner"}},
     # per publishing platform: length limit (X counts CJK double and links as 23) and the hosts a post URL may use.
     # OKX Square publishes no official limit we could find: 1000 characters is a conservative default to adjust.
     "platforms": {"x": {"limit": 280, "weighted": True, "hosts": ["x.com", "twitter.com"]},

@@ -57,6 +57,7 @@
 | `GET /research/forecasts?coin&days` | `research_forecast` 按模型 / 周期汇总：已结算、缺失、Brier 与基准、分块符号检验 p | N4 |
 | `GET /research/funding?coin&hours` | 最新资金费率及其历史排位 + `research_frame` 专家组 / 匹配对照组多头占比与分歧 | N5 |
 | `GET /market/groups?coin` | 最新一小时与 7 天前的 `market_snapshot`：各交易所、各 cohort 的多空人数与名义价值 | 多空对决 |
+| context 追加字段 `pnl_series` | `equity_point` allTime 序列（排行榜累计盈亏与账户价值），最多 90 个点，最新一点总在 | 图卡的盈亏曲线（可选字段，不在契约必需键里） |
 | `GET /market/coin-positions?coin&venue&top` | 实时横截面（只算轮询仍新鲜的交易员）：每个方向的人数、名义总额、其中择时显著（`timing_score` q<0.1）的人数与名义；每个方向名义最大的前 N 个仓位（地址、名义、杠杆、入场价、强平价、是否择时显著） | 事实包的 `crowd.*` 对照事实 |
 | `GET /cycles/holding?days` | 完整已平仓周期的持仓时长分位数，盈利 / 亏损分开，按级别 | N6 |
 | `GET /cycles/closed?hours&min_streak` | 最近平仓的完整周期 + 之前的连胜数及其起点是否已知（自然键） | 连胜终结者 |

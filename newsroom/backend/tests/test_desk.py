@@ -175,7 +175,7 @@ def test_an_overlong_x_post_goes_back_to_the_model_once(sf):
     ids, _ = accept_all(sf, nr["chief"])
     prov = FakeProvider(draft_output("zh", ZH * 5), draft_output("zh", ZH))
     generate_draft(sf, ids[0], NOW, transport=prov)
-    assert len(prov.requests) == 2 and "the limit is 280 (each CJK character counts 2)" in prov.requests[1]["user"]
+    assert len(prov.requests) == 2 and "keep it within 120 characters" in prov.requests[1]["user"]
     with sf() as s:
         assert s.execute(text("SELECT body FROM article_version")).scalar() == ZH
 

@@ -62,7 +62,8 @@ def test_experiment_runs_both_arms_blind_and_scores_them(sf):
         s.execute(text("UPDATE ai_agent_profile SET fallback_model_config_id = NULL"))
         model = s.execute(text("SELECT id FROM ai_model_config WHERE name = 'primary'")).scalar()
         s.commit()
-    out = contrast_ab.create(sf, feed.client(), "contrast-1", nr["zh"], model, 4, NOW, nr["chief"], seed=1)
+    out = contrast_ab.create(sf, feed.client(), "contrast-1", nr["zh"], model, 4, NOW, nr["chief"], seed=1,
+                             arms=contrast_ab.LEGACY_ARMS)
     assert out["pairs"] == 2 and out["by_stratum"]["open_add"] == 2  # thin strata are filled from any class
     rep = Reporter()
     run_pending(sf, Deps(feed=feed.client, provider=rep, now=lambda: NOW), ("draft_generate",))
@@ -150,10 +151,19 @@ def test_experiment_api_and_ratings(client, sf):
     h, rh = login(client, "chief"), login(client, "rev")
     body = {"name": "contrast-api", "account_id": nr["zh"], "model_config_id": model, "n": 10}
     assert client.post("/api/experiments", json=body, headers=rh).status_code == 403
-    assert client.post("/api/experiments", json=body, headers=h).status_code == 200
+    assert client.post("/api/experiments", json=body, headers=h).json()["name"] == "contrast-api"
+    assert client.post("/api/experiments", json=body, headers=h).json()["name"] == "contrast-api-2"  # never a clash
+    auto = client.post("/api/experiments", json={**body, "name": None, "b": {"prompt_version": 3, "style_key": "zh_degen"}},
+                       headers=h).json()["name"]
+    assert auto.startswith("x-") and auto.endswith("model-primary")
+    with sf() as s:
+        s.execute(text("UPDATE ai_model_config SET last_test_ok = false, last_test_detail = '{\"detail\": \"HTTP 403: Cloudflare\"}'"))
+        s.commit()
+    r = client.post("/api/experiments", json=body, headers=h)
+    assert r.status_code == 422 and "failed its last test: HTTP 403" in r.json()["detail"]
     with sf() as s:
         assert s.execute(text("SELECT payload->>'name' FROM job WHERE kind = 'experiment_create'")).scalar() == "contrast-api"
-    assert client.get("/api/experiments", headers=rh).json()["pending"][0]["experiment"] == "contrast-api"
+    assert "contrast-api" in [p["experiment"] for p in client.get("/api/experiments", headers=rh).json()["pending"]]
     assert client.get("/api/experiments/nope/next", headers=rh).status_code == 404
     # ratings of an ordinary version
     feed = two_events(sf)

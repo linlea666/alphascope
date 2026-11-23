@@ -30,9 +30,11 @@ type Detail = {
 
 export default async function EventPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [t, tt, tdr, locale, d, accounts, models] = await Promise.all([getTranslations("events"), getTranslations("trial"),
+  const [t, tt, tdr, locale, d, accounts, models, styleRows] = await Promise.all([getTranslations("events"), getTranslations("trial"),
     getTranslations("drafts"), getLocale(), nrGet<Detail>(`events/${id}`), nrGet<Account[]>("accounts"),
-    nrGet<{ id: number; name: string; model: string; last_test_ok: boolean | null }[]>("ai/model-options")]);
+    nrGet<{ id: number; name: string; model: string; last_test_ok: boolean | null }[]>("ai/model-options"),
+    nrGet<{ key: string; name: string; language: string }[]>("styles")]);
+  const styles = [...new Map(styleRows.map((s) => [s.key, { key: s.key, name: s.name, language: s.language }])).values()];
   const e = d.event;
   const handle = (aid: number) => accounts.find((a) => a.id === aid)?.handle ?? aid;
   const bd = e.score_breakdown;
@@ -109,7 +111,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             )}
           </Panel>
           <Panel title={tt("title")}>
-            <TrialPanel eventId={e.id} venue={e.venue} models={models}
+            <TrialPanel eventId={e.id} venue={e.venue} models={models} styles={styles}
               accounts={accounts.map((a) => ({ id: a.id, handle: a.handle, platform: a.platform, venues: a.venues ?? [], status: a.status, language: a.language }))} />
           </Panel>
           <Panel title={t("articles")} actions={<AutoRefresh active={d.pending_drafts > 0} label={`${tdr("refreshing")} (${d.pending_drafts})`} />}>

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" font-family="{{ font }}">
+  <rect width="1200" height="675" fill="{{ c.bg }}"/>
+  <text x="50" y="64" font-size="34" font-weight="700" fill="{{ c.text }}">{{ title }}</text>
+  <text x="50" y="100" font-size="22" fill="{{ c.muted }}">{{ subject }}</text>
+  <text x="1150" y="64" font-size="26" font-weight="700" fill="{{ c.accent }}" text-anchor="end">{{ brand }}</text>
+  <rect x="50" y="126" width="1100" height="412" rx="10" fill="{{ c.panel }}"/>
+  <text x="70" y="168" font-size="20" fill="{{ c.muted }}">{{ big_label }}</text>
+  <text x="70" y="240" font-size="68" font-weight="700" fill="{{ c[big_tone] }}">{{ big }}</text>
+  <text x="1130" y="168" font-size="17" fill="{{ c.muted }}" text-anchor="end">{{ curve_label }}</text>
+  {% if curve %}
+  <line x1="70" y1="{{ curve.zero }}" x2="1130" y2="{{ curve.zero }}" stroke="{{ c.line }}" stroke-dasharray="4 4"/>
+  <polygon points="{{ curve.area }}" fill="{{ c.up if curve.up else c.down }}" fill-opacity="0.15"/>
+  <polyline points="{{ curve.line }}" fill="none" stroke="{{ c.up if curve.up else c.down }}" stroke-width="3"/>
+  {% endif %}
+  {% for st in stats %}
+  <rect x="{{ 50 + loop.index0 * 277 }}" y="554" width="261" height="70" rx="10" fill="{{ c.panel }}"/>
+  <text x="{{ 66 + loop.index0 * 277 }}" y="580" font-size="16" fill="{{ c.muted }}">{{ st.label }}</text>
+  <text x="{{ 66 + loop.index0 * 277 }}" y="611" font-size="{{ 22 if st.value|length < 16 else 17 }}" font-weight="700" fill="{{ c[st.tone] }}">{{ st.value }}</text>
+  {% endfor %}
+  <text x="50" y="656" font-size="16" fill="{{ c.muted }}">{{ footer }}</text>
+</svg>

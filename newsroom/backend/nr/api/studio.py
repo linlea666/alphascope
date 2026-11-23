@@ -375,6 +375,8 @@ def new_style_version(body: StyleIn, s: Session = Depends(get_session), user: Cu
 class TrialIn(BaseModel):
     account_ids: list[int] = Field(min_length=1, max_length=6)
     model_ids: list[int] = Field(default_factory=list, max_length=6)
+    style_keys: list[str] = Field(default_factory=list, max_length=6)  # several voices side by side
+    prompt_version: int | None = Field(None, ge=1, le=99)  # the role's active version when empty
     angle: str = Field("", max_length=300)
 
 
@@ -389,10 +391,13 @@ def trial_drafts(event_id: int, body: TrialIn, s: Session = Depends(get_session)
     if ev["state"] == "archived":
         raise HTTPException(409, "event is archived")
     if body.model_ids:
-        known = set(s.execute(text("SELECT id FROM ai_model_config WHERE enabled AND id = ANY(:i)"),
-                              {"i": body.model_ids}).scalars())
-        if missing := set(body.model_ids) - known:
-            raise HTTPException(422, f"unknown or disabled models {sorted(missing)}")
+        from nr.api.experiments import usable_model
+        for m in body.model_ids:
+            usable_model(s, m)
+    if body.style_keys:
+        known = set(s.execute(text("SELECT key FROM editorial_style WHERE key = ANY(:k)"), {"k": body.style_keys}).scalars())
+        if missing := set(body.style_keys) - known:
+            raise HTTPException(422, f"unknown styles {sorted(missing)}")
     out = []
     for acc in dict.fromkeys(body.account_ids):
         check_account(s, user, acc, "draft")
@@ -404,10 +409,13 @@ def trial_drafts(event_id: int, body: TrialIn, s: Session = Depends(get_session)
                                     angle=body.angle, reason="trial")
         art = s.execute(text("SELECT id FROM article WHERE assignment_id = :a"), {"a": aid}).scalar() \
             or assignment.accept(s, aid, user.id)
-        models = body.model_ids or [None]
+        models, styles = body.model_ids or [None], body.style_keys or [None]
+        many = len(models) * len(styles) > 1
         jobs = [enqueue(s, "draft_generate", {"assignment_id": aid, "user_id": user.id, "mode": "draft",
-                                              "model_config_id": m, "compare": len(models) > 1},
-                        dedupe_key=f"draft:{aid}:trial:{m}", priority=35) for m in models]
+                                              "model_config_id": m, "compare": many, "style_key": st,
+                                              "prompt_version": body.prompt_version},
+                        dedupe_key=f"draft:{aid}:trial:{m}:{st}:{body.prompt_version}", priority=35)
+                for m in models for st in styles]
         out.append({"account_id": acc, "article_id": art, "jobs": jobs})
     audit.record(s, "article.trial", "news_event", event_id, user_id=user.id, after=body.model_dump())
     s.commit()
@@ -528,7 +536,9 @@ def ai_drafts(s: Session = Depends(get_session), user: CurrentUser = Depends(act
             SELECT v.id, v.article_id, v.version_no, v.model, v.agent_key, v.prompt_ref, v.headline, v.body, v.guard_status,
                    (v.guard_report->>'x_length')::int AS length, v.created_at, (ar.current_version_id = v.id) AS is_current,
                    ar.status AS article_status, ar.deleted_at IS NOT NULL AS deleted, asg.source, acc.handle, acc.platform,
-                   e.id AS event_id, e.event_class, e.coin, c.cost_usd, c.latency_ms
+                   e.id AS event_id, e.event_class, e.coin, c.cost_usd, c.latency_ms, v.thread,
+                   (SELECT m.id FROM media_asset m WHERE m.fact_packet_id = v.fact_packet_id AND m.template_key = v.card_template
+                     AND m.language = ar.language AND m.kind = 'card_png' ORDER BY m.id DESC LIMIT 1) AS card_asset_id
             FROM article_version v JOIN article ar ON ar.id = v.article_id JOIN editorial_account acc ON acc.id = ar.account_id
             JOIN news_event e ON e.id = ar.news_event_id LEFT JOIN assignment asg ON asg.id = ar.assignment_id
             LEFT JOIN ai_call_log c ON c.id = v.ai_call_id

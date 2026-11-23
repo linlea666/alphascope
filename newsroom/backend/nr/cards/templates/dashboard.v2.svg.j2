@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" font-family="{{ font }}">
+  <rect width="1200" height="675" fill="{{ c.bg }}"/>
+  <text x="50" y="64" font-size="34" font-weight="700" fill="{{ c.text }}">{{ title }}</text>
+  <text x="50" y="100" font-size="22" fill="{{ c.muted }}">{{ subject }}</text>
+  <text x="1150" y="64" font-size="26" font-weight="700" fill="{{ c.accent }}" text-anchor="end">{{ brand }}</text>
+  {% for t in tiles %}
+  <rect x="{{ 50 + loop.index0 * 277 }}" y="126" width="261" height="112" rx="10" fill="{{ c.panel }}"/>
+  <text x="{{ 70 + loop.index0 * 277 }}" y="162" font-size="19" fill="{{ c.muted }}">{{ t.label }}</text>
+  <text x="{{ 70 + loop.index0 * 277 }}" y="212" font-size="32" font-weight="700" fill="{{ c[t.tone] }}">{{ t.value }}</text>
+  {% endfor %}
+  <rect x="50" y="256" width="1100" height="128" rx="10" fill="{{ c.panel }}"/>
+  {% for r in row %}
+  <text x="{{ 70 + loop.index0 * 154 }}" y="296" font-size="17" fill="{{ c.muted }}">{{ r.label }}</text>
+  <text x="{{ 70 + loop.index0 * 154 }}" y="348" font-size="{{ 24 if r.value|length < 11 else 19 }}" font-weight="700" fill="{{ c[r.tone] }}">{{ r.value }}</text>
+  {% endfor %}
+  <rect x="50" y="402" width="1100" height="206" rx="10" fill="{{ c.panel }}"/>
+  <text x="70" y="434" font-size="18" fill="{{ c.muted }}">{{ curve_label }}</text>
+  {% if curve_last %}<text x="1130" y="434" font-size="22" font-weight="700" fill="{{ c.up if curve.up else c.down }}" text-anchor="end">{{ curve_last }}</text>{% endif %}
+  {% if curve %}
+  <line x1="70" y1="{{ curve.zero }}" x2="1130" y2="{{ curve.zero }}" stroke="{{ c.line }}" stroke-dasharray="4 4"/>
+  <polygon points="{{ curve.area }}" fill="{{ c.up if curve.up else c.down }}" fill-opacity="0.15"/>
+  <polyline points="{{ curve.line }}" fill="none" stroke="{{ c.up if curve.up else c.down }}" stroke-width="3"/>
+  {% endif %}
+  <text x="50" y="648" font-size="17" fill="{{ c.muted }}">{{ footer }}</text>
+</svg>

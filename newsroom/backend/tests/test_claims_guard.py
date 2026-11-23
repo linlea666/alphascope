@@ -57,7 +57,7 @@ def test_numbers_must_come_from_the_packet():
     assert nums("杠杆五十倍") == ["五十倍"]
     assert nums("一个历史战绩突出的地址") == []
     # tickers, handles and the address shortener are not numbers
-    assert nums("1000PEPE and $BTC by @alpha_1 0xabcd…1234") == []
+    assert nums("1000PEPE and $BTC by @alpha_1 0xabcd…1234 0x9ee…be185") == []
 
 
 def test_wording_constraints():

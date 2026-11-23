@@ -92,7 +92,11 @@ def article_detail(article_id: int, s: Session = Depends(get_session), user: Cur
                                           v.agent_key, v.model, v.prompt_ref, v.fact_packet_version, v.headline, v.body,
                                           v.thread, v.alt_headlines, v.angle, v.added_value, v.difference_from_others,
                                           v.why_shareable, v.risks, v.facts_used, v.guard_status, v.guard_report,
-                                          v.created_at, v.fact_packet_id, v.why_now, v.open_question, v.lede_fact_ids
+                                          v.created_at, v.fact_packet_id, v.why_now, v.open_question, v.lede_fact_ids,
+                                          v.card_template, (SELECT m.id FROM media_asset m JOIN article ar ON ar.id = v.article_id
+                                            WHERE m.fact_packet_id = v.fact_packet_id AND m.template_key = v.card_template
+                                              AND m.language = ar.language AND m.kind = 'card_png'
+                                            ORDER BY m.id DESC LIMIT 1) AS card_asset_id
                                    FROM article_version v LEFT JOIN app_user u ON u.id = v.author_user_id
                                    WHERE v.article_id = :a ORDER BY v.version_no DESC""", {"a": article_id}),
             "publications": rows(s, "SELECT * FROM publication_record WHERE article_id = :a ORDER BY id",
@@ -280,12 +284,16 @@ class RenderIn(BaseModel):
 
 @router.post("/assets/render")
 def render_card(body: RenderIn, s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
-    if body.template not in TEMPLATES:
-        raise HTTPException(422, f"template must be one of {sorted(TEMPLATES)}")
+    from nr.cards.v2 import V2_BUILDERS
+    if body.template not in {*TEMPLATES, *V2_BUILDERS}:
+        raise HTTPException(422, f"template must be one of {sorted({*TEMPLATES, *V2_BUILDERS})}")
     if not s.execute(text("SELECT 1 FROM fact_packet WHERE id = :p"), {"p": body.fact_packet_id}).scalar():
         raise HTTPException(404, "fact packet not found")
-    return render_for_packet(sessionmaker(bind=s.get_bind(), expire_on_commit=False), body.fact_packet_id,
-                             body.template, body.language)
+    try:
+        return render_for_packet(sessionmaker(bind=s.get_bind(), expire_on_commit=False), body.fact_packet_id,
+                                 body.template, body.language)
+    except ValueError as exc:  # the packet has nothing for this card
+        raise HTTPException(422, str(exc)) from exc
 
 
 @router.get("/assets")

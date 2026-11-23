@@ -18,7 +18,7 @@ MULT = {"亿美元": Decimal("1e8"), "亿": Decimal("1e8"), "万美元": Decimal
         "mn": Decimal("1e6"), "b": Decimal("1e9"), "bn": Decimal("1e9"), "billion": Decimal("1e9")}
 URL = re.compile(r"https?://\S+")
 HANDLE = re.compile(r"@\w+")
-ADDRESS = re.compile(r"0x[0-9a-fA-F]{4,}(?:…|\.\.\.)?[0-9a-fA-F]*")
+ADDRESS = re.compile(r"0x[0-9a-fA-F]{3,}(?:…|\.\.\.)?[0-9a-fA-F]*")  # full, or short as 0x9ee…be185
 OKX_REF = re.compile(r"OKX·\d+")
 # boundaries are ASCII-only: Python's \w also matches CJK, and "约1500万" must still yield 1500
 TICKER = re.compile(r"(?<![A-Za-z0-9])\$?\d*[A-Z][A-Z0-9]+(?![A-Za-z0-9])")  # BTC, 1000PEPE, $ETH (cashtags)
@@ -83,6 +83,15 @@ def _half_unit(raw: str) -> Decimal:
     digits = raw.replace(",", "")
     places = len(digits.split(".")[1]) if "." in digits else 0
     return Decimal(5).scaleb(-(places + 1))
+
+
+def _rounded_half_unit(raw: str) -> Decimal:
+    """Trailing zeros of a whole number are rounding ("2800万" is 2800 to the nearest hundred), not precision."""
+    digits = raw.replace(",", "")
+    if "." in digits or digits == "0":
+        return _half_unit(raw)
+    zeros = len(digits) - len(digits.rstrip("0"))
+    return Decimal(5).scaleb(zeros - 1)
 
 
 def fact_numbers(facts: list[dict]) -> dict[str, list[Decimal]]:
@@ -190,6 +199,8 @@ def check(text: str, facts: list[dict], allow: list[str]) -> list[Finding]:
         else:
             mult = MULT.get(unit, Decimal(1))
             value, tol = v * mult, half * mult
+            if value >= 1000:  # a round amount; the 5% rule below still stops a coarse figure standing for another
+                tol = _rounded_half_unit(raw) * mult
             money = bool(m.group("cur")) or "美元" in unit or after.startswith(("usd", "美元", "美金", "dollar"))
             candidates = pool["money"] if money else pool["money"] + pool["plain"]
         # amounts: also within 5%, so a coarse rounding cannot stand for a different figure

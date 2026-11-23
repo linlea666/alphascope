@@ -10,7 +10,8 @@ import { fmtTime } from "@/lib/format";
 type V = { id: number; article_id: number; version_no: number; model: string | null; agent_key: string | null; prompt_ref: string | null;
   headline: string; body: string; guard_status: string; length: number | null; created_at: string; is_current: boolean;
   article_status: string; deleted: boolean; source: string | null; handle: string; platform: string; event_id: number;
-  event_class: string; coin: string; cost_usd: number | null; latency_ms: number | null };
+  event_class: string; coin: string; cost_usd: number | null; latency_ms: number | null; thread: string[] | null;
+  card_asset_id: number | null };
 type D = { versions: V[]; failures: { created_at: string; purpose: string; model: string | null; status: string; error: string | null; article_id: number | null }[];
   waiting: { kind: string; n: number; last_error: string | null }[]; models: { model: string }[] };
 
@@ -57,7 +58,14 @@ export default async function DraftsPage({ searchParams }: { searchParams: Promi
                           {v.is_current && <> <Badge tone="accent">{t("current")}</Badge></>} <StateBadge state={v.article_status} />
                         </div>
                         {v.headline && <div className="font-medium">{v.headline}</div>}
-                        <p className="line-clamp-4 whitespace-pre-wrap">{v.body}</p>
+                        <p className="line-clamp-6 whitespace-pre-wrap">{v.body}</p>
+                        {v.thread?.map((x, i) => <p key={i} className="mt-1 whitespace-pre-wrap border-l-2 border-border pl-2 text-xs text-muted">{x}</p>)}
+                        {v.card_asset_id && (
+                          <a href={`/api/bff/assets/${v.card_asset_id}/file`} target="_blank" rel="noreferrer">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={`/api/bff/assets/${v.card_asset_id}/file`} alt="card" className="mt-2 w-80 rounded border border-border" />
+                          </a>
+                        )}
                       </td>
                       <td className={`${td} text-xs`}>{v.model}<div className="text-muted">{v.agent_key}</div>
                         <div className="text-muted">${Number(v.cost_usd ?? 0).toFixed(4)} · {v.latency_ms ?? "—"}ms</div></td>

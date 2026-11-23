@@ -22,8 +22,9 @@ OPEN_WORDS = re.compile(r"新开|刚开|开仓(?!均?价)|建仓|开了|\bjust o
                         r"\bentered\b", re.I)
 FIRST_SEEN_OK = re.compile(r"首次(?:被)?(?:观察|发现|监测)|已持有|\bfirst (?:observed|seen|spotted)\b|\balready (?:held|holding)\b",
                            re.I)
-MARGIN_WORDS = re.compile(r"本金|保证金|投入|押上|押注|砸下|砸了|梭哈|\ball[- ]in\b|\bstaked\b|\bput up\b|\bbet\b|\bwagered\b|"
-                          r"\bown money\b|\bmargin\b", re.I)
+MARGIN_WORDS = re.compile(r"本金|保证金|投入|\bstaked\b|\bput up\b|\bown money\b|\bmargin\b", re.I)
+# figures of speech ("押注BTC下跌", "梭哈") are fine on their own; attached to an amount they turn notional into stake
+STAKE_WORDS = re.compile(r"(?:押上|押注|砸下|砸了|梭哈|\ball[- ]in\b|\bbet\b|\bwagered\b)\s*(?:了|约|近|超)?\s*\$?\d", re.I)
 ESTIMATE = re.compile(r"估算|约|大约|推算|\bestimated\b|\bimplied\b|\broughly\b|\babout\b|\b~", re.I)
 WHOLE_MARKET = re.compile(r"全市场|全网|所有交易者|所有人|整个市场|\bwhole market\b|\bentire market\b|\ball traders\b|"
                           r"\beveryone\b", re.I)
@@ -96,9 +97,10 @@ def check(text: str, packet: dict, forbidden: list[str]) -> list[Finding]:
             for m in OPEN_WORDS.finditer(sent):
                 if not FIRST_SEEN_OK.search(sent):
                     flag("OPEN_NOT_OBSERVED", start, m, "the position was already open when first observed")
-        for m in MARGIN_WORDS.finditer(sent):
-            if money and not (_near(money, margin_v) and ESTIMATE.search(sent)):
-                flag("NOTIONAL_AS_MARGIN", start, m, "notional is not margin; margin may only be cited as the estimate")
+        for rx in (MARGIN_WORDS, STAKE_WORDS):
+            for m in rx.finditer(sent):
+                if money and not (_near(money, margin_v) and ESTIMATE.search(sent)):
+                    flag("NOTIONAL_AS_MARGIN", start, m, "notional is not margin; margin may only be cited as the estimate")
         for m in WHOLE_MARKET.finditer(sent):
             flag("WHOLE_MARKET_CLAIM", start, m, "the data is an observed sample, not the whole market")
         for m in IDENTITY.finditer(sent):

@@ -26,7 +26,10 @@ STRATA = (("open_add", ("whale_open", "whale_add", "flip", "notable_trader_move"
           ("underwater_add", ("underwater_add",), 10 / 30),
           ("near_liquidation", ("near_liquidation",), 5 / 30),
           ("close", ("whale_close", "liquidation"), 5 / 30))
-ARMS = {"a": {"prompt_version": 1, "variant": "baseline"}, "b": {"prompt_version": 2, "variant": None}}
+# what each arm uses: prompt version, optional variant / style / model (the experiment's model when absent)
+LEGACY_ARMS = {"a": {"prompt_version": 1, "variant": "baseline"}, "b": {"prompt_version": 2}}  # the first run
+DEFAULT_ARMS = {"a": {"prompt_version": 2}, "b": {"prompt_version": 3}}
+ARM_KEYS = ("prompt_version", "variant", "style_key", "model_config_id")
 DIMENSIONS = ("information", "lede", "evidence", "publishable")
 # families of contrast facts; an event "has contrast" when at least two families say something
 FAMILIES = {"archive": ("contrast.",), "radar": ("radar.prior_positions",), "book": ("book.positions",),
@@ -60,10 +63,22 @@ def candidates(s: Session, classes: tuple[str, ...], venues: list[str], now: dat
         {"c": list(classes), "v": venues, "since": now - timedelta(hours=48), "n": limit}) if r[0] not in taken]
 
 
+def arms_of(s: Session, name: str) -> dict:
+    return s.execute(text("SELECT arms FROM experiment WHERE name = :x"), {"x": name}).scalar() or LEGACY_ARMS
+
+
 def create(sf: sessionmaker, client: FeedClient, name: str, account_id: int, model_id: int, n: int, now: datetime,
-           user_id: int, seed: int | None = None) -> dict:
+           user_id: int, seed: int | None = None, arms: dict | None = None) -> dict:
     """Pick the sample (refreshing each event's facts first), open one trial article per event and queue both arms."""
     rng = random.Random(seed)
+    arms = {k: {f: v for f, v in (arms or DEFAULT_ARMS)[k].items() if f in ARM_KEYS and v not in (None, "")}
+            for k in ("a", "b")}
+    with sf() as s:
+        s.execute(text("""INSERT INTO experiment (name, arms, account_id, created_by) VALUES (:x, CAST(:a AS jsonb), :acc, :u)
+                          ON CONFLICT (name) DO NOTHING"""),
+                  {"x": name, "a": json.dumps(arms), "acc": account_id, "u": user_id})
+        s.commit()
+        arms = arms_of(s, name)
     with sf() as s:
         acc = s.execute(text("SELECT venues FROM editorial_account WHERE id = :a"), {"a": account_id}).scalar()
         if acc is None:
@@ -122,7 +137,7 @@ def create(sf: sessionmaker, client: FeedClient, name: str, account_id: int, mod
             for arm in ("a", "b"):
                 enqueue(s, "draft_generate", {"assignment_id": aid, "user_id": user_id, "mode": "draft",
                                               "model_config_id": model_id, "compare": arm == "b",
-                                              "experiment_pair": pid, "arm": arm, **ARMS[arm]},
+                                              "experiment_pair": pid, "arm": arm, **arms[arm]},
                         dedupe_key=f"exp:{pid}:{arm}", priority=40, now=now)
             pairs.append(pid)
         audit.record(s, "experiment.create", "experiment", name, user_id=user_id,
@@ -141,7 +156,7 @@ def run_arm(sf: sessionmaker, payload: dict, now: datetime, job_id: int | None =
         out = generate_draft(sf, payload["assignment_id"], now, job_id=job_id, transport=transport,
                              user_id=payload.get("user_id"), mode="draft", model_config_id=payload["model_config_id"],
                              compare=payload.get("compare", False), prompt_version=payload["prompt_version"],
-                             variant=payload.get("variant"))
+                             variant=payload.get("variant"), style_key=payload.get("style_key"))
     except Exception as exc:
         with sf() as s:
             s.execute(text(f"UPDATE experiment_pair SET {col}_error = :e WHERE id = :p"),
@@ -227,9 +242,10 @@ def results(s: Session, name: str) -> dict:
         SELECT v.id, v.guard_status, v.lede_fact_ids, fp.content AS packet FROM article_version v
         JOIN fact_packet fp ON fp.id = v.fact_packet_id WHERE v.id = ANY(:i)"""), {"i": vids}).mappings()}
     tokens = {r[0]: int(r[1] or 0) for r in s.execute(text("""
-        SELECT split_part(prompt_ref, '@v', 2), sum(coalesce(input_tokens, 0) + coalesce(output_tokens, 0))
-        FROM ai_call_log WHERE article_id = ANY(:a) AND purpose = 'draft_generate' GROUP BY 1"""),
-        {"a": [p["article_id"] for p in pairs]})}
+        SELECT j.payload->>'arm', sum(coalesce(c.input_tokens, 0) + coalesce(c.output_tokens, 0))
+        FROM ai_call_log c JOIN job j ON j.id = c.job_id
+        WHERE j.kind = 'draft_generate' AND (j.payload->>'experiment_pair')::bigint = ANY(:p) GROUP BY 1"""),
+        {"p": [p["id"] for p in pairs]})}
     arms = {}
     for arm in "ab":
         done = [vers[p[f"{arm}_version_id"]] for p in pairs if p[f"{arm}_version_id"]]
@@ -238,7 +254,7 @@ def results(s: Session, name: str) -> dict:
                      "guard_pass": round(sum(1 for v in done if v["guard_status"] != "fail") / len(done), 3) if done else None,
                      "misleading": sum(1 for v in votes if v[f"misleading_{arm}"]),
                      "mean_scores": {d: round(sum(x) / len(x), 2) if x else None for d, x in sc.items()},
-                     "tokens": tokens.get(str(ARMS[arm]["prompt_version"]), 0)}
+                     "tokens": tokens.get(arm, 0)}
     with_contrast = [p for p in ready if len(families(vers[p["b_version_id"]]["packet"])) >= 2]
     fam = {k: sum(1 for p in ready if k in families(vers[p["b_version_id"]]["packet"])) for k in FAMILIES}
     b_wins = sum(1 for v in votes if v["winner"] == "b") + 0.5 * sum(1 for v in votes if v["winner"] == "tie")
@@ -255,7 +271,7 @@ def results(s: Session, name: str) -> dict:
     stop = [k for k, hit in (("contrast_coverage_below_40pct", coverage is not None and coverage < CRITERIA["stop_contrast_coverage"]),
                              ("b_win_rate_below_55pct", win is not None and len(votes) >= 10 and win < CRITERIA["stop_b_win_rate"]))
             if hit]
-    return {"experiment": name, "pairs": len(pairs), "ready": len(ready), "votes": len(votes),
+    return {"experiment": name, "arms_config": arms_of(s, name), "pairs": len(pairs), "ready": len(ready), "votes": len(votes),
             "voters": len({v["user_id"] for v in votes}), "b_win_rate": win, "arms": arms,
             "contrast_coverage": coverage, "families": fam, "extra_tokens_b": extra,
             "by_stratum": {k: sum(1 for p in pairs if p["stratum"] == k) for k, _, _ in STRATA},

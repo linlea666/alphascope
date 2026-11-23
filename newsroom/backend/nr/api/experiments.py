@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from nr import audit
-from nr.api.common import one, rows
+from nr.api.common import now, one, rows
 from nr.auth.deps import active_user, require_roles
 from nr.auth.sessions import CurrentUser
 from nr.db import get_session
@@ -22,11 +22,42 @@ JUDGES = require_roles("admin", "editor_in_chief", "editor", "reviewer")
 RATING_TAGS = ("information", "lede", "evidence", "story", "tone", "wrong_angle", "misleading")
 
 
+class ArmIn(BaseModel):
+    prompt_version: int = Field(ge=1, le=99)
+    style_key: str | None = Field(None, max_length=64)
+    model_config_id: int | None = None  # the experiment's model when empty
+
+
 class ExperimentIn(BaseModel):
-    name: str = Field(pattern=r"^[a-z0-9][a-z0-9_-]{2,47}$")
+    name: str | None = Field(None, pattern=r"^[a-z0-9][a-z0-9_-]{2,40}$")
     account_id: int
     model_config_id: int
     n: int = Field(30, ge=4, le=40)
+    a: ArmIn = ArmIn(prompt_version=2)
+    b: ArmIn = ArmIn(prompt_version=3)
+
+
+def usable_model(s: Session, model_id: int) -> None:
+    """A model that failed its last test would fail every draft: say why instead of queueing them."""
+    m = one(s, "SELECT name, model, enabled, last_test_ok, last_test_detail FROM ai_model_config WHERE id = :m",
+            {"m": model_id})
+    if m is None or not m["enabled"]:
+        raise HTTPException(422, f"model {model_id} is unknown or disabled")
+    if m["last_test_ok"] is False:
+        why = (m["last_test_detail"] or {}).get("detail") or ""
+        raise HTTPException(422, f"model {m['name']} ({m['model']}) failed its last test{': ' + str(why)[:160] if why else ''}"
+                                 " - test it again under Settings > AI models first")
+
+
+def free_name(s: Session, base: str) -> str:
+    """Names never collide: a taken one gets -2, -3, ..."""
+    name, i = base, 1
+    while s.execute(text("""SELECT 1 FROM experiment WHERE name = :x UNION SELECT 1 FROM experiment_pair WHERE experiment = :x
+                            UNION SELECT 1 FROM job WHERE kind = 'experiment_create' AND payload->>'name' = :x
+                              AND status IN ('queued', 'running')"""), {"x": name}).first():
+        i += 1
+        name = f"{base}-{i}"
+    return name
 
 
 @router.get("/experiments")
@@ -42,20 +73,27 @@ def list_experiments(s: Session = Depends(get_session), user: CurrentUser = Depe
 
 @router.post("/experiments")
 def create_experiment(body: ExperimentIn, s: Session = Depends(get_session), user: CurrentUser = Depends(CHIEF)):
-    if s.execute(text("SELECT 1 FROM experiment_pair WHERE experiment = :x"), {"x": body.name}).scalar():
-        raise HTTPException(409, "an experiment with this name exists")
     if one(s, "SELECT id FROM editorial_account WHERE id = :a", {"a": body.account_id}) is None:
         raise HTTPException(422, "unknown account")
-    if one(s, "SELECT id FROM ai_model_config WHERE id = :m AND enabled", {"m": body.model_config_id}) is None:
-        raise HTTPException(422, "unknown or disabled model")
-    for key in ("reporter", "reporter_breaking", "reporter_derivatives"):  # arm b needs the v2 prompts
-        if not s.execute(text("SELECT 1 FROM prompt_template WHERE key = :k AND version = 2"), {"k": key}).scalar():
-            raise HTTPException(409, f"prompt {key}@v2 is missing: run the seed (newsroom/start.sh update)")
-    job = enqueue(s, "experiment_create", {**body.model_dump(), "user_id": user.id},
-                  dedupe_key=f"experiment:{body.name}", priority=30)
-    audit.record(s, "experiment.request", "experiment", body.name, user_id=user.id, after=body.model_dump())
+    for mid in {body.model_config_id, body.a.model_config_id, body.b.model_config_id} - {None}:
+        usable_model(s, mid)
+    for arm in (body.a, body.b):
+        for key in ("reporter", "reporter_breaking", "reporter_derivatives"):
+            if not s.execute(text("SELECT 1 FROM prompt_template WHERE key = :k AND version = :v"),
+                             {"k": key, "v": arm.prompt_version}).scalar():
+                raise HTTPException(409, f"prompt {key}@v{arm.prompt_version} is missing: run the seed "
+                                         "(newsroom/start.sh update)")
+        if arm.style_key and not s.execute(text("SELECT 1 FROM editorial_style WHERE key = :k"), {"k": arm.style_key}).scalar():
+            raise HTTPException(422, f"unknown style {arm.style_key}")
+    model = s.execute(text("SELECT model FROM ai_model_config WHERE id = :m"), {"m": body.model_config_id}).scalar()
+    base = body.name or "x-" + now().strftime("%m%d-%H%M") + "-" + re.sub(r"[^a-z0-9]+", "-", model.lower())[:16].strip("-")
+    name = free_name(s, base)
+    payload = {**body.model_dump(exclude={"a", "b"}), "name": name, "user_id": user.id,
+               "arms": {"a": body.a.model_dump(), "b": body.b.model_dump()}}
+    job = enqueue(s, "experiment_create", payload, dedupe_key=f"experiment:{name}", priority=30)
+    audit.record(s, "experiment.request", "experiment", name, user_id=user.id, after=payload)
     s.commit()
-    return {"job": job}
+    return {"job": job, "name": name}
 
 
 @router.get("/experiments/{name}/next")

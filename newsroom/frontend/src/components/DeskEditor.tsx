@@ -127,6 +127,12 @@ export function DeskEditor({ articleId, status, current, versions, facts, curren
           {current.why_now && <div>{t("whyNow")}: {current.why_now}</div>}
           {current.open_question && <div>{t("openQuestion")}: {current.open_question}</div>}
           {(current.lede_fact_ids?.length ?? 0) > 0 && <div>{t("ledeFacts")}: {current.lede_fact_ids!.join(", ")}</div>}
+          {current.card_asset_id && (
+            <a href={`/api/bff/assets/${current.card_asset_id}/file`} target="_blank" rel="noreferrer">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/api/bff/assets/${current.card_asset_id}/file`} alt="card" className="mt-2 w-full max-w-md rounded border border-border" />
+            </a>
+          )}
           {current.risks?.length > 0 && <div>{t("risks")}: {current.risks.join("; ")}</div>}
           {current.alt_headlines?.length > 0 && <div>alt: {current.alt_headlines.join(" | ")}</div>}
         </div>

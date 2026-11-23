@@ -8,8 +8,8 @@ import json
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from nr.ai.prompts import SEEDS, SEEDS_V2
-from nr.styles import LIBRARY
+from nr.ai.prompts import SEEDS, SEEDS_V2, SEEDS_V3
+from nr.styles import HOUSE, LIBRARY
 
 STYLES = [
     {"key": "zh_data_explainer", "language": "zh", "name": "中文数据解读",
@@ -70,12 +70,13 @@ AGENTS = [
 
 def seed(s: Session) -> dict:
     out = {"styles": 0, "accounts": 0, "prompts": 0, "agents": 0}
-    for st in STYLES + LIBRARY:
+    for st in STYLES + LIBRARY + HOUSE:
         out["styles"] += s.execute(text("""
-            INSERT INTO editorial_style (key, version, language, name, guide, structure, forbidden)
-            VALUES (:k, 1, :l, :n, :g, CAST(:s AS jsonb), CAST(:f AS jsonb)) ON CONFLICT DO NOTHING"""),
+            INSERT INTO editorial_style (key, version, language, name, guide, structure, forbidden, examples)
+            VALUES (:k, 1, :l, :n, :g, CAST(:s AS jsonb), CAST(:f AS jsonb), CAST(:e AS jsonb)) ON CONFLICT DO NOTHING"""),
             {"k": st["key"], "l": st["language"], "n": st["name"], "g": st["guide"],
-             "s": json.dumps(st["structure"], ensure_ascii=False), "f": json.dumps(st["forbidden"], ensure_ascii=False)}
+             "s": json.dumps(st["structure"], ensure_ascii=False), "f": json.dumps(st["forbidden"], ensure_ascii=False),
+             "e": json.dumps(st.get("examples", []), ensure_ascii=False)}
         ).rowcount
     for a in ACCOUNTS:
         out["accounts"] += s.execute(text("""
@@ -86,7 +87,7 @@ def seed(s: Session) -> dict:
             {"h": a["handle"], "d": a["display_name"], "l": a["language"], "tz": a["timezone"], "st": a["style_key"],
              "p": a["positioning"], "ap": json.dumps(a["audience_profile"], ensure_ascii=False),
              "pf": a.get("platform", "x"), "v": a["venues"], "lp": a.get("long_post_allowed", False)}).rowcount
-    for key, p in [*SEEDS.items(), *SEEDS_V2.items()]:
+    for key, p in [*SEEDS.items(), *SEEDS_V2.items(), *SEEDS_V3.items()]:
         out["prompts"] += s.execute(text("""
             INSERT INTO prompt_template (key, version, system_text, user_template, sha256, notes)
             VALUES (:k, :v, :s, :u, :h, 'seed') ON CONFLICT DO NOTHING"""),

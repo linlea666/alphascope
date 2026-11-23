@@ -31,25 +31,35 @@ def usd(v: Decimal) -> dict[str, list[str]]:
     else:
         en = [f"{sign}${_trim(_q(a, 2))}"]
     en.append(f"{sign}${_commas(a, 0)}")
+    # the way people write it comes first: 2-3 significant digits (2812万美元, 1.29亿美元, 39.3万美元)
     if a >= Decimal("1e8"):
         zh = [f"{sign}{_trim(_q(a / Decimal('1e8'), 2))}亿美元", f"{sign}{_trim(_q(a / Decimal('1e8'), 1))}亿美元"]
+    elif a >= Decimal("1e6"):
+        zh = [f"{sign}{_q(a / Decimal('1e4'), 0)}万美元", f"{sign}{_trim(_q(a / Decimal('1e4'), 2))}万美元"]
     elif a >= Decimal("1e4"):
-        zh = [f"{sign}{_trim(_q(a / Decimal('1e4'), 2))}万美元", f"{sign}{_q(a / Decimal('1e4'), 0)}万美元"]
+        zh = [f"{sign}{_trim(_q(a / Decimal('1e4'), 1))}万美元", f"{sign}{_trim(_q(a / Decimal('1e4'), 2))}万美元"]
     else:
-        zh = [f"{sign}{_trim(_q(a, 2))}美元"]
+        zh = [f"{sign}{_q(a, 0)}美元", f"{sign}{_trim(_q(a, 2))}美元"]
     return {"zh": list(dict.fromkeys(zh)), "en": list(dict.fromkeys(en))}
 
 
 def price(v: Decimal) -> dict[str, list[str]]:
     a = abs(v)
-    places = 1 if a >= 1000 else 2 if a >= 1 else 6
+    if a >= 1000:  # whole dollars first; 6.35万 is how Chinese posts quote a BTC price
+        s, fine = _commas(a, 0), _trim(_commas(a, 1))
+        zh = [f"{s}美元", s, f"{fine}美元"] + ([f"{_trim(_q(a / Decimal('1e4'), 2))}万"] if a >= 10000 else [])
+        return {"zh": list(dict.fromkeys(zh)), "en": list(dict.fromkeys([f"${s}", f"${fine}"]))}
+    places = 2 if a >= 1 else 6
     s = _trim(_commas(a, places)) if a >= 1 else _trim(_q(a, places))
     return {"zh": [f"{s}美元", s], "en": [f"${s}"]}
 
 
 def size(v: Decimal, coin: str) -> dict[str, list[str]]:
-    s = _trim(_commas(abs(v), 4))
-    return {"zh": [f"{s} {coin}", f"{s}枚{coin}"], "en": [f"{s} {coin}"]}
+    a = abs(v)
+    exact = _trim(_commas(a, 4))
+    s = _commas(a, 0) if a >= 100 else _trim(_commas(a, 2)) if a >= 1 else exact  # 267 BTC, not 267.4216 BTC
+    return {"zh": list(dict.fromkeys([f"{s}枚{coin}", f"{s} {coin}", f"{exact} {coin}"])),
+            "en": list(dict.fromkeys([f"{s} {coin}", f"{exact} {coin}"]))}
 
 
 def leverage(v: Decimal) -> dict[str, list[str]]:
@@ -69,6 +79,15 @@ def multiple(v: Decimal) -> dict[str, list[str]]:
 
 def count(n: int) -> dict[str, list[str]]:
     return {"zh": [str(n)], "en": [str(n)]}
+
+
+def headcount(n: int) -> dict[str, list[str]]:
+    """A large count the way a post says it: 约1.4万 / ~14,000."""
+    if n < 1000:
+        return count(n)
+    wan = _trim(_q(Decimal(n) / Decimal("1e4"), 1))
+    k = f"{round(n, -3):,}"
+    return {"zh": [f"约{wan}万", f"{n:,}"], "en": [f"~{k}", f"{n:,}"]}
 
 
 def duration(hours: Decimal) -> tuple[Decimal, str, dict[str, list[str]]]:

@@ -41,17 +41,24 @@ export function FieldForm({ fields, path, method = "POST", submitLabel, showResu
         setError(null);
         setResult(null);
         const body: Record<string, unknown> = {};
+        // "a.prompt_version" fills body.a.prompt_version
+        const put = (name: string, v: unknown) => {
+          const path = name.split(".");
+          let o = body;
+          for (const k of path.slice(0, -1)) o = (o[k] ??= {}) as Record<string, unknown>;
+          o[path[path.length - 1]] = v;
+        };
         try {
           for (const fd of fields) {
             const raw = f.get(fd.name);
             const s = raw === null ? "" : String(raw);
-            if (fd.type === "checkbox") body[fd.name] = raw === "on";
-            else if (fd.type === "number") body[fd.name] = s === "" ? null : Number(s);
-            else if (fd.type === "select" && fd.numeric) body[fd.name] = s === "" ? null : Number(s);
-            else if (fd.type === "json") body[fd.name] = s.trim() ? JSON.parse(s) : {};
-            else if (fd.type === "list") body[fd.name] = s.split(",").map((x) => x.trim()).filter(Boolean);
-            else if (fd.type === "numbers") body[fd.name] = s.split(",").map((x) => x.trim()).filter(Boolean).map(Number);
-            else body[fd.name] = s === "" && !fd.required ? null : s;
+            if (fd.type === "checkbox") put(fd.name, raw === "on");
+            else if (fd.type === "number") put(fd.name, s === "" ? null : Number(s));
+            else if (fd.type === "select" && fd.numeric) put(fd.name, s === "" ? null : Number(s));
+            else if (fd.type === "json") put(fd.name, s.trim() ? JSON.parse(s) : {});
+            else if (fd.type === "list") put(fd.name, s.split(",").map((x) => x.trim()).filter(Boolean));
+            else if (fd.type === "numbers") put(fd.name, s.split(",").map((x) => x.trim()).filter(Boolean).map(Number));
+            else put(fd.name, s === "" && !fd.required ? null : s);
           }
         } catch {
           return setError("invalid JSON");

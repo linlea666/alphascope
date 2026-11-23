@@ -49,3 +49,94 @@ def _style(lang: str, spec) -> dict:
 
 
 LIBRARY = [_style(lang, spec) for spec in SPECS for lang in ("zh", "en")]
+
+
+# ---- house voices for X (2026-11): what the accounts people actually follow do ----------------------------------
+# Each has its own avoid list, a structure the prompt reads and examples whose {placeholders} show shape, never facts.
+# The default reporter for each is in settings "styles.by_reporter".
+
+def _house(key, language, name, guide, structure, examples, avoid=()):
+    common = COMMON_ZH if language == "zh" else COMMON_EN
+    return {"key": f"{language}_{key}", "language": language, "name": name, "guide": guide,
+            "structure": structure, "examples": examples,
+            "forbidden": [w for w in common if w not in structure.get("allow", [])] + list(avoid)}
+
+
+HOUSE = [
+    _house("whale_alert", "zh", "鲸鱼警报",
+           "像 X 上最受欢迎的巨鲸快讯号那样写。第一行就是钩子（🚨鲸鱼警报 / 突发 / 刚刚），接着两三行、每行一个事实，"
+           "最后一句反问或看点。只挑 2–3 个最有冲击力的数字，全部取整。少形容词，多反差。",
+           {"lines": "3-5", "emoji": "0-2，如 🚨🐋", "cashtag": True, "closing": "反问或看点",
+            "prefer_hooks": ["record", "top_of_sample", "personal_record", "sheer_size"]},
+           ["🚨 鲸鱼警报\n\n{短地址} 刚刚把 $BTC 空单加到 {金额}\n在我们追踪的 {地址数} 个地址里排第 {名次}\n\n他累计赚了 {累计盈利}。\n\n他知道些什么？",
+            "突发：一头巨鲸刚刚开出 {金额} 的 $ETH 多单，{杠杆} 杠杆\n\n强平价 {强平价}，离现价只有 {距离}\n\n这次扛得住吗？"]),
+    _house("degen", "zh", "赌鲸江湖",
+           "口语、带情绪，像币圈老哥围观：『刚刚，巨鲸又上头了』『拉满』『赌狗』都可以用，但每个数字都必须对。"
+           "重点写杠杆、强平价、浮盈浮亏的刺激感。说本金或保证金时只能用估算值，并带「约」。",
+           {"lines": "3-5", "emoji": "0-2，如 🙈🔥", "cashtag": True, "closing": "调侃或反问",
+            "prefer_hooks": ["near_liquidation", "adding_underwater", "sheer_size", "record"], "allow": ["梭哈"]},
+           ["刚刚，巨鲸又上头了\n\n用约 {保证金估算} 拉满，开出 {金额} $BTC 多单\n{杠杆} 全仓，爆仓价 {强平价}\n\n赌狗的快乐你想象不到",
+            "{短地址} 浮亏 {浮亏} 还在加 $ETH 空单 🙈\n\n仓位已经 {金额}，离强平只剩 {距离}\n\n头铁还是有底牌？"]),
+    _house("dossier", "zh", "追踪档案",
+           "像追一个人的连续剧：先交代他过去做过什么（战绩、上一笔怎么结束），再写这次做了什么，最后留一个悬念。"
+           "历史只用档案里有的事实，并带上「自某月以来」这样的范围。",
+           {"lines": "4-6", "emoji": "0-1", "cashtag": True, "closing": "悬念",
+            "prefer_hooks": ["last_time", "sequel", "record", "keeps_adding", "personal_record"]},
+           ["{短地址} 又回来了。\n\n上一次他做多 $BTC，拿了 {时长}，净赚 {盈利}。\n\n现在他反手做空 {金额}，{杠杆}。\n\n这次还能赢吗？",
+            "时隔几天，这个地址再次加仓 $SOL。\n\n自 {日期} 以来他在 SOL 上开过 {次数} 次仓，这次最大：{金额}。\n现浮亏 {浮亏}。"]),
+    _house("crowd", "zh", "聪明钱对赌",
+           "讲对立：这头巨鲸站在哪边，我们追踪的其他人、尤其是择时高手站在哪边。用排名和人数制造反差，最后问谁会是对的。"
+           "一定要说「我们追踪的地址里」，不能说全网。",
+           {"lines": "4-5", "emoji": "0-1，如 ⚔️", "cashtag": True, "closing": "谁会是对的",
+            "prefer_hooks": ["against_timers", "top_of_sample", "hedge"]},
+           ["巨鲸 vs 择时高手 ⚔️\n\n{短地址} 刚刚把 $ETH 空单加到 {金额}，在我们追踪的地址里排第 {名次}\n\n"
+            "但 {人数} 位择时高手里，{多头人数} 位在做多\n\n谁会是对的？"]),
+    _house("outcome", "zh", "结局复盘",
+           "写一个仓位的结局或续集：之前怎样，现在怎样。没有发布过的前情时，就用档案里上一笔同方向的结局做对照。"
+           "不预测，不归因。",
+           {"lines": "3-5", "emoji": "0-1", "cashtag": True, "closing": "一句看点",
+            "prefer_hooks": ["sequel", "last_time"]},
+           ["还记得那笔 {金额} 的 $BTC 空单吗？\n\n现在：{现状}\n\n{一句看点}"]),
+    _house("one_liner", "zh", "一句话快讯",
+           "一到两行，让配图说话。只写最硬的一个事实和一个数字。", {"lines": "1-2", "emoji": "0-1，如 🐋", "cashtag": True,
+                                                    "closing": "无", "prefer_hooks": ["sheer_size", "top_of_sample"]},
+           ["🐋 {短地址} 刚刚开出 {金额} $HYPE 空单，{杠杆}"]),
+    _house("whale_alert", "en", "Whale alert",
+           "Write like the whale-alert accounts people follow: a hook line (🚨 WHALE ALERT / BREAKING / JUST IN), two or "
+           "three short lines with one fact each, then a question or what to watch. Two or three round numbers only.",
+           {"lines": "3-5", "emoji": "0-2, e.g. 🚨🐋", "cashtag": True, "closing": "question",
+            "prefer_hooks": ["record", "top_of_sample", "personal_record", "sheer_size"], "allow": ["BREAKING:"]},
+           ["🚨 WHALE ALERT\n\n{short address} just took his $BTC short to {amount}\nThat's #{rank} among the {N} wallets "
+            "we track.\n\nHe's up {all-time pnl} all-time.\n\nDoes he know something?"]),
+    _house("degen", "en", "Degen desk",
+           "Casual and punchy, like CT watching a high-stakes trade: 'just went full degen', 'max leverage'. Every "
+           "number exact; margin only as the estimate with '~'.",
+           {"lines": "3-5", "emoji": "0-2", "cashtag": True, "closing": "quip or question",
+            "prefer_hooks": ["near_liquidation", "adding_underwater", "sheer_size", "record"]},
+           ["This whale just went full degen\n\n~{margin} margin → {amount} $BTC long at {leverage}\nLiquidation at "
+            "{liq price}\n\nIron hands or about to get rekt?"]),
+    _house("dossier", "en", "Trader dossier",
+           "Tell it as a series: what he did before (record, how the last trade ended), what he is doing now, and a "
+           "cliffhanger. History only from the archive, with its range ('since March').",
+           {"lines": "4-6", "emoji": "0-1", "cashtag": True, "closing": "cliffhanger",
+            "prefer_hooks": ["last_time", "sequel", "record", "keeps_adding", "personal_record"]},
+           ["{short address} is back.\n\nLast time he went long $BTC for {duration} and made {profit}.\n\nNow he's "
+            "short {amount} at {leverage}.\n\nCan he do it again?"]),
+    _house("crowd", "en", "Smart money vs whale",
+           "Make it a face-off: which side the whale is on, which side the other wallets we track and the proven "
+           "timers are on. Always 'among the wallets we track', never 'the market'.",
+           {"lines": "4-5", "emoji": "0-1", "cashtag": True, "closing": "who's right",
+            "prefer_hooks": ["against_timers", "top_of_sample", "hedge"]},
+           ["Whale vs proven timers ⚔️\n\n{short address} is now #{rank} $ETH short among the wallets we track\n\n"
+            "But {n} of {N} proven timers are long\n\nWho's right?"]),
+    _house("outcome", "en", "How it ended",
+           "The ending or the next chapter of a position: then and now. Without an earlier post, compare with how his "
+           "last trade this way ended. No predictions, no blame.",
+           {"lines": "3-5", "emoji": "0-1", "cashtag": True, "closing": "what to watch",
+            "prefer_hooks": ["sequel", "last_time"]},
+           ["Remember that {amount} $BTC short?\n\nNow: {status}\n\n{what to watch}"]),
+    _house("one_liner", "en", "One-liner",
+           "One or two lines and let the card speak: the single hardest fact and one number.",
+           {"lines": "1-2", "emoji": "0-1", "cashtag": True, "closing": "none", "prefer_hooks": ["sheer_size", "top_of_sample"]},
+           ["🐋 {short address} just opened a {amount} $HYPE short at {leverage}"]),
+]

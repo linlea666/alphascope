@@ -70,6 +70,8 @@ export type Version = {
   why_now?: string;
   open_question?: string | null;
   lede_fact_ids?: string[];
+  card_template?: string | null;
+  card_asset_id?: number | null;
 };
 export type Account = {
   id: number;
@@ -93,5 +95,6 @@ export type Account = {
   authorization_status: string;
   authorization_expires_at: string | null;
   authorization_note: string | null;
+  link_in_thread?: boolean;
 };
 export type Me = { id: number; username: string; roles: string[]; must_change_password: boolean; account_permissions: Record<string, string[]> };
