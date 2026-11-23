@@ -426,6 +426,33 @@ def closed_cycles(hours: int = Query(48, ge=1, le=168), min_streak: int = Query(
     return {"schema": SCHEMA, "as_of": now, "hours": hours, "rows": out}
 
 
+@router.get("/market/coin-positions")
+def coin_positions(coin: str = Query(..., max_length=48), venue: Venue = "all", top: int = Query(10, ge=1, le=50),
+                   s: Session = Depends(feed_session)):
+    """Live cross-section of one coin in the observed sample: per side, how many fresh traders hold it, their total
+    notional and the largest positions (trader key, size, leverage), plus the same split for traders with a
+    significant timing score (q < 0.1). Positions count only while their trader's poll is fresh."""
+    now = datetime.now(UTC)
+    timing = stats.COHORTS["timing"].format(col="f.wallet_id")
+    p = {"now": now, "coin": coin, "n": top}
+    sides = rows(s, f"""
+        WITH {stats.fresh_cte(venue, "all")}
+        SELECT CASE WHEN f.szi > 0 THEN 'long' ELSE 'short' END AS side, count(*) AS traders,
+               sum(f.notional_usd) AS notional, count(*) FILTER (WHERE {timing}) AS timing_traders,
+               coalesce(sum(f.notional_usd) FILTER (WHERE {timing}), 0) AS timing_notional
+        FROM fresh f WHERE f.coin = :coin AND f.szi <> 0 GROUP BY 1 ORDER BY 1""", p)
+    largest = rows(s, f"""
+        WITH {stats.fresh_cte(venue, "all")}
+        SELECT side, rank, trader_key, venue, notional_usd, leverage, entry_px, liq_px, timing_significant FROM (
+            SELECT CASE WHEN f.szi > 0 THEN 'long' ELSE 'short' END AS side, w.address AS trader_key, f.venue,
+                   f.notional_usd, f.leverage, f.entry_px, f.liq_px, {timing} AS timing_significant,
+                   row_number() OVER (PARTITION BY f.szi > 0 ORDER BY f.notional_usd DESC) AS rank
+            FROM fresh f JOIN wallet w ON w.id = f.wallet_id WHERE f.coin = :coin AND f.szi <> 0) x
+        WHERE rank <= :n ORDER BY side, rank""", p)
+    return {"schema": SCHEMA, "as_of": now, "coin": coin, "venue": venue,
+            "coverage": plain(stats.coverage(s, venue, "all", now)), "sides": sides, "largest": largest}
+
+
 @router.get("/market/groups")
 def trader_groups(coin: str = Query("BTC", max_length=48), s: Session = Depends(feed_session)):
     """Long / short split of each trader group in the latest hourly snapshot, and seven days earlier: Hyperliquid

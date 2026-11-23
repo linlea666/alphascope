@@ -219,7 +219,7 @@ def test_at_risk_and_health(client, sf):
 def test_feed_is_get_only_and_read_only(client, sf):
     from app.api.feed import feed_session, router
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 13 and all(r.methods == {"GET"} and r.path.startswith("/api/v1/feed/") for r in routes)
+    assert len(routes) == 14 and all(r.methods == {"GET"} and r.path.startswith("/api/v1/feed/") for r in routes)
     with sf() as s:
         gen = feed_session(s)
         session = next(gen)
@@ -284,3 +284,35 @@ def test_research_column_endpoints(client, sf):
         s.commit()
     gr = client.get("/api/v1/feed/market/groups", params={"coin": "BTC"}, headers=AUTH).json()
     assert keys("groups") <= set(gr) and len(gr["rows"]) == 2 and keys("groups.row") <= set(gr["rows"][0])
+
+
+def test_coin_positions_ranks_fresh_holders_and_splits_timing_traders(client, sf):
+    with sf() as s:
+        ws = [_wallet(s, "0x" + f"{i:02x}" * 20) for i in range(1, 5)]
+        for i, w in enumerate(ws):
+            fresh = "now() + interval '1 hour'" if i < 3 else "now() - interval '1 hour'"  # the last one is stale
+            s.execute(text(f"""
+                INSERT INTO position_watch (wallet_id, venue, tier, base_tier, added_at, next_due, last_observed_at,
+                                            stale_after, failures, account_value, n_positions, gross_notional)
+                VALUES (:w, 'hyperliquid', 'hot', 'hot', now(), now(), now(), {fresh}, 0, 1e6, 1, 1e6)"""), {"w": w})
+        for w, szi, ntl in ((ws[0], -10, 1000000), (ws[1], -30, 3000000), (ws[2], 5, 500000), (ws[3], -90, 9000000)):
+            s.execute(text("""
+                INSERT INTO trader_position (wallet_id, coin, venue, szi, notional_usd, mark_px, entry_px, leverage,
+                  liq_px, upl, opened_at_source, first_seen_at, observed_at)
+                VALUES (:w, 'ETH', 'hyperliquid', :z, :n, 100000, 100000, 10, NULL, 0, 'unknown', now(), now())"""),
+                {"w": w, "z": szi, "n": ntl})
+        s.execute(text("""
+            INSERT INTO timing_score (wallet_id, scale, time_window, coin_group, version, as_of, status, n_decisions,
+                                      n_scored, q_value, pivot_hits, pivots, pivots_hit, cycles)
+            VALUES (:w, 'swing', '90d', 'all', 't3', now(), 'scored', 40, 40, 0.05, 0, 0, 0, 0)"""), {"w": ws[2]})
+        s.commit()
+    r = client.get("/api/v1/feed/market/coin-positions", params={"coin": "ETH"}, headers=AUTH).json()
+    assert keys("coin_positions") <= set(r)
+    sides = {x["side"]: x for x in r["sides"]}
+    assert keys("coin_positions.side") <= set(sides["short"])
+    assert sides["short"]["traders"] == 2 and sides["short"]["notional"] == "4000000"  # the stale holder is left out
+    assert sides["long"]["timing_traders"] == 1 and sides["short"]["timing_traders"] == 0
+    top = [x for x in r["largest"] if x["side"] == "short"]
+    assert keys("coin_positions.largest") <= set(top[0])
+    assert [x["rank"] for x in top] == [1, 2] and top[0]["trader_key"] == "0x" + "02" * 20
+    assert r["largest"][0]["timing_significant"] is True  # the one long is the timing trader
