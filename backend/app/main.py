@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import (alerts, binance_profiles, discover, exchange, explore, holders, research, market, okx, rankings, sentinels, sims, swings, system, timing,
+from app.api import (alerts, binance_profiles, discover, exchange, explore, feed, holders, research, market, okx, rankings, sentinels, sims, swings, system, timing,
                      wallets, watch, zones)
 
 # Browsers only ever read (GET); writes arrive server-side through the web app's same-origin proxy.
@@ -26,6 +26,7 @@ app.include_router(binance_profiles.router)
 app.include_router(discover.router)
 app.include_router(explore.router)
 app.include_router(sentinels.router)
+app.include_router(feed.router)
 
 
 @app.get("/healthz")

@@ -167,6 +167,8 @@ EOF
     env_set API_BASE_URL "http://127.0.0.1:$(api_port)"
     # encryption key for secrets stored in the database (SMTP password); created by the service on first use
     [[ -n "$(env_get ALPHASCOPE_SECRET_KEY_PATH)" ]] || env_set ALPHASCOPE_SECRET_KEY_PATH "$(data_dir)/secret.key"
+    # 只读 Feed（给 newsroom 用）的访问令牌；只在没有这一行时生成，手动改成空值即关闭 Feed
+    grep -qE '^ALPHASCOPE_FEED_TOKEN=' "$file" || env_set ALPHASCOPE_FEED_TOKEN "$(random_secret 32)"
 }
 
 # 本机 PostgreSQL：独立的角色和数据库；密码只保存在 data/alphascope.env

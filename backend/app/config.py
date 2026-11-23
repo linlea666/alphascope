@@ -85,6 +85,11 @@ class Settings(BaseSettings):
     enrich_interval_minutes: int = 10
     portfolio_refresh_days: int = 7
 
+    # Read-only feed for the newsroom (app/api/feed.py): disabled while empty. Rows observed within the settle
+    # window are held back because concurrent observations can commit out of id order.
+    feed_token: str = ""
+    feed_settle_seconds: int = 120
+
 
 @lru_cache
 def get_settings() -> Settings:
