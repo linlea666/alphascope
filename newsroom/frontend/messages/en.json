@@ -17,7 +17,8 @@
     "calendar": "Calendar",
     "columns": "Columns",
     "public": "Public",
-    "drafts": "AI drafts"
+    "drafts": "AI drafts",
+    "experiments": "Experiments"
   },
   "common": {
     "save": "Save",
@@ -227,7 +228,10 @@
     "note": "Note",
     "aiNote": "AI only drafts; human edits are never overwritten by AI.",
     "otherArticles": "Other articles on this event",
-    "noVersion": "No version yet"
+    "noVersion": "No version yet",
+    "whyNow": "Why now",
+    "openQuestion": "Open question",
+    "ledeFacts": "Lede facts"
   },
   "library": {
     "title": "Library",
@@ -460,5 +464,121 @@
     "realOnly": "Real only",
     "deleted": "Deleted",
     "versions": "Versions"
+  },
+  "experiments": {
+    "title": "Experiments",
+    "subtitle": "Two drafts per event from the same model; editors judge them blind. Improvements are kept only if the data says so.",
+    "generating": "generating",
+    "list": "Experiments",
+    "none": "No experiments yet",
+    "name": "Name",
+    "pairs": "Pairs",
+    "ready": "Ready",
+    "myVotes": "Mine",
+    "votes": "Votes",
+    "failed": "{n} failed",
+    "review": "Review",
+    "results": "Results",
+    "pending": "Being prepared",
+    "howTitle": "What this tests",
+    "how1": "A: the current way (position data only, prompt v1). B: contrast facts (vs the trader's own past, the rest of their book and the sample's holders of the coin), story memory and prompt v2.",
+    "how2": "Both drafts come from the same role, model and account style. They are trial drafts: the event is untouched and they cannot go to review.",
+    "how3": "Review is blind: which draft is A or B is hidden and the order is random. Check the facts on the right; flag anything misleading.",
+    "how4": "Success: B wins ≥ 65%, guard pass rate not below A, no more misleading drafts, ≤ 50% more tokens. Stop if contrast coverage < 40% or B wins < 55%.",
+    "create": "Start an experiment",
+    "createHint": "Samples recent events (48h) by class: opens/adds, underwater adds, near liquidation, closes. Facts are refreshed first, then both drafts are queued.",
+    "start": "Start",
+    "account": "Account (style and platform rules)",
+    "model": "Model (same for both)",
+    "n": "Sample size (4–40)",
+    "reviewTitle": "Blind review",
+    "reviewSubtitle": "{done} of {total} pairs judged",
+    "allDone": "You have judged every ready pair. Wait for the rest or open the results.",
+    "judge": "Judge",
+    "facts": "Fact packet (for checking)",
+    "draft": "Draft {n}",
+    "better": "Better draft",
+    "tie": "About the same",
+    "misleading": "Misleading or wrong",
+    "note": "Note (optional): why",
+    "submit": "Submit, next pair",
+    "incomplete": "Score all four for both drafts and pick the better one",
+    "dim": {
+      "information": "New information",
+      "lede": "Lede",
+      "evidence": "Evidence",
+      "publishable": "Publishable"
+    },
+    "dimHint": {
+      "information": "Does the reader learn something they can't get elsewhere",
+      "lede": "Does the first sentence say why it matters",
+      "evidence": "Sourced numbers, honest qualifiers",
+      "publishable": "How little editing it needs"
+    },
+    "resultsLocked": "Results open once you have judged every ready pair (the editor-in-chief can always see them).",
+    "resultsSubtitle": "A = current, B = contrast facts + story memory + prompt v2",
+    "verdict": {
+      "pass": "Meets the bar",
+      "stop": "Stop condition hit",
+      "open": "In progress"
+    },
+    "bWin": "B win rate",
+    "bWinSub": "ties count half",
+    "coverage": "Contrast coverage",
+    "coverageSub": "share with two or more kinds of contrast",
+    "voters": "{n} reviewers",
+    "extraTokens": "Extra tokens for B",
+    "extraTokensSub": "limit 50%",
+    "arms": "A vs B",
+    "armA": "A current",
+    "armB": "B enriched",
+    "guardPass": "Guard first-pass rate",
+    "misleadingCount": "Flagged misleading",
+    "tokens": "Tokens",
+    "errors": "Failed",
+    "checks": "Success criteria",
+    "check": {
+      "b_win_rate": "B wins ≥ 65%",
+      "guard_not_worse": "Guard pass rate not below A",
+      "not_more_misleading": "No more misleading than A",
+      "tokens_within_budget": "≤ 50% more tokens"
+    },
+    "stopReason": {
+      "contrast_coverage_below_40pct": "Contrast coverage below 40%: widen data coverage before tuning the writing",
+      "b_win_rate_below_55pct": "B wins below 55%: not worth it"
+    },
+    "familiesTitle": "Where contrast comes from",
+    "familiesHint": "pairs where each kind is available",
+    "family": {
+      "archive": "Trade archive (cycles on the coin)",
+      "radar": "Radar memory (earlier positions on the coin)",
+      "book": "Rest of the book",
+      "crowd": "Rank / share / timing traders in the sample",
+      "leaderboard": "Leaderboard P&L"
+    },
+    "stratum": {
+      "open_add": "Open / add",
+      "underwater_add": "Underwater add",
+      "near_liquidation": "Near liquidation",
+      "close": "Close / liquidation"
+    }
+  },
+  "rating": {
+    "title": "Rate this version",
+    "hint": "1–5, and what was good or wrong. Feeds the weekly quality report.",
+    "note": "Why, in one line (optional)",
+    "rate": "Rate",
+    "update": "Update rating",
+    "saved": "Saved",
+    "blind": "blind",
+    "tag": {
+      "information": "new information",
+      "lede": "strong lede",
+      "evidence": "solid evidence",
+      "story": "story value",
+      "tone": "wrong tone",
+      "wrong_angle": "wrong angle",
+      "misleading": "misleading"
+    }
   }
 }

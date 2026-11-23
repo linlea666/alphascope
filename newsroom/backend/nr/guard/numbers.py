@@ -95,7 +95,7 @@ def fact_numbers(facts: list[dict]) -> dict[str, list[Decimal]]:
         except (InvalidOperation, TypeError):
             continue
         k = f["kind"]
-        if k in ("notional", "realized_pnl", "unrealized_pnl", "estimate", "price"):
+        if k in ("notional", "realized_pnl", "unrealized_pnl", "pnl", "estimate", "price"):
             out["money"].append(v)
         elif k in ("percent", "return"):
             out["percent"].append(v * 100)

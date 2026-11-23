@@ -15,6 +15,7 @@ from nr.ai.schemas import EicEvaluation
 from nr.desk import assignment
 from nr.events.states import InvalidTransition, transition
 from nr.guard.duplicates import similarity
+from nr.stories.memory import add_open_questions
 
 
 def accounts_brief(s: Session, event_id: int) -> list[dict]:
@@ -126,6 +127,7 @@ def evaluate_event(sf: sessionmaker, event_id: int, now: datetime, job_id: int |
                 if aid:
                     created.append(aid)
         s.execute(text("UPDATE news_event SET priority = :p WHERE id = :e"), {"p": o.priority, "e": event_id})
+        add_open_questions(s, ev["story_id"], o.open_questions, source="eic", event_id=event_id, at=now)
         try:
             transition(s, event_id, "evaluated", actor_kind="ai", reason=f"{o.decision} {o.priority}")
         except InvalidTransition:

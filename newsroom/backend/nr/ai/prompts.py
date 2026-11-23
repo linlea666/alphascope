@@ -93,6 +93,42 @@ SEEDS = {
     "editor_en": {"version": 1, "system": EDITOR_SYSTEM.replace("{lang}", "English"), "user": DRAFT_FIX_USER},
     "fact_checker": {"version": 1, "system": FACT_CHECK_SYSTEM, "user": DRAFT_FIX_USER},
 }
+# v2: contrast facts and story memory. Seeded next to v1; an agent uses it once an editor points the role at it.
+STRUCTURE_V2 = """
+
+Structure (version 2):
+8. Lead with what is different this time. Facts whose ids start with contrast., radar., book., crowd. or history.
+   compare this move with the trader's own past, the rest of their positions and the other traders in the sample.
+   If any are present, the first sentence must rest on at least one of them (for example: the largest position this
+   trader has held on this coin in the archive, how their last trade in the same direction ended, where it ranks
+   among the sample's positions on the coin, an opposite position elsewhere that makes it look like a hedge). Put
+   their ids in lede_fact_ids. Without such facts write a plain news brief and leave lede_fact_ids empty.
+9. Each contrast fact has a coverage note: keep its qualifier ("in the trade archive since ...", "since first
+   observed on ...", "among traders in the sample"). Never turn a sample figure into a claim about the whole market.
+10. A single post carries at most three figures: pick the ones that carry the story, not every number available.
+11. why_now: one sentence for the desk on why this deserves a post now. It is not published.
+12. open_question: the one question a follow-up should answer (for example whether the position is cut before the
+    reported liquidation price). It is not published unless you write it into the text yourself.
+13. story_memory, when present, lists what was already published on this story and the open questions. Do not
+    repeat earlier posts: say what changed since, and if the facts now answer an open question, answer it first."""
+REPORTER_USER_V2 = REPORTER_USER + """
+Lead with what is different this time; keep every figure's coverage qualifier."""
+EIC_V2 = """
+
+8. open_questions: up to three questions the coverage should keep track of (what would make this story continue or
+   end). Use the contrast facts (contrast., radar., book., crowd.) when judging rarity: how this compares with the
+   trader's own past and the rest of the sample is what makes a move newsworthy, not its size alone."""
+
+SEEDS_V2 = {
+    "eic": {"version": 2, "system": EIC_SYSTEM.replace("\n\nReply with one JSON", EIC_V2 + "\n\nReply with one JSON"),
+            "user": EIC_USER},
+    "reporter": {"version": 2, "system": REPORTER_SYSTEM.replace("\n\nReply with one JSON",
+                                                                 STRUCTURE_V2 + "\n\nReply with one JSON"),
+                 "user": REPORTER_USER_V2},
+    **{f"reporter_{k}": {"version": 2, "system": REPORTER_SYSTEM.replace(
+        "\n\nReply with one JSON", STRUCTURE_V2 + "\n\nReply with one JSON") + "\n\n" + beat, "user": REPORTER_USER_V2}
+       for k, beat in BEATS.items()},
+}
 REPORTER_ROLES = tuple(f"reporter_{k}" for k in BEATS)
 # which reporter a class goes to unless the editor-in-chief or an editor picks another
 DEFAULT_REPORTER = {"whale_open": "reporter_breaking", "flip": "reporter_breaking", "whale_add": "reporter_breaking",

@@ -17,7 +17,7 @@ from nr.feed.client import FeedClient
 from nr.jobs import queue
 
 log = logging.getLogger(__name__)
-DETERMINISTIC = ("build_facts", "card_render", "column_build")
+DETERMINISTIC = ("build_facts", "card_render", "column_build", "experiment_create")
 
 
 @dataclass
@@ -48,6 +48,9 @@ def handle(sf: sessionmaker, deps: Deps, job: dict, now: datetime) -> dict:
     if kind == "eic_evaluate":
         from nr.desk.eic import evaluate_event
         return evaluate_event(sf, p["event_id"], now, job_id=job["id"], transport=deps.provider)
+    if kind == "draft_generate" and p.get("experiment_pair"):
+        from nr.experiments.contrast_ab import run_arm
+        return run_arm(sf, p, now, job_id=job["id"], transport=deps.provider)
     if kind == "draft_generate":
         from nr.desk.drafting import generate_draft
         return generate_draft(sf, p["assignment_id"], now, job_id=job["id"], transport=deps.provider,
@@ -57,6 +60,10 @@ def handle(sf: sessionmaker, deps: Deps, job: dict, now: datetime) -> dict:
         from nr.columns.run import build_column
         with deps.feed() as c:
             return build_column(sf, c, p["column"], now, p.get("params") or {})
+    if kind == "experiment_create":
+        from nr.experiments.contrast_ab import create
+        with deps.feed() as c:
+            return create(sf, c, p["name"], p["account_id"], p["model_config_id"], p["n"], now, p["user_id"])
     if kind == "card_render":
         from nr.cards.render import render_for_packet
         return render_for_packet(sf, p["fact_packet_id"], p["template"], p["language"], p.get("brand", "default"))

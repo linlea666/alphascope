@@ -91,6 +91,16 @@ class FeedClient:
             raise FeedError(str(exc)) from exc
         return r
 
+    def coin_positions(self, coin: str, venue: str = "all", top: int = 10) -> dict:
+        r = self._get("/market/coin-positions", {"coin": coin, "venue": venue, "top": top})
+        try:
+            check("coin_positions", r)
+            check_all("coin_positions", r["sides"], "coin_positions.side")
+            check_all("coin_positions", r["largest"], "coin_positions.largest")
+        except ContractError as exc:
+            raise FeedError(str(exc)) from exc
+        return r
+
     def research(self, name: str, path: str, params: dict | None = None, rows_field: str | None = None,
                  row_name: str | None = None) -> dict:
         """Research column endpoints, checked against the contract like every other response."""

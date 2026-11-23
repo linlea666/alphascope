@@ -9,6 +9,7 @@ import { FactsTable } from "@/components/FactsTable";
 import { CardPanel, PublishForm, ReviewButtons } from "@/components/PublishPanel";
 import { Badge, Empty, KV, PageHeader, Panel } from "@/components/ui";
 import { Link } from "@/i18n/routing";
+import { RateVersion, type Rating } from "@/components/RateVersion";
 import { nrGet, nrGetOptional } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
 import type { Account, Me, Packet, Version } from "@/lib/types";
@@ -29,13 +30,14 @@ const EDITABLE = ["drafting", "draft_ready", "changes_requested", "stale", "in_r
 
 export default async function DeskPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [t, tc, ts, tm, tt, tdr, locale] = await Promise.all([getTranslations("desk"), getTranslations("common"), getTranslations("studio"),
-    getTranslations("manage"), getTranslations("trial"), getTranslations("drafts"), getLocale()]);
+  const [t, tc, ts, tm, tt, tdr, tr, locale] = await Promise.all([getTranslations("desk"), getTranslations("common"), getTranslations("studio"),
+    getTranslations("manage"), getTranslations("trial"), getTranslations("drafts"), getTranslations("rating"), getLocale()]);
   const d = await nrGetOptional<ArticleDetail>(`articles/${id}`);
   if (!d) return <Empty>{tc("noAccess")}</Empty>;
   const a = d.article;
-  const [ev, me, accounts, models] = await Promise.all([nrGet<EventDetail>(`events/${a.news_event_id}`), nrGet<Me>("auth/me"),
-    nrGet<Account[]>("accounts"), nrGet<{ id: number; name: string; model: string; last_test_ok: boolean | null }[]>("ai/model-options")]);
+  const [ev, me, accounts, models, ratings] = await Promise.all([nrGet<EventDetail>(`events/${a.news_event_id}`), nrGet<Me>("auth/me"),
+    nrGet<Account[]>("accounts"), nrGet<{ id: number; name: string; model: string; last_test_ok: boolean | null }[]>("ai/model-options"),
+    nrGet<Rating[]>(`articles/${a.id}/ratings`)]);
   const current = d.versions.find((v) => v.id === a.current_version_id) ?? null;
   const packet = ev.packet!.content;
   const perms = new Set(me.roles.some((r) => ["admin", "editor_in_chief"].includes(r)) ? ["view", "draft", "review", "publish"] : me.account_permissions[String(a.account_id)] ?? []);
@@ -87,6 +89,11 @@ export default async function DeskPage({ params }: { params: Promise<{ id: strin
             <DeskEditor articleId={a.id} status={a.status} current={current} versions={d.versions} facts={packet.facts}
               currentPacketId={a.current_fact_packet_id} editable={perms.has("draft") && EDITABLE.includes(a.status) && !a.deleted_at} />
           </Panel>
+          {current && (
+            <Panel title={`${tr("title")} · v${current.version_no}`} hint={tr("hint")}>
+              <RateVersion articleId={a.id} versionId={current.id} ratings={ratings} />
+            </Panel>
+          )}
           <Panel title={ts("aiActions")}>
             <AiStudio articleId={a.id} models={models} editable={perms.has("draft") && EDITABLE.includes(a.status) && !a.deleted_at} />
           </Panel>

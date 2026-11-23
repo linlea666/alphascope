@@ -41,6 +41,16 @@ def source_events(s: Session, event_id: int) -> list[dict]:
         WHERE ev.news_event_id = :e AND ev.kind = 'source_event' ORDER BY se.id"""), {"e": event_id}).mappings()]
 
 
+def prior_positions(s: Session, trader_id: int, coin: str, ep: dict) -> dict:
+    """Earlier positions of this trader on this coin seen by the radar, and when the radar first saw the trader."""
+    since = s.execute(text("SELECT min(start_to) FROM position_episode WHERE trader_id = :t"), {"t": trader_id}).scalar()
+    eps = [dict(r) for r in s.execute(text("""
+        SELECT direction, start_kind, start_to, status, end_to, peak_notional FROM position_episode
+        WHERE trader_id = :t AND coin = :c AND id <> :e AND start_to < :s ORDER BY start_to"""),
+        {"t": trader_id, "c": coin, "e": ep["id"], "s": ep["start_to"]}).mappings()]
+    return {"since": since, "episodes": eps}
+
+
 def context_calls_last_hour(s: Session, now: datetime) -> int:
     return s.execute(text("""SELECT count(*) FROM job WHERE kind = 'build_facts' AND status = 'done'
                              AND finished_at > :t"""), {"t": now - timedelta(hours=1)}).scalar()
@@ -69,11 +79,18 @@ def build_event_facts(sf: sessionmaker, client: FeedClient, event_id: int, now: 
         ctx_error = None
     except (FeedUnavailable, FeedError) as exc:
         ctx, ctx_error = None, str(exc)
+    crowd = None
+    if ev["venue"] in ("hyperliquid", "okx"):
+        try:  # context, not a requirement: the packet is built without it
+            crowd = client.coin_positions(ev["coin"], ev["venue"])
+        except (FeedUnavailable, FeedError) as exc:
+            log.info("coin positions for %s unavailable: %s", ev["coin"], exc)
     with sf() as s:
         detect = settings_store.get(s, "detect")
         path = [dict(r) for r in s.execute(text("""SELECT kind, szi_after, observed_at FROM source_event
                                                      WHERE episode_id = :e ORDER BY id"""), {"e": ep["id"]}).mappings()]
-        built = builder.build(ev, ep, ses, ctx, blockers, now, detect, path)
+        built = builder.build(ev, ep, ses, ctx, blockers, now, detect, path, crowd=crowd,
+                              prior=prior_positions(s, ev["trader_id"], ev["coin"], ep))
         if ctx is not None:
             sid = snapshot_context(s, ev["trader_id"], ctx, now)
             add_evidence(s, event_id, "context_snapshot", sid)

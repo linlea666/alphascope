@@ -67,6 +67,9 @@ export type Version = {
   guard_status: string;
   guard_report: GuardReport;
   created_at: string;
+  why_now?: string;
+  open_question?: string | null;
+  lede_fact_ids?: string[];
 };
 export type Account = {
   id: number;

@@ -13,7 +13,7 @@ def test_upgrade_downgrade_roundtrip(db_engine):
                            capture_output=True, text=True)
         assert r.returncode == 0, r.stderr
     with db_engine.connect() as c:
-        assert c.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0008"
+        assert c.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0009"
 
 
 def test_state_machine_matches_seed(sf):

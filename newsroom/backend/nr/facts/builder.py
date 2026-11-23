@@ -15,7 +15,7 @@ from decimal import Decimal
 from nr.facts import fmt
 
 SCHEMA = "fp.v1"
-BUILDER_VERSION = "facts-1"
+BUILDER_VERSION = "facts-2"
 SCORE_VERSION = "s1"
 HOLDING_CLASSES = ("whale_open", "flip", "whale_add", "underwater_add", "near_liquidation", "notable_trader_move")
 MAJOR_COINS = ("BTC", "ETH", "SOL", "HYPE")
@@ -23,6 +23,7 @@ MAJOR_COINS = ("BTC", "ETH", "SOL", "HYPE")
 # (sizes and notionals are not here: a 10% move in either is material, whatever caused it)
 VOLATILE = {"position.mark_px", "position.unrealized_pnl_usd", "position.liq_distance", "position.observed_at", "episode.path",
             "trader.account_value_usd"}
+VOLATILE_PREFIXES = ("crowd.", "book.")  # snapshots of other traders and other coins: context, not the story
 CONSTRAINT_TEXT = {
     "OBSERVED_SAMPLE": "Data covers AlphaScope's observed sample of traders, not the whole exchange.",
     "NO_IDENTITY": "Who controls the account is unknown; do not guess or imply an identity.",
@@ -35,6 +36,14 @@ CONSTRAINT_TEXT = {
     "ACCOUNT_RATIO_UNAVAILABLE": "Account value is unreliable for this account; do not relate size to account value.",
     "HISTORY_UNAVAILABLE": "The trading history archive is incomplete; make no claims about past record or streaks.",
     "OKX_LEAD_ASSETS": "OKX assets are the lead-trading account only, not the trader's whole capital.",
+    "CROWD_SAMPLE": "Crowd figures count traders in AlphaScope's sample whose positions were fresh at the time shown; "
+                    "they are a snapshot of the sample, not of the exchange.",
+    "HEDGE_POSSIBLE": "The trader also holds sizeable opposite-direction positions (book.opposite); do not present this "
+                      "position as a one-way bet without saying so.",
+    "ARCHIVE_PARTIAL": "The trade archive starts later than the trader's history; 'largest', 'last' and counts refer only "
+                       "to the period it covers.",
+    "RADAR_SINCE": "Earlier positions are known only since this trader was first observed; say 'since <date>'.",
+    "LEADERBOARD_PNL": "Leaderboard P&L is reported by the venue and includes unrealized P&L; never call it realized.",
 }
 
 
@@ -112,7 +121,8 @@ def _strong_record(ctx: dict) -> tuple[bool, list[str]]:
 
 
 def build(event: dict, episode: dict, source_events: list[dict], ctx: dict | None, source_blockers: list[dict],
-          now: datetime, cfg: dict, path: list[dict] | None = None) -> Built:
+          now: datetime, cfg: dict, path: list[dict] | None = None, crowd: dict | None = None,
+          prior: dict | None = None) -> Built:
     f = Facts()
     blocking = list(source_blockers)
     cls, coin, venue = event["event_class"], event["coin"], event["venue"]
@@ -307,9 +317,13 @@ def build(event: dict, episode: dict, source_events: list[dict], ctx: dict | Non
                           "context.okx.closes.close_time")
                     f.usd("liquidation.realized_pnl_usd", "realized_pnl", D(hits[0]["realized_pnl"]),
                           "context.okx.closes.realized_pnl")
+        contrast_own(f, event, position, ctx, prior, now)
         if name:
             f.add("trader.venue_nickname", "text", name, {"zh": [name], "en": [name]}, "context.trader.display_name",
                   label="self-chosen public nickname on the venue")
+
+    if crowd:
+        contrast_crowd(f, event, position, crowd)
 
     # --- closes: what was there before
     if cls in ("whale_close", "liquidation") and trigger:
@@ -353,6 +367,136 @@ def build(event: dict, episode: dict, source_events: list[dict], ctx: dict | Non
         "gate": {"status": gate_status, "blocking": codes},
     }
     return Built(content, gate_status, blocking, score, breakdown, record_strong, liq_status)
+
+
+# ---- contrast: how this move compares with the trader's own past, the rest of their book and the crowd -------------
+# Each fact carries its sample and coverage. Nothing is computed where the data cannot support it.
+
+SIDE = {"long": {"zh": "多单", "en": "long"}, "short": {"zh": "空单", "en": "short"}}
+
+
+def contrast_own(f: Facts, event: dict, position: dict | None, ctx: dict, prior: dict | None, now: datetime) -> None:
+    coin, direction, venue = event["coin"], event["direction"], event["venue"]
+    size = D(position["notional_usd"]) if position else None
+    # the rest of the book: share of gross exposure, sizeable opposite positions (a pair trade or a hedge)
+    if position and len(ctx["positions"]) >= 2 and size:
+        book = [(p, D(p["notional_usd"])) for p in ctx["positions"] if D(p["notional_usd"]) > 0]
+        gross = sum((n for _, n in book), Decimal(0))
+        f.add("book.positions", "count", len(book), fmt.count(len(book)), "context.positions",
+              label="open positions the trader holds now, all coins")
+        f.usd("book.gross_notional_usd", "notional", gross, "context.positions.notional_usd",
+              derivation="sum of notional over all open positions")
+        f.add("book.share", "percent", size / gross, fmt.pct(size / gross), "position / book.gross_notional_usd")
+        rank = 1 + sum(1 for _, n in book if n > size)
+        f.add("book.rank", "count", rank, fmt.count(rank), "context.positions",
+              label="rank of this position by notional in the trader's book (1 = largest)")
+        opp = [(p, n) for p, n in book if p["coin"] != coin and (D(p["szi"]) > 0) != (direction == "long")
+               and n >= size * Decimal("0.2")]
+        if opp:
+            other = "short" if direction == "long" else "long"
+            f.add("book.opposite", "text", [{"coin": p["coin"], "direction": other, "notional_usd": format(n, "f")}
+                                            for p, n in opp],
+                  {"zh": [f"{p['coin']} {SIDE[other]['zh']} {fmt.usd(n)['zh'][0]}" for p, n in opp],
+                   "en": [f"{p['coin']} {SIDE[other]['en']} {fmt.usd(n)['en'][0]}" for p, n in opp]},
+                  "context.positions", label="opposite-direction positions of at least 20% of this one's size")
+            for p, n in opp:  # the figures themselves, so a writer can cite them
+                f.usd(f"book.opposite_{p['coin']}_usd", "notional", n, "context.positions.notional_usd")
+            f.constraints.add("HEDGE_POSSIBLE")
+    # the trade archive on this coin: complete cycles only, wherever the archive starts
+    cov = ctx["fill_coverage"]
+    if venue == "hyperliquid" and cov and cov["status"] == "synced" and cov["earliest_at"]:
+        done = [c for c in ctx["cycles"] if c["coin"] == coin and c["complete"] and c["status"] != "open"]
+        if done:
+            hc = {"complete_only": True, "coin": coin, "n_cycles": len(done), "fills_from": cov["earliest_at"],
+                  "truncated": bool(cov["truncated"]), "note": "complete closed cycles on this coin in the archive"}
+            if cov["truncated"]:
+                f.constraints.add("ARCHIVE_PARTIAL")
+            f.add("contrast.coin_cycles", "count", len(done), fmt.count(len(done)), "context.cycles", coverage=hc)
+            wins = sum(1 for c in done if D(c["realized_pnl"]) - D(c["fees"]) > 0)
+            f.add("contrast.coin_winning_cycles", "count", wins, fmt.count(wins), "context.cycles", coverage=hc,
+                  label="cycles closed with a profit net of fees")
+            largest = max(D(c["max_notional"]) for c in done)
+            f.usd("contrast.largest_prior_cycle_usd", "notional", largest, "context.cycles.max_notional", coverage=hc)
+            if size and largest > 0:
+                f.add("contrast.vs_largest_prior_cycle", "ratio", size / largest, fmt.multiple(size / largest),
+                      "position.notional_usd / contrast.largest_prior_cycle_usd", unit="x", coverage=hc)
+            same = [c for c in done if c["direction"] == direction]  # cycles come most recent first
+            if same:
+                c = same[0]
+                net = D(c["realized_pnl"]) - D(c["fees"])
+                f.add("contrast.last_same_side_closed_at", "time", T(c["closed_at"]), fmt.when(T(c["closed_at"])),
+                      "context.cycles.closed_at", coverage=hc, label=f"last complete {direction} cycle on {coin}")
+                f.usd("contrast.last_same_side_net_usd", "realized_pnl", net, "context.cycles", coverage=hc,
+                      derivation="realized P&L minus fees of that cycle")
+                f.usd("contrast.last_same_side_peak_usd", "notional", D(c["max_notional"]), "context.cycles.max_notional",
+                      coverage=hc)
+                v, unit, disp = fmt.duration(D(c["holding_hours"]))
+                f.add("contrast.last_same_side_held", "duration", v, disp, "context.cycles.holding_hours", unit=unit,
+                      coverage=hc)
+    # the radar's own memory: earlier positions on this coin since the trader was first observed
+    if prior and prior.get("since") and now - T(prior["since"]) >= timedelta(days=3):
+        since = T(prior["since"])
+        rc = {"since": since.isoformat(), "note": "positions seen by the radar; changes between polls are not seen"}
+        f.constraints.add("RADAR_SINCE")
+        eps = prior["episodes"]
+        f.add("radar.since", "time", since, fmt.when(since), "trader first observed", coverage=rc)
+        f.add("radar.prior_positions", "count", len(eps), fmt.count(len(eps)), "position_episode", coverage=rc,
+              label=f"earlier {coin} positions of this trader seen by the radar")
+        same = [e for e in eps if e["direction"] == direction]
+        f.add("radar.prior_same_side", "count", len(same), fmt.count(len(same)), "position_episode", coverage=rc,
+              label=f"of which {direction}")
+        if eps:
+            peak = max(D(e["peak_notional"]) for e in eps)
+            f.usd("radar.largest_prior_peak_usd", "notional", peak, "position_episode.peak_notional", coverage=rc)
+            if size and peak > 0:
+                f.add("radar.vs_largest_prior_peak", "ratio", size / peak, fmt.multiple(size / peak),
+                      "position.notional_usd / radar.largest_prior_peak_usd", unit="x", coverage=rc)
+    # the venue's leaderboard figures (they include unrealized P&L)
+    tr = ctx["trader"]
+    if venue == "hyperliquid" and tr.get("leaderboard_fetched_at"):
+        lb = {"as_of": tr["leaderboard_fetched_at"], "note": "venue leaderboard, includes unrealized P&L"}
+        for fid, col in (("trader.alltime_pnl_usd", "alltime_pnl"), ("trader.month_pnl_usd", "month_pnl")):
+            if tr.get(col) is not None:
+                f.usd(fid, "pnl", D(tr[col]), f"context.trader.{col}", coverage=lb)
+                f.constraints.add("LEADERBOARD_PNL")
+
+
+def contrast_crowd(f: Facts, event: dict, position: dict | None, crowd: dict) -> None:
+    """Who else holds this coin right now in the sample, and where this position ranks among them."""
+    direction = event["direction"]
+    if direction not in SIDE:
+        return
+    sides = {x["side"]: x for x in crowd["sides"]}
+    same, opp = sides.get(direction), sides.get("short" if direction == "long" else "long")
+    if not same and not opp:
+        return
+    cc = {"as_of": crowd["as_of"], "venue": crowd["venue"], "fresh_traders": crowd["coverage"].get("fresh"),
+          "note": "traders in the sample whose last poll is fresh"}
+    f.constraints.add("CROWD_SAMPLE")
+    f.add("crowd.as_of", "time", T(crowd["as_of"]), fmt.when(T(crowd["as_of"])), "coin_positions.as_of", coverage=cc)
+    for fid, row in (("crowd.same_side", same), ("crowd.opposite_side", opp)):
+        if row:
+            f.add(f"{fid}_traders", "count", int(row["traders"]), fmt.count(int(row["traders"])),
+                  "coin_positions.sides.traders", coverage=cc)
+            f.usd(f"{fid}_notional_usd", "notional", D(row["notional"]), "coin_positions.sides.notional", coverage=cc)
+    timing = sum(int(x["timing_traders"]) for x in (same, opp) if x)
+    if timing >= 5:  # fewer is an anecdote, not a split
+        for fid, row in (("crowd.timing_same_side", same), ("crowd.timing_opposite_side", opp)):
+            n = int(row["timing_traders"]) if row else 0
+            f.add(fid, "count", n, fmt.count(n), "coin_positions.sides.timing_traders", coverage=cc,
+                  label="traders with a statistically significant timing record (q < 0.1)")
+    if position and same:
+        size = D(position["notional_usd"])
+        if D(same["notional"]) > 0:
+            share = size / D(same["notional"])
+            f.add("crowd.share_of_same_side", "percent", share, fmt.pct(share),
+                  "position.notional_usd / crowd.same_side_notional_usd", coverage=cc)
+        me = next((x for x in crowd["largest"] if x["side"] == direction and x["trader_key"] == event["trader_key"]),
+                  None)
+        if me:
+            f.add("crowd.same_side_rank", "count", int(me["rank"]), fmt.count(int(me["rank"])),
+                  "coin_positions.largest.rank", coverage=cc,
+                  label=f"rank by notional among {direction} positions on this coin in the sample (1 = largest)")
 
 
 def _score(event, episode, f: Facts, ctx, record_strong, ratio, liq_status, now) -> tuple[Decimal, dict]:
@@ -438,13 +582,13 @@ def material_changes(old: dict | None, new: dict) -> list[str]:
     a = {x["id"]: x for x in old["facts"]}
     b = {x["id"]: x for x in new["facts"]}
     for fid in sorted(set(a) | set(b)):
-        if fid in VOLATILE:
+        if fid in VOLATILE or fid.startswith(VOLATILE_PREFIXES):
             continue
         if fid not in a or fid not in b:
             out.append(fid)
             continue
         va, vb = a[fid]["value"], b[fid]["value"]
-        if a[fid]["kind"] in ("notional", "size", "price", "leverage", "realized_pnl", "estimate", "ratio", "return",
+        if a[fid]["kind"] in ("notional", "size", "price", "leverage", "realized_pnl", "pnl", "estimate", "ratio", "return",
                               "percent", "unrealized_pnl"):
             x, y = D(va), D(vb)
             if x != y and (x == 0 or abs(y - x) / abs(x) >= Decimal("0.1")):

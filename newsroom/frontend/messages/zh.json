@@ -17,7 +17,8 @@
     "calendar": "发布日历",
     "columns": "栏目",
     "public": "公开页",
-    "drafts": "AI 稿件"
+    "drafts": "AI 稿件",
+    "experiments": "内容实验"
   },
   "common": {
     "save": "保存",
@@ -227,7 +228,10 @@
     "note": "备注",
     "aiNote": "AI 只生成草稿；人工修改不会被 AI 覆盖。",
     "otherArticles": "同一事件的其他稿件",
-    "noVersion": "还没有版本"
+    "noVersion": "还没有版本",
+    "whyNow": "为什么现在发",
+    "openQuestion": "待跟进的问题",
+    "ledeFacts": "开头依据的事实"
   },
   "library": {
     "title": "稿件库",
@@ -460,5 +464,121 @@
     "realOnly": "只看正式",
     "deleted": "已删除",
     "versions": "版本数"
+  },
+  "experiments": {
+    "title": "内容实验",
+    "subtitle": "同一事件、同一模型写两版稿件，编辑盲评哪一版更好。用数据决定改进是否有效。",
+    "generating": "生成中",
+    "list": "实验列表",
+    "none": "还没有实验",
+    "name": "名称",
+    "pairs": "样本",
+    "ready": "已生成",
+    "myVotes": "我已评",
+    "votes": "评审票数",
+    "failed": "{n} 个失败",
+    "review": "去盲评",
+    "results": "结果",
+    "pending": "准备中的实验",
+    "howTitle": "这个实验在测什么",
+    "how1": "A 版：当前做法（只有仓位数据，提示词 v1）。B 版：加入对照事实（与自身历史、其他持仓、样本内同币种交易员对比）、故事记忆和提示词 v2。",
+    "how2": "两版由同一角色、同一模型、同一账号风格生成，只作为试写稿，不会改变事件状态，也不能提交审核。",
+    "how3": "盲评时不显示哪篇是 A、哪篇是 B，左右位置随机。请对照右侧事实打分，有误导就勾选。",
+    "how4": "成功标准：B 胜率 ≥ 65%，守卫通过率不低于 A，误导不多于 A，token 增加 ≤ 50%。对照事实覆盖率 < 40% 或 B 胜率 < 55% 即停止。",
+    "create": "发起实验",
+    "createHint": "按事件类型分层抽取最近 48 小时的事件（开仓/加仓、浮亏加仓、接近强平、平仓/强平），先刷新事实，再排队生成 A/B 两版。",
+    "start": "开始",
+    "account": "账号（写作风格和平台规则）",
+    "model": "模型（两版相同）",
+    "n": "样本数（4–40）",
+    "reviewTitle": "盲评",
+    "reviewSubtitle": "已评 {done} / 共 {total} 对",
+    "allDone": "这个实验里已生成的稿件你都评完了。等剩下的生成完，或去看结果。",
+    "judge": "打分",
+    "facts": "事实包（核对用）",
+    "draft": "稿件 {n}",
+    "better": "哪篇更好",
+    "tie": "差不多",
+    "misleading": "有误导或事实错误",
+    "note": "备注（可选）：为什么",
+    "submit": "提交并看下一对",
+    "incomplete": "两篇都要打满 4 项分，并选出更好的一篇",
+    "dim": {
+      "information": "信息增量",
+      "lede": "开头",
+      "evidence": "证据",
+      "publishable": "可发布性"
+    },
+    "dimHint": {
+      "information": "读者能学到别处没有的东西吗",
+      "lede": "第一句是否说明为什么值得看",
+      "evidence": "数字是否有出处、限定是否到位",
+      "publishable": "改动多少就能发"
+    },
+    "resultsLocked": "评完所有已生成的稿件后才能看结果（总编辑除外）。",
+    "resultsSubtitle": "A = 当前做法，B = 对照事实 + 故事记忆 + 提示词 v2",
+    "verdict": {
+      "pass": "达到标准",
+      "stop": "触发停止条件",
+      "open": "进行中"
+    },
+    "bWin": "B 胜率",
+    "bWinSub": "平局按半票计",
+    "coverage": "对照事实覆盖率",
+    "coverageSub": "至少两类对照事实的样本占比",
+    "voters": "{n} 位评审",
+    "extraTokens": "B 多用的 token",
+    "extraTokensSub": "上限 50%",
+    "arms": "两组对比",
+    "armA": "A 现状",
+    "armB": "B 增强",
+    "guardPass": "守卫首次通过率",
+    "misleadingCount": "被标误导",
+    "tokens": "token 合计",
+    "errors": "生成失败",
+    "checks": "成功标准",
+    "check": {
+      "b_win_rate": "B 胜率 ≥ 65%",
+      "guard_not_worse": "守卫通过率不低于 A",
+      "not_more_misleading": "误导不多于 A",
+      "tokens_within_budget": "token 增加 ≤ 50%"
+    },
+    "stopReason": {
+      "contrast_coverage_below_40pct": "对照事实覆盖率不足 40%：先扩大数据覆盖，不要继续调写作",
+      "b_win_rate_below_55pct": "B 胜率低于 55%：这条路收益不足"
+    },
+    "familiesTitle": "对照事实来源",
+    "familiesHint": "每类在多少个样本里可用",
+    "family": {
+      "archive": "成交档案（同币种历史周期）",
+      "radar": "雷达记忆（此前在该币的仓位）",
+      "book": "账户内其他持仓",
+      "crowd": "样本内同币种排名/占比/择时交易员",
+      "leaderboard": "排行榜盈亏"
+    },
+    "stratum": {
+      "open_add": "开仓/加仓",
+      "underwater_add": "浮亏加仓",
+      "near_liquidation": "接近强平",
+      "close": "平仓/强平"
+    }
+  },
+  "rating": {
+    "title": "给这一版打分",
+    "hint": "1–5 分，并勾选好在哪里或问题在哪里。用于每周质量报告。",
+    "note": "一句话原因（可选）",
+    "rate": "打分",
+    "update": "更新评分",
+    "saved": "已保存",
+    "blind": "盲评",
+    "tag": {
+      "information": "有新信息",
+      "lede": "开头好",
+      "evidence": "证据扎实",
+      "story": "有故事性",
+      "tone": "语气不对",
+      "wrong_angle": "角度不对",
+      "misleading": "有误导"
+    }
   }
 }

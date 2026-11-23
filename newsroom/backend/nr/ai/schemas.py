@@ -54,6 +54,7 @@ class EicEvaluation(Strict):
     follow_up: FollowUp
     risk_flags: list[Literal["identity_risk", "stale_risk", "liquidation_unconfirmed", "low_sample", "duplicate_risk",
                              "other"]]
+    open_questions: list[str] = Field(default_factory=list, max_length=3)
 
 
 class DraftOut(Strict):
@@ -68,6 +69,13 @@ class DraftOut(Strict):
     risks: list[str]
     facts_used: list[str] = Field(min_length=1)
     card_suggestion: Literal["position_card", "close_card", "liq_card"] | None = None
+
+
+class DraftOutV2(DraftOut):
+    """Reporter prompts from v2 on: a lede built on what is different this time, and a question for the follow-up."""
+    lede_fact_ids: list[str] = Field(default_factory=list, max_length=4)
+    why_now: str = Field("", max_length=300)
+    open_question: str | None = Field(None, max_length=200)
 
 
 class ModelTestOut(Strict):

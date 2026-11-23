@@ -108,7 +108,7 @@ def call_json(sf: sessionmaker, *, agent_key: str, purpose: str, schema: type[Ba
               semantic: Callable[[BaseModel], list[str]] | None, now: datetime, job_id: int | None = None,
               event_id: int | None = None, article_id: int | None = None, transport: Callable | None = None,
               model_override: int | None = None, inherit_models_from: str | None = None,
-              sleep: Callable[[float], None] | None = None) -> CallOutcome:
+              prompt_version: int | None = None, sleep: Callable[[float], None] | None = None) -> CallOutcome:
     transport = transport or default_transport
     with sf() as s:
         if not settings_store.get(s, "ai")["enabled"]:
@@ -128,7 +128,7 @@ def call_json(sf: sessionmaker, *, agent_key: str, purpose: str, schema: type[Ba
         if primary is None:
             raise AIUnavailable(f"agent {agent_key} has no enabled model")
         prompt = s.execute(text("SELECT * FROM prompt_template WHERE key = :k AND version = :v"),
-                           {"k": agent["prompt_key"], "v": agent["prompt_version"]}).mappings().one()
+                           {"k": agent["prompt_key"], "v": prompt_version or agent["prompt_version"]}).mappings().one()
         budgets = settings_store.get(s, "budgets")
     prompt_ref = f"{prompt['key']}@v{prompt['version']}"
     task = Template(prompt["user_template"]).safe_substitute(task_vars)

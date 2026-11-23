@@ -30,6 +30,9 @@ class Draft:
     why_shareable: str = ""
     risks: list | None = None
     facts_used: list | None = None
+    why_now: str = ""
+    open_question: str | None = None
+    lede_fact_ids: list | None = None
 
 
 def text_hash(headline: str, body: str, thread: list | None) -> str:
@@ -77,6 +80,8 @@ def guard(s: Session, art: dict, packet_id: int, parts: dict[str, str], facts_us
 def save_version(s: Session, article_id: int, d: Draft, *, origin: str, user_id: int | None = None,
                  ai_call_id: int | None = None, agent_key: str | None = None, prompt_ref: str | None = None,
                  model: str | None = None, fact_packet_id: int | None = None, make_current: bool | None = None) -> dict:
+    # one writer at a time per article: parallel model runs would otherwise race for the next version number
+    s.execute(text("SELECT 1 FROM article WHERE id = :a FOR UPDATE"), {"a": article_id})
     art = load(s, article_id)
     if art["deleted_at"] is not None:
         raise HTTPException(409, "the article is in the trash: restore it first")
@@ -99,9 +104,10 @@ def save_version(s: Session, article_id: int, d: Draft, *, origin: str, user_id:
         INSERT INTO article_version (article_id, version_no, parent_version_id, origin, author_user_id, ai_call_id,
           agent_key, prompt_ref, model, fact_packet_id, fact_packet_version, headline, alt_headlines, body, thread,
           angle, added_value, difference_from_others, why_shareable, risks, facts_used, text_hash, guard_status,
-          guard_report, guard_version)
+          guard_report, guard_version, why_now, open_question, lede_fact_ids)
         VALUES (:a, :no, :parent, :o, :u, :ai, :agent, :pr, :model, :p, :pv, :h, CAST(:alt AS jsonb), :b,
-          CAST(:th AS jsonb), :angle, :av, :diff, :why, CAST(:risks AS jsonb), :fu, :hash, :gs, CAST(:gr AS jsonb), :gv)
+          CAST(:th AS jsonb), :angle, :av, :diff, :why, CAST(:risks AS jsonb), :fu, :hash, :gs, CAST(:gr AS jsonb), :gv,
+          :wn, :oq, :lede)
         RETURNING id, version_no, guard_status"""),
         {"a": article_id, "no": no, "parent": current["id"] if current else None, "o": origin, "u": user_id,
          "ai": ai_call_id, "agent": agent_key, "pr": prompt_ref, "model": model, "p": packet_id, "pv": packet_version,
@@ -110,7 +116,8 @@ def save_version(s: Session, article_id: int, d: Draft, *, origin: str, user_id:
          "av": d.added_value, "diff": d.difference_from_others, "why": d.why_shareable,
          "risks": json.dumps(d.risks or [], ensure_ascii=False), "fu": facts_used,
          "hash": text_hash(d.headline, d.body, d.thread), "gs": report["status"],
-         "gr": json.dumps(report, ensure_ascii=False, default=str), "gv": GUARD_VERSION}).mappings().one()
+         "gr": json.dumps(report, ensure_ascii=False, default=str), "gv": GUARD_VERSION, "wn": d.why_now or "",
+         "oq": d.open_question or None, "lede": list(d.lede_fact_ids or [])}).mappings().one()
     for fid in dict.fromkeys(facts_used):
         s.execute(text("""INSERT INTO article_fact_reference (article_version_id, fact_packet_id, fact_id)
                           VALUES (:v, :p, :f) ON CONFLICT DO NOTHING"""), {"v": v["id"], "p": packet_id, "f": fid})

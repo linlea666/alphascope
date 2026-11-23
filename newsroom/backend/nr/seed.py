@@ -8,7 +8,7 @@ import json
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from nr.ai.prompts import SEEDS
+from nr.ai.prompts import SEEDS, SEEDS_V2
 from nr.styles import LIBRARY
 
 STYLES = [
@@ -86,7 +86,7 @@ def seed(s: Session) -> dict:
             {"h": a["handle"], "d": a["display_name"], "l": a["language"], "tz": a["timezone"], "st": a["style_key"],
              "p": a["positioning"], "ap": json.dumps(a["audience_profile"], ensure_ascii=False),
              "pf": a.get("platform", "x"), "v": a["venues"], "lp": a.get("long_post_allowed", False)}).rowcount
-    for key, p in SEEDS.items():
+    for key, p in [*SEEDS.items(), *SEEDS_V2.items()]:
         out["prompts"] += s.execute(text("""
             INSERT INTO prompt_template (key, version, system_text, user_template, sha256, notes)
             VALUES (:k, :v, :s, :u, :h, 'seed') ON CONFLICT DO NOTHING"""),

@@ -4,6 +4,9 @@ zh and en drafts are written independently from the same packet version, never t
 Modes: draft (the assigned reporter role), polish (the zh/en desk editor reworks the current version) and fix (the fact
 checker rewrites the current version to clear the guard's findings). A model can be chosen per run; comparison runs
 add versions without replacing the current one.
+
+The output schema follows the prompt: a prompt that asks for lede_fact_ids (reporter v2) gets the v2 schema and the
+story memory. The "baseline" variant writes the way facts-1 packets did, without contrast facts, for A/B experiments.
 """
 
 from collections.abc import Callable
@@ -15,24 +18,34 @@ from sqlalchemy.orm import sessionmaker
 
 from nr import settings_store
 from nr.ai.runner import call_json
-from nr.ai.schemas import DraftOut
+from nr.ai.schemas import DraftOut, DraftOutV2
 from nr.articles.versions import Draft, current_version, save_version
 from nr.desk.eic import packet_for_model
 from nr.guard.xlength import weighted_length
+from nr.stories.memory import story_memory
 
 MODES = ("draft", "polish", "fix")
+CONTRAST_PREFIXES = ("contrast.", "radar.", "book.", "crowd.", "trader.alltime_pnl", "trader.month_pnl")
+CONTRAST_CONSTRAINTS = {"CROWD_SAMPLE", "HEDGE_POSSIBLE", "ARCHIVE_PARTIAL", "RADAR_SINCE", "LEADERBOARD_PNL"}
+
+
+def baseline_packet(packet: dict) -> dict:
+    """The packet as facts-1 built it: no comparison with the trader's past, their book or the crowd."""
+    return {**packet, "facts": [f for f in packet["facts"] if not f["id"].startswith(CONTRAST_PREFIXES)],
+            "constraints": [c for c in packet["constraints"] if c["code"] not in CONTRAST_CONSTRAINTS]}
 
 
 def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: int | None = None,
                    transport: Callable | None = None, user_id: int | None = None, mode: str = "draft",
-                   model_config_id: int | None = None, compare: bool = False) -> dict:
+                   model_config_id: int | None = None, compare: bool = False, prompt_version: int | None = None,
+                   variant: str | None = None) -> dict:
     if mode not in MODES:
         raise ValueError(f"unknown mode {mode}")
     with sf() as s:
         a = s.execute(text("""
             SELECT asg.*, acc.handle, acc.display_name, acc.language, acc.positioning, acc.audience_profile, acc.platform,
                    acc.long_post_allowed, coalesce(asg.style_key, acc.style_key) AS style, ar.id AS article_id,
-                   ne.current_fact_packet_id, ne.event_class, ne.coin, ne.gate_status
+                   ne.current_fact_packet_id, ne.event_class, ne.coin, ne.gate_status, ne.story_id
             FROM assignment asg JOIN editorial_account acc ON acc.id = asg.account_id
             JOIN news_event ne ON ne.id = asg.news_event_id LEFT JOIN article ar ON ar.assignment_id = asg.id
             WHERE asg.id = :i"""), {"i": assignment_id}).mappings().first()
@@ -51,13 +64,25 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
             {"e": a["news_event_id"], "a": a["article_id"]}).mappings()]
         current = current_version(s, a["article_id"])
         platform_rule = {k: v for k, v in settings_store.get(s, "platforms").get(a["platform"], {}).items() if k != "hosts"}
+        agent = {"draft": a["agent_key"] or "reporter", "polish": f"editor_{a['language']}", "fix": "fact_checker"}[mode]
+        prompt = s.execute(text("""SELECT p.system_text FROM ai_agent_profile g JOIN prompt_template p
+                                   ON p.key = g.prompt_key AND p.version = coalesce(:v, g.prompt_version)
+                                   WHERE g.agent_key = :k AND g.active"""), {"k": agent, "v": prompt_version}).scalar()
+        if prompt_version and prompt is None:
+            raise HTTPException(422, f"{agent} has no prompt version {prompt_version}")
+        v2 = "lede_fact_ids" in (prompt or "")
+        if variant == "baseline":
+            packet = baseline_packet(packet)
+        memory = story_memory(s, a["story_id"], a["news_event_id"], packet, a["language"]) \
+            if v2 and variant != "baseline" else None
     if mode != "draft" and current is None:
         raise HTTPException(409, "there is no draft to revise yet")
-    agent = {"draft": a["agent_key"] or "reporter", "polish": f"editor_{a['language']}", "fix": "fact_checker"}[mode]
+    schema = DraftOutV2 if v2 else DraftOut
     fact_ids = {f["id"] for f in packet["facts"]}
 
     def semantic(o: DraftOut) -> list[str]:
         errs = [f"unknown fact id {f}" for f in o.facts_used if f not in fact_ids]
+        errs += [f"unknown fact id {f} in lede_fact_ids" for f in getattr(o, "lede_fact_ids", []) if f not in fact_ids]
         if o.language != a["language"]:
             errs.append(f"language must be {a['language']}")
         # same rule as the guard's TOO_LONG, checked here so the model gets one chance to shorten it itself
@@ -77,13 +102,16 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
             "style": dict(style) if style else None,
             "assignment": {"angle": a["angle"], "reason": a["reason"], "format": a["format"]},
             "other_drafts_for_this_event": others}
+    if memory:
+        data["story_memory"] = memory
     if mode != "draft":
         data["current_draft"] = {k: current[k] for k in ("headline", "body", "thread", "facts_used", "angle")}
     if mode == "fix":
         data["guard_findings"] = [{k: f.get(k) for k in ("part", "code", "text", "detail")}
                                   for f in current["guard_report"]["findings"]]
     out = call_json(
-        sf, agent_key=agent, purpose="draft_generate" if mode == "draft" else f"draft_{mode}", schema=DraftOut, semantic=semantic, now=now, job_id=job_id,
+        sf, agent_key=agent, purpose="draft_generate" if mode == "draft" else f"draft_{mode}", schema=schema,
+        semantic=semantic, now=now, job_id=job_id, prompt_version=prompt_version,
         event_id=a["news_event_id"], article_id=a["article_id"], transport=transport,
         model_override=model_config_id or a["model_config_id"], inherit_models_from=None if agent == "reporter"
         else "reporter",
@@ -96,7 +124,9 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
         v = save_version(s, a["article_id"], Draft(
             body=o.body, headline=o.headline_candidates[0], alt_headlines=o.headline_candidates[1:], thread=o.thread,
             angle=o.angle, added_value=o.added_value, difference_from_others=o.difference_from_others,
-            why_shareable=o.why_shareable, risks=o.risks, facts_used=o.facts_used),
+            why_shareable=o.why_shareable, risks=o.risks, facts_used=o.facts_used,
+            why_now=getattr(o, "why_now", ""), open_question=getattr(o, "open_question", None),
+            lede_fact_ids=getattr(o, "lede_fact_ids", None)),
             origin="ai", ai_call_id=out.call_id, agent_key=out.agent_key, prompt_ref=out.prompt_ref, model=out.model,
             make_current=False if compare else None)
         s.execute(text("UPDATE assignment SET status = 'drafting' WHERE id = :i AND status = 'accepted'"),

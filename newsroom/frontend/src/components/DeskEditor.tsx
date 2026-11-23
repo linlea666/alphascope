@@ -124,6 +124,9 @@ export function DeskEditor({ articleId, status, current, versions, facts, curren
           {current.added_value && <div>{t("addedValue")}: {current.added_value}</div>}
           {current.difference_from_others && <div>{t("difference")}: {current.difference_from_others}</div>}
           {current.why_shareable && <div>{t("whyShareable")}: {current.why_shareable}</div>}
+          {current.why_now && <div>{t("whyNow")}: {current.why_now}</div>}
+          {current.open_question && <div>{t("openQuestion")}: {current.open_question}</div>}
+          {(current.lede_fact_ids?.length ?? 0) > 0 && <div>{t("ledeFacts")}: {current.lede_fact_ids!.join(", ")}</div>}
           {current.risks?.length > 0 && <div>{t("risks")}: {current.risks.join("; ")}</div>}
           {current.alt_headlines?.length > 0 && <div>alt: {current.alt_headlines.join(" | ")}</div>}
         </div>

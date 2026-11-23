@@ -71,6 +71,16 @@ def count(n: int) -> dict[str, list[str]]:
     return {"zh": [str(n)], "en": [str(n)]}
 
 
+def duration(hours: Decimal) -> tuple[Decimal, str, dict[str, list[str]]]:
+    """Whole hours under three days, else days to one decimal: the value is in the displayed unit, so the guard
+    matches what the writer copies."""
+    if hours < 72:
+        v = Decimal(_q(hours, 0))
+        return v, "hours", {"zh": [f"{v}小时"], "en": [f"{v} hours", f"{v}h"]}
+    v = Decimal(_trim(_q(hours / 24, 1)))
+    return v, "days", {"zh": [f"{v}天"], "en": [f"{v} days"]}
+
+
 def when(t: datetime) -> dict[str, list[str]]:
     u, b = t.astimezone(timezone.utc), t.astimezone(BEIJING)
     return {"zh": [f"{b:%Y-%m-%d %H:%M}（北京时间）", f"{u:%Y-%m-%d %H:%M} UTC"],

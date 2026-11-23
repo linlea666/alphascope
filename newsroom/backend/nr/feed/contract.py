@@ -367,6 +367,33 @@ REQUIRED: dict[str, list[str]] = {
         "long_ntl",
         "short_ntl"
     ],
+    "coin_positions": [
+        "schema",
+        "as_of",
+        "coin",
+        "venue",
+        "coverage",
+        "sides",
+        "largest"
+    ],
+    "coin_positions.side": [
+        "side",
+        "traders",
+        "notional",
+        "timing_traders",
+        "timing_notional"
+    ],
+    "coin_positions.largest": [
+        "side",
+        "rank",
+        "trader_key",
+        "venue",
+        "notional_usd",
+        "leverage",
+        "entry_px",
+        "liq_px",
+        "timing_significant"
+    ],
 }
 
 
