@@ -1,4 +1,5 @@
 import { getLocale, getTranslations } from "next-intl/server";
+import { Action } from "@/components/Action";
 import { ClassLabel, StateBadge } from "@/components/badges";
 import { Badge, PageHeader, Panel } from "@/components/ui";
 import { Link } from "@/i18n/routing";
@@ -13,12 +14,14 @@ type StoryDetail = {
 
 export default async function StoryPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [t, locale, d] = await Promise.all([getTranslations("stories"), getLocale(), nrGet<StoryDetail>(`stories/${id}`)]);
+  const [t, tc, locale, d] = await Promise.all([getTranslations("stories"), getTranslations("columns"), getLocale(),
+    nrGet<StoryDetail>(`stories/${id}`)]);
   const s = d.story;
   return (
     <>
       <PageHeader title={s.public_label ?? s.display_name ?? (s.trader_key ? shortKey(s.trader_key) : s.story_key)} subtitle={s.story_key}>
         <StateBadge state={s.status} />
+        {s.trader_key && <Action path="columns/dossier/run" body={{ params: { trader_key: s.trader_key } }}>{tc("dossier")}</Action>}
       </PageHeader>
       <Panel title={t("timeline")}>
         <ol className="relative space-y-4 border-l border-border pl-5">

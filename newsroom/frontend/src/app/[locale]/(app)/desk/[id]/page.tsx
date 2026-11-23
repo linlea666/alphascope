@@ -1,6 +1,8 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { ClassLabel, StateBadge } from "@/components/badges";
+import { AiStudio } from "@/components/AiStudio";
 import { DeskEditor } from "@/components/DeskEditor";
+import { ScheduleForm } from "@/components/ScheduleForm";
 import { FactsTable } from "@/components/FactsTable";
 import { CardPanel, PublishForm, ReviewButtons } from "@/components/PublishPanel";
 import { Badge, Empty, KV, PageHeader, Panel } from "@/components/ui";
@@ -24,11 +26,12 @@ const EDITABLE = ["drafting", "draft_ready", "changes_requested", "stale", "in_r
 
 export default async function DeskPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [t, tc, locale] = await Promise.all([getTranslations("desk"), getTranslations("common"), getLocale()]);
+  const [t, tc, ts, locale] = await Promise.all([getTranslations("desk"), getTranslations("common"), getTranslations("studio"), getLocale()]);
   const d = await nrGetOptional<ArticleDetail>(`articles/${id}`);
   if (!d) return <Empty>{tc("noAccess")}</Empty>;
   const a = d.article;
-  const [ev, me, accounts] = await Promise.all([nrGet<EventDetail>(`events/${a.news_event_id}`), nrGet<Me>("auth/me"), nrGet<Account[]>("accounts")]);
+  const [ev, me, accounts, models] = await Promise.all([nrGet<EventDetail>(`events/${a.news_event_id}`), nrGet<Me>("auth/me"),
+    nrGet<Account[]>("accounts"), nrGet<{ id: number; name: string; model: string; last_test_ok: boolean | null }[]>("ai/model-options")]);
   const current = d.versions.find((v) => v.id === a.current_version_id) ?? null;
   const packet = ev.packet!.content;
   const perms = new Set(me.roles.some((r) => ["admin", "editor_in_chief"].includes(r)) ? ["view", "draft", "review", "publish"] : me.account_permissions[String(a.account_id)] ?? []);
@@ -36,6 +39,10 @@ export default async function DeskPage({ params }: { params: Promise<{ id: strin
   const myRec = evaluation?.recommended_accounts.find((r) => r.account_id === a.account_id);
   const postText = current ? [current.body, ...(current.thread ?? [])].join("\n\n") : "";
   const account = accounts.find((x) => x.id === a.account_id);
+  const factIds = new Set(packet.facts.map((f) => f.id));
+  const templates = factIds.has("chart") ? ["chart_card"]
+    : [...(packet.event.class === "liquidation" ? ["liq_card"] : []), ...(["whale_close", "liquidation"].includes(packet.event.class) ? ["close_card"] : ["position_card"]),
+      ...(factIds.has("episode.path") ? ["lifecycle_card"] : [])];
   return (
     <>
       <PageHeader
@@ -62,10 +69,15 @@ export default async function DeskPage({ params }: { params: Promise<{ id: strin
             ))}
           </div>
         </Panel>
-        <Panel title={t("draft")}>
-          <DeskEditor articleId={a.id} status={a.status} current={current} versions={d.versions} facts={packet.facts}
-            currentPacketId={a.current_fact_packet_id} editable={perms.has("draft") && EDITABLE.includes(a.status)} />
-        </Panel>
+        <div className="space-y-5">
+          <Panel title={t("draft")}>
+            <DeskEditor articleId={a.id} status={a.status} current={current} versions={d.versions} facts={packet.facts}
+              currentPacketId={a.current_fact_packet_id} editable={perms.has("draft") && EDITABLE.includes(a.status)} />
+          </Panel>
+          <Panel title={ts("aiActions")}>
+            <AiStudio articleId={a.id} models={models} editable={perms.has("draft") && EDITABLE.includes(a.status)} />
+          </Panel>
+        </div>
         <div className="space-y-5">
           <Panel title={t("publish")}>
             <KV k={tc("account")} v={`@${a.handle} · ${a.account_name}`} />
@@ -74,7 +86,11 @@ export default async function DeskPage({ params }: { params: Promise<{ id: strin
             {account && <p className="mt-2 text-xs text-muted">{account.positioning}</p>}
             <div className="mt-4"><ReviewButtons articleId={a.id} status={a.status} /></div>
             {a.status === "approved" && perms.has("publish") && (
-              <div className="mt-4 border-t border-border pt-4"><PublishForm articleId={a.id} handle={a.handle} text={postText} /></div>
+              <div className="mt-4 space-y-3 border-t border-border pt-4">
+                <div className="text-xs text-muted">{ts("schedule")}</div>
+                <ScheduleForm articleId={a.id} />
+                <PublishForm articleId={a.id} handle={a.handle} text={postText} />
+              </div>
             )}
             {d.publications.map((p) => (
               <div key={p.id} className="mt-3 text-xs">
@@ -82,7 +98,7 @@ export default async function DeskPage({ params }: { params: Promise<{ id: strin
               </div>
             ))}
           </Panel>
-          <Panel title={t("card")}><CardPanel packetId={a.current_fact_packet_id} language={a.language} /></Panel>
+          <Panel title={t("card")}><CardPanel packetId={a.current_fact_packet_id} language={a.language} templates={templates} /></Panel>
           <Panel title="Audit">
             {d.audit.map((x, i) => <div key={i} className="text-xs"><span className="text-muted">{fmtTime(x.at, locale)}</span> {x.action} {x.username} {x.reason}</div>)}
           </Panel>

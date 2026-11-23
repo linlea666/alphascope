@@ -127,6 +127,8 @@ def mark_published(s: Session, article_id: int, user_id: int, x_url: str, publis
          "g": json.dumps(report, ensure_ascii=False, default=str)}).scalar_one()
     versions.set_status(s, article_id, "published")
     s.execute(text("UPDATE assignment SET status = 'done' WHERE id = :i"), {"i": art["assignment_id"]})
+    s.execute(text("""UPDATE publication_plan SET status = 'done', publication_id = :p
+                      WHERE article_id = :a AND status IN ('planned', 'claimed')"""), {"p": pid, "a": article_id})
     try:
         transition(s, art["news_event_id"], "covered", actor_kind="user", user_id=user_id, reason=f"published {pid}")
     except InvalidTransition:

@@ -1,16 +1,17 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { Action } from "@/components/Action";
 import { FieldForm } from "@/components/FieldForm";
+import { ModelPresetForm } from "@/components/ModelPresetForm";
 import { Badge, Empty, KV, PageHeader, Panel, td, th } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { nrGet, nrGetOptional } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
 
-const TABS = ["sources", "ai", "agents", "prompts", "users", "costs", "rules", "jobs", "audit"] as const;
+const TABS = ["sources", "ai", "agents", "prompts", "styles", "users", "costs", "rules", "jobs", "rpa", "audit"] as const;
 type Tab = (typeof TABS)[number];
 
 type Model = { id: number; name: string; protocol: string; base_url: string; model: string; auth_header: string; anthropic_version: string; json_mode: string;
-  timeout_s: number; max_retries: number; max_concurrency: number; input_usd_per_mtok: number; output_usd_per_mtok: number; enabled: boolean;
+  timeout_s: number; max_retries: number; max_concurrency: number; input_usd_per_mtok: number; output_usd_per_mtok: number; enabled: boolean; extra_body: Record<string, unknown>;
   last_test_at: string | null; last_test_ok: boolean | null; last_test_detail: Record<string, unknown> | null; has_key: boolean };
 type Agent = { id: number; agent_key: string; version: number; display_name: string; role_description: string; model_config_id: number | null;
   fallback_model_config_id: number | null; prompt_key: string; prompt_version: number; max_output_tokens: number; budget_usd_per_task: number;
@@ -20,13 +21,14 @@ type User = { id: number; username: string; display_name: string | null; is_acti
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   const tab: Tab = (TABS as readonly string[]).includes((await searchParams).tab ?? "") ? ((await searchParams).tab as Tab) : "sources";
-  const [t, locale] = await Promise.all([getTranslations("settings"), getLocale()]);
+  const [t, tx, locale] = await Promise.all([getTranslations("settings"), getTranslations("settingsX"), getLocale()]);
+  const label = (k: Tab) => (k === "styles" || k === "rpa" ? tx(k) : t(k));
   return (
     <>
       <PageHeader title={t("title")} />
       <div className="mb-5 flex flex-wrap gap-1 border-b border-border text-sm">
         {TABS.map((k) => (
-          <Link key={k} href={`/settings?tab=${k}`} className={`px-3 py-2 ${k === tab ? "border-b-2 border-accent text-text" : "text-muted hover:text-text"}`}>{t(k)}</Link>
+          <Link key={k} href={`/settings?tab=${k}`} className={`px-3 py-2 ${k === tab ? "border-b-2 border-accent text-text" : "text-muted hover:text-text"}`}>{label(k)}</Link>
         ))}
       </div>
       {tab === "sources" && <Sources locale={locale} />}
@@ -37,6 +39,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {tab === "costs" && <Costs locale={locale} />}
       {tab === "rules" && <Rules />}
       {tab === "jobs" && <Jobs locale={locale} />}
+      {tab === "styles" && <Styles />}
+      {tab === "rpa" && <Rpa />}
       {tab === "audit" && <Audit locale={locale} />}
     </>
   );
@@ -90,7 +94,7 @@ async function Models() {
   if (!models) return <NoAccess />;
   const fields = (m?: Model) => [
     { name: "name", label: "name", value: m?.name, required: true },
-    { name: "protocol", label: t("protocol"), type: "select" as const, options: ["openai_chat", "anthropic_messages"], value: m?.protocol ?? "openai_chat" },
+    { name: "protocol", label: t("protocol"), type: "select" as const, options: ["openai_chat", "openai_responses", "anthropic_messages"], value: m?.protocol ?? "openai_chat" },
     { name: "base_url", label: t("baseUrl"), value: m?.base_url, required: true, placeholder: "https://www.aicodemirror.com/api/... or https://api.example.com/v1", wide: true },
     { name: "model", label: t("model"), value: m?.model, required: true },
     { name: "api_key", label: t("apiKey"), type: "password" as const },
@@ -102,6 +106,7 @@ async function Models() {
     { name: "max_concurrency", label: "concurrency", type: "number" as const, value: m?.max_concurrency ?? 2 },
     { name: "input_usd_per_mtok", label: `${t("price")} · in`, type: "number" as const, value: m?.input_usd_per_mtok ?? 0 },
     { name: "output_usd_per_mtok", label: `${t("price")} · out`, type: "number" as const, value: m?.output_usd_per_mtok ?? 0 },
+    { name: "extra_body", label: "extra body (JSON)", type: "json" as const, value: m?.extra_body ?? {} },
     { name: "enabled", label: "enabled", type: "checkbox" as const, value: m?.enabled ?? true },
   ];
   return (
@@ -115,15 +120,17 @@ async function Models() {
             <div className="mt-3"><FieldForm fields={fields(m)} path={`ai/models/${m.id}`} method="PUT" /></div></details>
         </Panel>
       ))}
-      <Panel title={t("addModel")}><FieldForm fields={fields()} path="ai/models" /></Panel>
+      <Panel title={t("addModel")}><ModelPresetForm fields={fields()} /></Panel>
     </div>
   );
 }
 
 async function Agents() {
   const t = await getTranslations("settings");
-  const [agents, models] = await Promise.all([nrGetOptional<Agent[]>("ai/agents"), nrGetOptional<Model[]>("ai/models")]);
+  const [tx, agents, models] = await Promise.all([getTranslations("settingsX"), nrGetOptional<Agent[]>("ai/agents"),
+    nrGetOptional<Model[]>("ai/models")]);
   if (!agents || !models) return <NoAccess />;
+  const modelOpts = [{ value: "", label: "—" }, ...models.map((m) => ({ value: String(m.id), label: `${m.name} · ${m.model}` }))];
   return (
     <div className="space-y-5">
       {agents.filter((a) => a.active).map((a) => (
@@ -134,8 +141,10 @@ async function Agents() {
           <details className="mt-3"><summary className="cursor-pointer text-sm text-accent">{t("newVersion")}</summary>
             <div className="mt-3">
               <FieldForm path={`ai/agents/${a.agent_key}`} method="PUT" fields={[
-                { name: "model_config_id", label: `${t("primaryModel")} (id: ${models.map((m) => `${m.id}=${m.name}`).join(", ")})`, type: "number", value: a.model_config_id },
-                { name: "fallback_model_config_id", label: t("fallbackModel"), type: "number", value: a.fallback_model_config_id },
+                { name: "model_config_id", label: `${t("primaryModel")}${a.agent_key === "reporter" || a.agent_key === "eic" ? "" : ` · ${tx("inherit")}`}`,
+                  type: "select", numeric: true, value: a.model_config_id ?? "", options: modelOpts },
+                { name: "fallback_model_config_id", label: t("fallbackModel"), type: "select", numeric: true,
+                  value: a.fallback_model_config_id ?? "", options: modelOpts },
                 { name: "prompt_version", label: t("promptVersion"), type: "number", value: a.prompt_version },
                 { name: "max_output_tokens", label: "max output tokens", type: "number", value: a.max_output_tokens },
                 { name: "budget_usd_per_task", label: "budget / task (USD)", type: "number", value: a.budget_usd_per_task },
@@ -291,6 +300,46 @@ async function Audit({ locale }: { locale: string }) {
           </tr>
         ))}
       </tbody></table>
+    </Panel>
+  );
+}
+
+async function Styles() {
+  const tx = await getTranslations("settingsX");
+  const styles = await nrGet<{ key: string; version: number; language: string; name: string; guide: string; forbidden: string[]; structure: Record<string, unknown> }[]>("styles");
+  const latest = new Map<string, (typeof styles)[number]>();
+  styles.forEach((st) => { if (!latest.has(st.key)) latest.set(st.key, st); });
+  return (
+    <div className="space-y-5">
+      <Panel title={tx("newStyle")}>
+        <FieldForm path="styles" fields={[
+          { name: "key", label: "key (zh_xxx / en_xxx)", required: true },
+          { name: "language", label: "language", type: "select", options: ["zh", "en"], value: "zh" },
+          { name: "name", label: "name", required: true },
+          { name: "guide", label: tx("guide"), type: "textarea", required: true },
+          { name: "forbidden", label: tx("forbidden"), type: "list" },
+          { name: "structure", label: "structure (JSON)", type: "json", value: {} },
+        ]} />
+      </Panel>
+      <div className="grid gap-3 md:grid-cols-2">
+        {[...latest.values()].map((st) => (
+          <Panel key={st.key} title={`${st.name} · ${st.key} v${st.version}`} hint={st.guide}>
+            <p className="text-xs text-muted">{st.forbidden.join(" · ")}</p>
+          </Panel>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+async function Rpa() {
+  const tx = await getTranslations("settingsX");
+  return (
+    <Panel title={tx("rpa")} hint={tx("rpaHint")}>
+      <FieldForm fields={[]} path="settings/rpa-token" submitLabel={tx("newToken")} showResult />
+      <pre className="mt-3 overflow-auto rounded bg-panel-2 p-2 text-xs">{`GET  /api/rpa/next                     Authorization: Bearer <token>
+POST /api/rpa/plans/<id>/result        {"ok": true, "x_url": "...", "published_at": "...", "final_text": "..."}
+POST /api/rpa/plans/<id>/result        {"ok": false, "error": "..."}`}</pre>
     </Panel>
   );
 }

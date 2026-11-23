@@ -9,6 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 from nr import audit
+from nr.ai.prompts import BEATS
 from nr.ai.runner import call_json
 from nr.ai.schemas import EicEvaluation
 from nr.desk import assignment
@@ -82,7 +83,9 @@ def evaluate_event(sf: sessionmaker, event_id: int, now: datetime, job_id: int |
                                    "account_ids": ", ".join(map(str, ids))},
                         data={"event": {k: ev[k] for k in ("id", "event_class", "coin", "venue", "direction", "score")},
                               "score_breakdown": ev["score_breakdown"], "fact_packet": packet_for_model(packet),
-                              "story_so_far": story, "accounts": accounts})
+                              "story_so_far": story, "accounts": accounts,
+                              "reporter_roles": {k: v for k, v in BEATS.items()},
+                              "reporter_field": "optional per recommended account: reporter_<role> from reporter_roles"})
     except Exception:
         with sf() as s:
             try:
@@ -115,7 +118,8 @@ def evaluate_event(sf: sessionmaker, event_id: int, now: datetime, job_id: int |
         if o.decision == "cover":
             for r in recs:
                 aid = assignment.create(s, event_id, r.account_id, source="eic_ai", angle=r.angle, reason=r.reason,
-                                        fmt=r.format, eic_evaluation_id=eid, needs_human=r.account_id in similar)
+                                        fmt=r.format, eic_evaluation_id=eid, needs_human=r.account_id in similar,
+                                        agent_key=r.reporter)
                 if aid:
                     created.append(aid)
         s.execute(text("UPDATE news_event SET priority = :p WHERE id = :e"), {"p": o.priority, "e": event_id})

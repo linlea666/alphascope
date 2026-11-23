@@ -13,6 +13,7 @@
 | 协议 | 请求 | 说明 |
 |---|---|---|
 | `openai_chat` | `POST {base_url}/chat/completions` | `response_format` 支持 `json_object` / `json_schema`；`finish_reason=length` 视为截断失败 |
+| `openai_responses` | `POST {base_url}/responses` | Codex 类网关使用；`instructions` + `input`；附加参数 `{"stream": true}` 时按 SSE 解析；`status=incomplete` 视为截断 |
 | `anthropic_messages` | `POST {base_url}/v1/messages`（base_url 以 `/v1` 结尾时直接拼 `/messages`） | `anthropic-version` 可配置（默认 2023-06-01，兼容第三方网关）；不发送 temperature，不使用 assistant 预填；`stop_reason=refusal` / `max_tokens` 视为失败 |
 
 第三方多模型网关（例如 aicodemirror）通常同时提供这两种格式之一：在“系统管理 → AI 模型”添加，填地址、模型名、密钥（Fernet 加密存储，从不回显），再点 **测试模型**。测试会发一个要求原样返回随机数的 JSON 请求，依次检查 HTTP、JSON、Schema 和随机数，记录延迟、token 和费用。
@@ -47,3 +48,25 @@
 ## 7. 人工内容保护
 
 当前版本是人工写的时，AI 重新生成只会新增一个版本、不改变当前版本；要使用它必须有人点“设为当前版本”。
+
+## 8. 记者角色、编辑与核查（Phase 2）
+
+| 角色 | 用途 | 提示词 |
+|---|---|---|
+| `reporter_breaking` | 大额开仓、反手、加减仓 | 通用记者规则 + 突发条线 |
+| `reporter_investigator` | 战绩交易员动向、人物 | + 巨鲸调查条线 |
+| `reporter_data` | 数据类栏目 | + 数据研究条线 |
+| `reporter_derivatives` | 浮亏加仓、强平、近强平 | + 衍生品风险条线 |
+| `reporter_historian` | 复盘、交易员档案 | + 历史故事条线 |
+| `editor_zh` / `editor_en` | 本地化润色当前版本 | 不翻译、不加新结论 |
+| `fact_checker` | 按守卫发现改写当前版本 | 不能改规则或事实 |
+
+分派时按事件类型给默认记者，AI 总编辑可以为每个账号指定记者（`reporter` 字段），编辑也可以在任务台改。没有单独配置模型的角色沿用“通用记者”的模型。
+
+## 9. 多模型对比
+
+编辑室“多模型对比”对同一分派、同一事实包，让选中的每个模型各写一版：都作为 AI 版本保存（不替换当前版本），并列显示守卫结果、X 长度、费用和耗时。选中哪版就“设为当前版本”。
+
+## 10. 网关被防火墙拦截时
+
+若返回 HTML 页面（例如 Cloudflare “Attention Required”），错误信息会注明“被网关防火墙拦截，请让服务商放行本服务器 IP”。这种情况与配置无关，系统不会尝试绕过。

@@ -87,6 +87,7 @@ class FakeFeed:
         self.at_risk_rows: list[dict] = []
         self.down = False
         self.calls: list[str] = []
+        self.research: dict[str, dict] = {}  # path -> response for the research column endpoints
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         self.calls.append(request.url.path)
@@ -116,6 +117,8 @@ class FakeFeed:
         if path == "/health":
             head = max((r["source_id"] for r in self.events), default=None)
             return httpx.Response(200, json=self.health_doc or health(head=head))
+        if path in self.research:
+            return httpx.Response(200, json=self.research[path])
         if path == "/positions/at-risk":
             return httpx.Response(200, json={"schema": "feed.v1", "as_of": iso(T0), "max_dist": q["max_dist"],
                                              "rows": self.at_risk_rows})

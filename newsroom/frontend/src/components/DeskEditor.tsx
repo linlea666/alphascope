@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { bff } from "@/lib/bff";
 import type { Fact, GuardReport, Version } from "@/lib/types";
+import { DiffView } from "./AiStudio";
 import { Badge, button, input, primary } from "./ui";
 
 function Highlighted({ text, report, part }: { text: string; report: GuardReport | null; part: string }) {
@@ -61,6 +62,7 @@ export function DeskEditor({ articleId, status, current, versions, facts, curren
   const [report, setReport] = useState<GuardReport | null>(current?.guard_report ?? null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [diffWith, setDiffWith] = useState<Version | null>(null);
   const threadList = useMemo(() => thread.split("\n").map((s) => s.trim()).filter(Boolean), [thread]);
   const payload = { headline, body, thread: threadList.length ? threadList : null, facts_used: used };
 
@@ -126,6 +128,12 @@ export function DeskEditor({ articleId, status, current, versions, facts, curren
           {current.alt_headlines?.length > 0 && <div>alt: {current.alt_headlines.join(" | ")}</div>}
         </div>
       )}
+      {diffWith && (
+        <div>
+          <div className="mb-1 text-xs text-muted">Δ v{diffWith.version_no} → editor</div>
+          <DiffView a={[diffWith.headline, diffWith.body].filter(Boolean).join("\n")} b={[headline, body].filter(Boolean).join("\n")} />
+        </div>
+      )}
       <div>
         <div className="mb-1 text-xs font-semibold">{t("versions")}</div>
         {versions.map((v) => (
@@ -138,6 +146,7 @@ export function DeskEditor({ articleId, status, current, versions, facts, curren
               <button className="text-accent" onClick={() => run(async () => { await bff(`articles/${articleId}/accept-version`, "POST", { version_id: v.id }); router.refresh(); })}>{t("useVersion")}</button>
             )}
             <button className="text-muted hover:text-text" onClick={() => { setHeadline(v.headline); setBody(v.body); setThread((v.thread ?? []).join("\n")); setUsed(v.facts_used); setReport(v.guard_report); }}>↺</button>
+            <button className="text-muted hover:text-text" title="diff" onClick={() => setDiffWith(diffWith?.id === v.id ? null : v)}>Δ</button>
             <span className="truncate text-muted">{v.headline || v.body.slice(0, 40)}</span>
           </div>
         ))}

@@ -109,3 +109,20 @@ def test_ai_jobs_wait_for_a_model_without_dying(sf):
     with sf() as s:
         st = s.execute(text("SELECT status, attempts, last_error FROM job WHERE id = :j"), {"j": jid}).one()
     assert st[0] == "queued" and st[1] == 0 and "AIUnavailable" in st[2]
+
+
+def test_stories_go_dormant_and_close(sf):
+    from tests.helpers import candidate_event
+    newsroom(sf)
+    candidate_event(sf)
+    with sf() as s:
+        s.execute(text("UPDATE news_story SET last_event_at = :t"), {"t": NOW - timedelta(days=8)})
+        s.commit()
+    maintenance.run(sf, NOW)
+    with sf() as s:
+        assert s.execute(text("SELECT status FROM news_story")).scalar() == "dormant"  # the position is still open
+        s.execute(text("UPDATE position_episode SET status = 'closed'"))
+        s.commit()
+    maintenance.run(sf, NOW)
+    with sf() as s:
+        assert s.execute(text("SELECT status FROM news_story")).scalar() == "closed"

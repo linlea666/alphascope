@@ -5,6 +5,7 @@ import time
 from datetime import datetime, timedelta
 from decimal import Decimal
 
+from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
 from nr import settings_store
@@ -30,6 +31,13 @@ def process_pending(sf: sessionmaker, now: datetime, batch: int = 2000, liq_tol:
             for e in pending:
                 ch = episodes.apply(s, e)
                 out["events"] += 1
+                ended = ch.ended or (ch.episode if ch.episode["status"] != "open" else None)
+                if ended is not None and s.execute(text(
+                        "SELECT 1 FROM news_event WHERE episode_id = :e AND state IN ('covered', 'archived') LIMIT 1"),
+                        {"e": ended["id"]}).scalar():
+                    # a position we reported on has ended: its whole story becomes a recap candidate
+                    enqueue(s, "column_build", {"column": "recap", "params": {"episode_id": ended["id"]}},
+                            dedupe_key=f"column:recap:{ended['id']}", priority=60, now=now)
                 if e["observed_at"] < oldest:
                     out["too_old"] += 1
                     continue

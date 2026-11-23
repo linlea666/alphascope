@@ -37,8 +37,8 @@
 
 | 项 | 结果 |
 |---|---|
-| Newsroom pytest | 41 passed |
-| AlphaScope pytest | 233 passed（含新增的 Feed 契约测试 7 个） |
+| Newsroom pytest | 57 passed（含栏目、多模型对比、RPA、公开页、故事引擎） |
+| AlphaScope pytest | 234 passed（含 Feed 契约测试 8 个，覆盖 7 个研究端点） |
 | eslint / tsc | 无错误 |
 | shellcheck（newsroom 脚本） | 无告警 |
 | next build | 成功（12 个页面 + 3 个路由处理器） |

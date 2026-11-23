@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from nr import settings_store
 from nr.ai.envelope import extract_json, user_message
-from nr.ai.providers import anthropic_compat, openai_compat
+from nr.ai.providers import anthropic_compat, openai_compat, openai_responses
 from nr.ai.providers.base import ChatRequest, ChatResult, ProviderError
 from nr.crypto import decrypt
 
@@ -61,7 +61,8 @@ def model_config(s: Session, model_id: int | None) -> dict | None:
 
 
 def default_transport(cfg: dict, req: ChatRequest) -> ChatResult:
-    return (anthropic_compat if cfg["protocol"] == "anthropic_messages" else openai_compat).call(cfg, req)
+    mod = {"anthropic_messages": anthropic_compat, "openai_responses": openai_responses}.get(cfg["protocol"], openai_compat)
+    return mod.call(cfg, req)
 
 
 def _semaphore(cfg: dict) -> threading.BoundedSemaphore:
@@ -105,6 +106,7 @@ def log_call(s: Session, *, job_id, agent_key, prompt_ref, cfg, purpose, event_i
 def call_json(sf: sessionmaker, *, agent_key: str, purpose: str, schema: type[BaseModel], task_vars: dict, data: dict,
               semantic: Callable[[BaseModel], list[str]] | None, now: datetime, job_id: int | None = None,
               event_id: int | None = None, article_id: int | None = None, transport: Callable | None = None,
+              model_override: int | None = None, inherit_models_from: str | None = None,
               sleep: Callable[[float], None] | None = None) -> CallOutcome:
     transport = transport or default_transport
     with sf() as s:
@@ -115,6 +117,13 @@ def call_json(sf: sessionmaker, *, agent_key: str, purpose: str, schema: type[Ba
         if agent is None:
             raise AIUnavailable(f"no active agent profile {agent_key}")
         primary, fallback = model_config(s, agent["model_config_id"]), model_config(s, agent["fallback_model_config_id"])
+        if primary is None and inherit_models_from:  # a reporter role without its own model uses the base reporter's
+            base = s.execute(text("SELECT model_config_id, fallback_model_config_id FROM ai_agent_profile "
+                                  "WHERE agent_key = :k AND active"), {"k": inherit_models_from}).first()
+            if base:
+                primary, fallback = model_config(s, base[0]), model_config(s, base[1])
+        if model_override is not None:  # comparison runs: exactly this model, no fallback
+            primary, fallback = model_config(s, model_override), None
         if primary is None:
             raise AIUnavailable(f"agent {agent_key} has no enabled model")
         prompt = s.execute(text("SELECT * FROM prompt_template WHERE key = :k AND version = :v"),

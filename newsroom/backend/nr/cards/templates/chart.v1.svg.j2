@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675" font-family="{{ font }}">
+  <rect width="1200" height="675" fill="{{ c.bg }}"/>
+  <rect x="0" y="0" width="12" height="675" fill="{{ c.accent }}"/>
+  <text x="64" y="84" font-size="26" fill="{{ c.muted }}">{{ t.kicker }}</text>
+  <text x="64" y="136" font-size="42" font-weight="700" fill="{{ c.text }}">{{ t.title }}</text>
+  {% for el in labels %}<text x="{{ el.x }}" y="{{ el.y }}" font-size="{{ el.size }}" fill="{{ c.text if el.strong else c.muted }}"{% if el.anchor %} text-anchor="{{ el.anchor }}"{% endif %}>{{ el.text }}</text>
+  {% endfor %}
+  {% for b in bars %}<rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}" fill="{{ c.accent if b.series == 0 else c.warn }}"/>
+  {% endfor %}
+  {% if line %}<polyline points="{{ line }}" fill="none" stroke="{{ c.accent }}" stroke-width="4"/>
+  {% for p in dots %}<circle cx="{{ p.x }}" cy="{{ p.y }}" r="5" fill="{{ c.accent }}"/>{% endfor %}{% endif %}
+  {% for note in notes %}<text x="64" y="{{ 580 + loop.index0 * 26 }}" font-size="19" fill="{{ c.warn }}">{{ note }}</text>
+  {% endfor %}
+  {% if legend %}<text x="64" y="610" font-size="18" fill="{{ c.warn }}">{{ legend }}</text>{% endif %}
+  <text x="64" y="650" font-size="17" fill="{{ c.muted }}">{{ t.footer }}</text>
+  <text x="1136" y="650" font-size="17" fill="{{ c.muted }}" text-anchor="end">{{ t.brand }}</text>
+</svg>

@@ -71,7 +71,9 @@ def build_event_facts(sf: sessionmaker, client: FeedClient, event_id: int, now: 
         ctx, ctx_error = None, str(exc)
     with sf() as s:
         detect = settings_store.get(s, "detect")
-        built = builder.build(ev, ep, ses, ctx, blockers, now, detect)
+        path = [dict(r) for r in s.execute(text("""SELECT kind, szi_after, observed_at FROM source_event
+                                                     WHERE episode_id = :e ORDER BY id"""), {"e": ep["id"]}).mappings()]
+        built = builder.build(ev, ep, ses, ctx, blockers, now, detect, path)
         if ctx is not None:
             sid = snapshot_context(s, ev["trader_id"], ctx, now)
             add_evidence(s, event_id, "context_snapshot", sid)
@@ -155,11 +157,13 @@ def refresh_due(sf: sessionmaker, now: datetime) -> int:
             SELECT id FROM news_event
             WHERE (state IN ('detected', 'blocked', 'candidate', 'evaluated', 'assigned', 'covered')
                    OR (state = 'dismissed' AND event_class = 'liquidation' AND liquidation_status = 'suspected'))
-              AND detected_at > :since
-              AND (facts_refreshed_at IS NULL OR facts_refreshed_at < :stale
+              AND detected_at > :since AND column_key IS NULL
+              AND (facts_refreshed_at IS NULL
+                   OR facts_refreshed_at < CASE WHEN state = 'blocked' THEN :blocked ELSE :stale END
                    OR (event_class = 'liquidation' AND liquidation_status = 'suspected' AND facts_refreshed_at < :liq))
             ORDER BY facts_refreshed_at NULLS FIRST LIMIT 100"""),
             {"since": now - timedelta(hours=max(hours, 26)), "stale": now - timedelta(minutes=30),
+             "blocked": now - timedelta(minutes=60),
              "liq": now - timedelta(hours=2)}).scalars())
         n = 0
         for i in ids:

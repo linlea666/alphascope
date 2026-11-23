@@ -36,3 +36,16 @@ export async function nrGetOptional<T>(path: string, params?: Record<string, str
     throw e;
   }
 }
+
+/** Server-side read of the public pages' API (no session; only published material is served there). */
+export async function publicGet<T>(path: string): Promise<T | null> {
+  try {
+    const res = await fetch(new URL(`/api/public/${path}`, API_BASE), { cache: "no-store" });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new ApiError(res.status, await res.text());
+    return res.json() as Promise<T>;
+  } catch (e) {
+    if (e instanceof ApiError) throw e;
+    throw new ApiError(0, `cannot reach the newsroom API at ${API_BASE}`);
+  }
+}

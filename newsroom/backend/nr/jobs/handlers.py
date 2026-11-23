@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
 from nr import settings_store
@@ -16,7 +17,7 @@ from nr.feed.client import FeedClient
 from nr.jobs import queue
 
 log = logging.getLogger(__name__)
-DETERMINISTIC = ("build_facts", "card_render")
+DETERMINISTIC = ("build_facts", "card_render", "column_build")
 
 
 @dataclass
@@ -34,6 +35,14 @@ def default_deps() -> Deps:
 def handle(sf: sessionmaker, deps: Deps, job: dict, now: datetime) -> dict:
     kind, p = job["kind"], job["payload"]
     if kind == "build_facts":
+        with sf() as s:
+            col = s.execute(text("SELECT column_key, column_params, coin FROM news_event WHERE id = :e"),
+                            {"e": p["event_id"]}).mappings().first()
+        if col and col["column_key"]:  # a column issue is rebuilt by its column, not from a position
+            from nr.columns.run import build_column
+            params = {**(col["column_params"] or {}), **({"coins": [col["coin"]]} if col["coin"] != "*" else {})}
+            with deps.feed() as c:
+                return build_column(sf, c, col["column_key"], now, params)
         with deps.feed() as c:
             return build_event_facts(sf, c, p["event_id"], now, get_settings().context_calls_per_hour)
     if kind == "eic_evaluate":
@@ -42,7 +51,12 @@ def handle(sf: sessionmaker, deps: Deps, job: dict, now: datetime) -> dict:
     if kind == "draft_generate":
         from nr.desk.drafting import generate_draft
         return generate_draft(sf, p["assignment_id"], now, job_id=job["id"], transport=deps.provider,
-                              user_id=p.get("user_id"))
+                              user_id=p.get("user_id"), mode=p.get("mode", "draft"),
+                              model_config_id=p.get("model_config_id"), compare=p.get("compare", False))
+    if kind == "column_build":
+        from nr.columns.run import build_column
+        with deps.feed() as c:
+            return build_column(sf, c, p["column"], now, p.get("params") or {})
     if kind == "card_render":
         from nr.cards.render import render_for_packet
         return render_for_packet(sf, p["fact_packet_id"], p["template"], p["language"], p.get("brand", "default"))

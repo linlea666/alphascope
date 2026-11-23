@@ -13,8 +13,13 @@ class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+ReporterRole = Literal["reporter", "reporter_breaking", "reporter_investigator", "reporter_data",
+                      "reporter_derivatives", "reporter_historian"]
+
+
 class AccountRec(Strict):
     account_id: int
+    reporter: ReporterRole | None = None
     angle: str = Field(max_length=300)
     reason: str = Field(max_length=500)
     format: Literal["single_post", "thread", "card_post"]

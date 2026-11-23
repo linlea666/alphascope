@@ -27,6 +27,7 @@ DEFAULTS: dict[str, dict] = {
     "ai": {"enabled": True, "auto_eic": True},
     # four_eyes: the author of the current version may not approve it (turn on once there is more than one editor)
     "review": {"four_eyes": False},
+    "columns": {"disabled": []},
     "guard": {"allow_numbers": ["24h", "7d", "30d", "90d", "24小时", "7天", "30天", "90天"],
               "duplicate_block": 0.45, "duplicate_warn": 0.30, "duplicate_hours": 72},
 }

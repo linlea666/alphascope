@@ -16,6 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
 from nr.config import get_settings
+from nr.facts import fmt
 
 TEMPLATE_VERSION = "v1"
 ENV = Environment(loader=FileSystemLoader(Path(__file__).parent / "templates"),
@@ -95,19 +96,107 @@ def card_inputs(packet: dict, template: str, language: str, brand: str) -> dict:
             "rows": rows, "notes": notes, "c": THEMES.get(brand, THEMES["default"]), "font": cjk_font()}
 
 
+CHART_TEMPLATES = ("chart_card", "lifecycle_card")
+NOTE_CODES["zh"].update({"OBSERVED_SAMPLE": "AlphaScope 观测样本，不是全市场", "COPY_BACKTEST_ASSUMPTIONS": "跟单收益为回测，假设见正文",
+                         "FORECAST_SHADOW": "研究预测（影子模式），不是交易信号", "SCREEN_NOT_SIGNAL": "研究筛选，不是可交易信号",
+                         "SURVIVORSHIP": "榜单只显示当下表现好的人", "COMPLETE_CYCLES_ONLY": "只统计完整的已平仓周期"})
+NOTE_CODES["en"].update({"OBSERVED_SAMPLE": "AlphaScope observed sample, not the whole market",
+                         "COPY_BACKTEST_ASSUMPTIONS": "Copy returns are backtests with stated assumptions",
+                         "FORECAST_SHADOW": "Research forecasts in shadow mode, not signals",
+                         "SCREEN_NOT_SIGNAL": "A research screen, not a tradable signal",
+                         "SURVIVORSHIP": "Boards only show who is doing well now",
+                         "COMPLETE_CYCLES_ONLY": "Complete closed cycles only"})
+
+
 def render_svg(inputs: dict) -> str:
-    """One layout for every template; templates differ in which facts they show."""
-    return ENV.get_template(f"card.{TEMPLATE_VERSION}.svg.j2").render(**inputs)
+    """Fact cards share one layout (templates differ in which facts they show); charts have their own."""
+    name = "chart" if "bars" in inputs else "card"
+    return ENV.get_template(f"{name}.{TEMPLATE_VERSION}.svg.j2").render(**inputs)
+
+
+def _num(fact: dict) -> float:
+    try:
+        return abs(float(fact["value"]))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _footer(packet: dict, lang: str) -> str:
+    return (f"数据：AlphaScope · 事实包 v{packet.get('version')} #{packet.get('hash', '')[:8]}" if lang == "zh"
+            else f"Data: AlphaScope · fact packet v{packet.get('version')} #{packet.get('hash', '')[:8]}")
+
+
+def chart_inputs(packet: dict, lang: str, brand: str) -> dict:
+    """Bar chart from the packet's `chart` fact: every label and value is a display string of a packet fact."""
+    facts = {f["id"]: f for f in packet["facts"]}
+    spec = facts["chart"]["value"]
+    rows = spec["rows"][:9]
+    top = max((_num(facts[fid]) for r in rows for fid in r["fact_ids"] if fid in facts), default=0) or 1
+    labels, bars, y = [], [], 190
+    row_h = min(44, int(370 / max(len(rows), 1)))
+    for r in rows:
+        label = facts[r["label_fact"]]["display"][lang][0] if r.get("label_fact") else r["label"][lang]
+        labels.append({"x": 64, "y": y + 18, "size": 20, "text": label[:24], "strong": True})
+        for i, fid in enumerate(r["fact_ids"][:2]):
+            if fid not in facts:
+                continue
+            w = max(4, int(460 * _num(facts[fid]) / top))
+            by = y + i * 18
+            bars.append({"x": 400, "y": by + 4, "w": w, "h": 14, "series": i})
+            labels.append({"x": 412 + w, "y": by + 17, "size": 17, "text": facts[fid]["display"][lang][0],
+                           "strong": False})
+        y += row_h
+    codes = {c["code"] for c in packet["constraints"]}
+    subj = packet["subject"].get("title", {}).get(lang) or packet["subject"]["trader_ref"]
+    return {"t": {"kicker": subj, "title": spec["title"][lang], "footer": _footer(packet, lang), "brand": brand},
+            "labels": labels, "bars": bars, "line": None, "dots": [],
+            "notes": [NOTE_CODES[lang][c] for c in NOTE_CODES[lang] if c in codes][:2],
+            "c": THEMES.get(brand, THEMES["default"]), "font": cjk_font()}
+
+
+def lifecycle_inputs(packet: dict, lang: str, brand: str) -> dict:
+    """Observed size of one position over time; points are polls, so changes happened somewhere between them."""
+    facts = {f["id"]: f for f in packet["facts"]}
+    path = facts["episode.path"]["value"]
+    sizes = [float(p["size"]) for p in path]
+    top = max(sizes) or 1
+    x0, x1, y0, y1 = 140, 1100, 520, 190
+    ts = [datetime.fromisoformat(p["t"]).timestamp() for p in path]
+    span = (ts[-1] - ts[0]) or 1  # x follows real time, so uneven polling shows as uneven spacing
+    dots = [{"x": round(x0 + (x1 - x0) * (t - ts[0]) / span, 1), "y": round(y0 - (y0 - y1) * v / top, 1)}
+            for t, v in zip(ts, sizes)]
+    coin = packet["event"]["coin"]
+    peak = max(path, key=lambda p: float(p["size"]))["size"]
+    labels = [{"x": x0, "y": 548, "size": 17, "text": _when(path[0]["t"], lang), "strong": False},
+              {"x": x1, "y": 548, "size": 17, "text": _when(path[-1]["t"], lang), "strong": False, "anchor": "end"},
+              {"x": x0 - 12, "y": y1 + 6, "size": 18, "text": f"{peak} {coin}", "strong": True, "anchor": "end"},
+              {"x": x0 - 12, "y": y0 + 6, "size": 18, "text": "0", "strong": False, "anchor": "end"}]
+    note = "数据为轮询观测：变化发生在两次观测之间" if lang == "zh" else "Polled observations: changes happen between points"
+    return {"t": {"kicker": packet["subject"]["trader_ref"],
+                  "title": f"{coin} 仓位变化路径" if lang == "zh" else f"{coin} position path",
+                  "footer": _footer(packet, lang), "brand": brand},
+            "labels": labels, "bars": [], "line": " ".join(f"{p['x']},{p['y']}" for p in dots), "dots": dots,
+            "notes": [], "legend": note, "c": THEMES.get(brand, THEMES["default"]), "font": cjk_font()}
+
+
+def _when(iso: str, lang: str) -> str:
+    return fmt.when(datetime.fromisoformat(iso))[lang][0]
 
 
 def render_for_packet(sf: sessionmaker, packet_id: int, template: str, language: str, brand: str = "default") -> dict:
-    if template not in TEMPLATES:
+    if template not in TEMPLATES and template not in CHART_TEMPLATES:
         raise ValueError(f"unknown template {template}")
     with sf() as s:
         row = s.execute(text("SELECT content, content_hash, version FROM fact_packet WHERE id = :i"),
                         {"i": packet_id}).mappings().one()
         packet = {**row["content"], "hash": row["content_hash"], "version": row["version"]}
-        inputs = card_inputs(packet, template, language, "AlphaScope" if brand == "default" else brand)
+        name = "AlphaScope" if brand == "default" else brand
+        facts = {f["id"] for f in packet["facts"]}
+        if template == "chart_card" and "chart" not in facts or template == "lifecycle_card" and "episode.path" not in facts:
+            raise ValueError(f"this packet has nothing for {template}")
+        inputs = (chart_inputs(packet, language, name) if template == "chart_card" else
+                  lifecycle_inputs(packet, language, name) if template == "lifecycle_card" else
+                  card_inputs(packet, template, language, name))
         data_hash = hashlib.sha256(json.dumps(inputs, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
         svg = render_svg(inputs)
         png = cairosvg.svg2png(bytestring=svg.encode())
@@ -128,5 +217,5 @@ def render_for_packet(sf: sessionmaker, packet_id: int, template: str, language:
                 {"k": kind, "t": template, "tv": TEMPLATE_VERSION, "p": packet_id, "l": language, "b": brand,
                  "dh": data_hash, "fp": str(path), "sha": sha}).scalar_one()
         s.commit()
-    return {"assets": out, "data_hash": data_hash, "rows": inputs["rows"]}
+    return {"assets": out, "data_hash": data_hash, "rows": inputs.get("rows", [])}
 

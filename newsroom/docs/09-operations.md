@@ -24,7 +24,8 @@ sudo newsroom/start.sh install
 
 ## 4. 首次配置（网页）
 
-1. 系统管理 → AI 模型：添加模型（地址、模型名、密钥、协议、JSON 模式、单价）→ 测试模型。
+1. 系统管理 → AI 模型：选预设（DeepSeek 官方、aicodemirror Codex/Claude、OpenAI）或自定义，填密钥和单价 → 测试模型。
+   aicodemirror 的 Cloudflare 目前拦截本服务器 IP（2026-11-23 实测：本机 401、服务器 403），需要服务商放行后才能用。
 2. 系统管理 → AI 角色：给 `eic` 和 `reporter` 选主模型和备用模型（会生成新版本）。
 3. 系统管理 → 提示词版本：按自己的编辑方针保存新版本，再在 AI 角色里指向它。
 4. 账号运营：两个示例账号默认是暂停状态。按真实 X 账号修改用户名、定位、风格，把状态改为 active，授权状态改为 authorized 并填写到期时间。
@@ -75,3 +76,19 @@ make check          # pytest + eslint + tsc + shellcheck + next build
 ```
 
 本机联调需要 AlphaScope API 开启 Feed：`ALPHASCOPE_FEED_TOKEN=xxx backend/.venv/bin/uvicorn app.main:app --port 8610`，并在 `newsroom/backend/.env` 写 `NEWSROOM_FEED_TOKEN=xxx`。不要在本机启动 AlphaScope 的 worker（生产服务器是唯一采集端）。
+
+## 10. 栏目
+
+栏目在“栏目”页查看和手动生成；Worker 每小时第 7 分钟检查：每周栏目周一生成，每月栏目 1 日生成，每日 / 每小时栏目按触发条件生成；数据不足被阻断的会在当天重试。可在“系统管理 → 规则与预算 → columns.disabled”停用某个栏目。
+
+## 11. RPA 接入（可选，默认关闭）
+
+1. 系统管理 → RPA 接口 → 生成令牌（只显示一次）。
+2. 账号设置勾选 RPA。
+3. 在日历里给已审核稿件排期。
+4. RPA 轮询 `GET /api/rpa/next`（Authorization: Bearer 令牌），拿到文本后在 X 发布，再 `POST /api/rpa/plans/<id>/result` 回报帖子链接；失败时回报 `ok=false`，计划回到待发布。
+所有人工发布的检查（授权、预算、紧急停止、守卫）对 RPA 同样生效，并写审计日志。RPA 只能通过本机或你自建的安全通道访问 API（API 只监听 127.0.0.1）。
+
+## 12. 公开页
+
+`/zh/p`：已发布的交易员故事、追踪账本（结局好坏都保留）、纠错与撤稿；只展示已发布内容，无需登录。

@@ -90,3 +90,15 @@ class FeedClient:
         except ContractError as exc:
             raise FeedError(str(exc)) from exc
         return r
+
+    def research(self, name: str, path: str, params: dict | None = None, rows_field: str | None = None,
+                 row_name: str | None = None) -> dict:
+        """Research column endpoints, checked against the contract like every other response."""
+        r = self._get(path, params)
+        try:
+            check(name, r)
+            if rows_field and row_name:
+                check_all(name, r[rows_field], row_name)
+        except ContractError as exc:
+            raise FeedError(str(exc)) from exc
+        return r

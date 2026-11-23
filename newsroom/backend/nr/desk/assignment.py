@@ -24,9 +24,16 @@ def account_fits(s: Session, account_id: int, event_id: int) -> tuple[bool, str]
     return True, ""
 
 
+def _default_agent(s: Session, event_id: int) -> str:
+    from nr.ai.prompts import default_reporter
+    cls = s.execute(text("SELECT event_class FROM news_event WHERE id = :e"), {"e": event_id}).scalar()
+    return default_reporter(cls or "")
+
+
 def create(s: Session, event_id: int, account_id: int, *, source: str, angle: str = "", reason: str = "",
            fmt: str = "single_post", eic_evaluation_id: int | None = None, needs_human: bool = False,
-           status: str = "proposed", user_id: int | None = None) -> int | None:
+           status: str = "proposed", user_id: int | None = None, agent_key: str | None = None,
+           style_key: str | None = None, model_config_id: int | None = None, due_at=None) -> int | None:
     ok, why = account_fits(s, account_id, event_id)
     if not ok:
         if source == "editor":
@@ -34,12 +41,15 @@ def create(s: Session, event_id: int, account_id: int, *, source: str, angle: st
         return None
     return s.execute(text("""
         INSERT INTO assignment (news_event_id, account_id, angle, reason, format, source, eic_evaluation_id, needs_human,
-                                status, decided_by, decided_at)
-        VALUES (:e, :a, :angle, :r, :f, :src, :eic, :nh, :st, :u, CASE WHEN :acc THEN now() END)
+                                status, decided_by, decided_at, agent_key, style_key, model_config_id, due_at)
+        VALUES (:e, :a, :angle, :r, :f, :src, :eic, :nh, :st, :u, CASE WHEN :acc THEN now() END,
+                :agent, :style, :model, :due)
         ON CONFLICT (news_event_id, account_id) WHERE status NOT IN ('rejected', 'cancelled') DO NOTHING
         RETURNING id"""),
         {"e": event_id, "a": account_id, "angle": angle, "r": reason, "f": fmt, "src": source,
-         "eic": eic_evaluation_id, "nh": needs_human, "st": status, "u": user_id, "acc": status == "accepted"}).scalar()
+         "eic": eic_evaluation_id, "nh": needs_human, "st": status, "u": user_id, "acc": status == "accepted",
+         "agent": agent_key or _default_agent(s, event_id), "style": style_key, "model": model_config_id,
+         "due": due_at}).scalar()
 
 
 def accept(s: Session, assignment_id: int, user_id: int) -> int:

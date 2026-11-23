@@ -5,8 +5,9 @@ import type { Me } from "@/lib/types";
 import { LogoutButton } from "./LogoutButton";
 
 const LINKS = [
-  ["/", "dashboard"], ["/radar", "radar"], ["/library", "library"], ["/stories", "stories"], ["/accounts", "accounts"],
-  ["/publications", "publications"], ["/settings", "settings"],
+  ["/", "dashboard"], ["/radar", "radar"], ["/assignments", "assignments"], ["/calendar", "calendar"],
+  ["/columns", "columns"], ["/library", "library"], ["/stories", "stories"], ["/accounts", "accounts"],
+  ["/publications", "publications"], ["/settings", "settings"], ["/p", "public"],
 ] as const;
 
 export async function Nav() {

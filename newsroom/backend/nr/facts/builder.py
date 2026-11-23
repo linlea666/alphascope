@@ -21,7 +21,7 @@ HOLDING_CLASSES = ("whale_open", "flip", "whale_add", "underwater_add", "near_li
 MAJOR_COINS = ("BTC", "ETH", "SOL", "HYPE")
 # values that move with the mark price between polls: they never make a new packet version on their own
 # (sizes and notionals are not here: a 10% move in either is material, whatever caused it)
-VOLATILE = {"position.mark_px", "position.unrealized_pnl_usd", "position.liq_distance", "position.observed_at",
+VOLATILE = {"position.mark_px", "position.unrealized_pnl_usd", "position.liq_distance", "position.observed_at", "episode.path",
             "trader.account_value_usd"}
 CONSTRAINT_TEXT = {
     "OBSERVED_SAMPLE": "Data covers AlphaScope's observed sample of traders, not the whole exchange.",
@@ -112,7 +112,7 @@ def _strong_record(ctx: dict) -> tuple[bool, list[str]]:
 
 
 def build(event: dict, episode: dict, source_events: list[dict], ctx: dict | None, source_blockers: list[dict],
-          now: datetime, cfg: dict) -> Built:
+          now: datetime, cfg: dict, path: list[dict] | None = None) -> Built:
     f = Facts()
     blocking = list(source_blockers)
     cls, coin, venue = event["event_class"], event["coin"], event["venue"]
@@ -167,6 +167,11 @@ def build(event: dict, episode: dict, source_events: list[dict], ctx: dict | Non
         f.add("episode.increases", "count", episode["n_increases"], fmt.count(episode["n_increases"]),
               "position_episode.n_increases")
     f.usd("episode.peak_notional_usd", "notional", D(episode["peak_notional"]), "position_episode.peak_notional")
+    if path and len(path) >= 2:  # the observed size path, for the lifecycle card (sampled: changes between polls)
+        pts = [{"t": T(p["observed_at"]).isoformat(), "size": format(abs(D(p["szi_after"])), "f"),
+                "kind": p["kind"]} for p in path[-40:]]
+        f.add("episode.path", "series", pts, {"zh": [f"{len(pts)} 次观测"], "en": [f"{len(pts)} observations"]},
+              "source_event (this position)", label="size after each observed change; changes happen between polls")
 
     record_strong, record_reasons = False, []
     position, ratio = None, None

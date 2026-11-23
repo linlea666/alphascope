@@ -81,14 +81,15 @@ export function PublishForm({ articleId, handle, text }: { articleId: number; ha
   );
 }
 
-export function CardPanel({ packetId, language }: { packetId: number; language: string }) {
+export function CardPanel({ packetId, language, templates = ["position_card", "close_card", "liq_card"] }:
+  { packetId: number; language: string; templates?: string[] }) {
   const t = useTranslations("desk");
   const [asset, setAsset] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        {["position_card", "close_card", "liq_card"].map((tpl) => (
+        {templates.map((tpl) => (
           <button key={tpl} className={button} onClick={async () => {
             setError(null);
             try {

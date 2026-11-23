@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     sync_max_pages: int = 20
     replay_minutes: int = 60
     # trader context calls hit AlphaScope's API process; keep them well below anything that could slow it down
-    context_calls_per_hour: int = 240
+    context_calls_per_hour: int = 600
 
     secret_key_path: Path = NEWSROOM_DIR / "data" / "secret.key"
     asset_dir: Path = NEWSROOM_DIR / "data" / "assets"

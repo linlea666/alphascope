@@ -9,6 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from nr.ai.prompts import SEEDS
+from nr.styles import LIBRARY
 
 STYLES = [
     {"key": "zh_data_explainer", "language": "zh", "name": "中文数据解读",
@@ -36,15 +37,32 @@ AGENTS = [
     {"agent_key": "eic", "display_name": "AI 总编辑 / Editor-in-chief",
      "role_description": "Chooses what to cover, explains why, proposes accounts and angles, plans follow-ups.",
      "max_output_tokens": 2500, "budget": "0.30"},
-    {"agent_key": "reporter", "display_name": "AI 记者 / Reporter",
-     "role_description": "Writes one account's draft from the fact packet and the assigned angle.",
+    {"agent_key": "reporter", "display_name": "AI 记者（通用） / Reporter",
+     "role_description": "Writes one account's draft from the fact packet and the assigned angle. Other reporter "
+                         "roles use this role's models unless they have their own.",
      "max_output_tokens": 2500, "budget": "0.30"},
+    {"agent_key": "reporter_breaking", "display_name": "突发新闻记者 / Breaking news",
+     "role_description": "Large opens, flips, sudden size changes: fast, precise, fact first."},
+    {"agent_key": "reporter_investigator", "display_name": "巨鲸调查记者 / Whale investigator",
+     "role_description": "A trader's verified record, past big trades and habits; no identity guessing."},
+    {"agent_key": "reporter_data", "display_name": "数据研究记者 / Data researcher",
+     "role_description": "Rarity, rankings, distributions and samples; columns and research pieces."},
+    {"agent_key": "reporter_derivatives", "display_name": "衍生品风险记者 / Derivatives risk",
+     "role_description": "Leverage, estimated margin, liquidation distance; never announces unconfirmed liquidations."},
+    {"agent_key": "reporter_historian", "display_name": "历史故事记者 / Story historian",
+     "role_description": "Running stories, recaps and trader dossiers, chapter by chapter."},
+    {"agent_key": "editor_zh", "display_name": "中文市场编辑 / Chinese desk editor",
+     "role_description": "Localizes and polishes a draft for Chinese readers without new claims."},
+    {"agent_key": "editor_en", "display_name": "全球英文编辑 / Global English editor",
+     "role_description": "Localizes and polishes a draft for an international audience without new claims."},
+    {"agent_key": "fact_checker", "display_name": "事实核查员 / Fact checker",
+     "role_description": "Rewrites a draft to clear the claims guard's findings; cannot change rules or facts."},
 ]
 
 
 def seed(s: Session) -> dict:
     out = {"styles": 0, "accounts": 0, "prompts": 0, "agents": 0}
-    for st in STYLES:
+    for st in STYLES + LIBRARY:
         out["styles"] += s.execute(text("""
             INSERT INTO editorial_style (key, version, language, name, guide, structure, forbidden)
             VALUES (:k, 1, :l, :n, :g, CAST(:s AS jsonb), CAST(:f AS jsonb)) ON CONFLICT DO NOTHING"""),
@@ -72,6 +90,6 @@ def seed(s: Session) -> dict:
                                               prompt_version, max_output_tokens, budget_usd_per_task)
                 VALUES (:k, 1, :d, :r, :k, 1, :m, :b)"""),
                 {"k": ag["agent_key"], "d": ag["display_name"], "r": ag["role_description"],
-                 "m": ag["max_output_tokens"], "b": ag["budget"]})
+                 "m": ag.get("max_output_tokens", 2500), "b": ag.get("budget", "0.30")})
             out["agents"] += 1
     return out

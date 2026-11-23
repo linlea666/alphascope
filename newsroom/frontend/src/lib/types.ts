@@ -84,6 +84,7 @@ export type Account = {
   daily_post_budget: number;
   min_gap_minutes: number;
   long_post_allowed: boolean;
+  rpa_enabled: boolean;
   authorization_status: string;
   authorization_expires_at: string | null;
   authorization_note: string | null;

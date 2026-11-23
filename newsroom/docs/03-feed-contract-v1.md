@@ -47,6 +47,18 @@
 ### `GET /health`
 雷达（HL / OKX）用 `stats.coverage()` 计算 `fresh_ratio` 与 `status`（ok / lagging / stale / empty，阈值随响应返回）；另含 `market_event` 头部、各 `ingest_run` 种类最近成功、成交归档 / OKX 历史 / 跟单评分的时间戳。雷达扫描不写 `ingest_run`，所以雷达健康只能从 `position_watch` 判断。
 
+## 研究栏目端点（v1 追加，只读）
+
+| 端点 | 来源 | 栏目 |
+|---|---|---|
+| `GET /copy/board?window=7d|30d|90d` | 最新完整 OKX 榜单 + `copy_backtest`（`default-v2`），附回测假设 | N1 |
+| `GET /okx/dropouts?days&max_best_rank` | `okx_presence`（7d 榜，已离榜）+ 离榜后的 `okx_position` 平仓、已实现、强平 | N2 |
+| `GET /market/structure?coin` | 与 `/market/structure` 同一计算：入场区间、强平阶梯（只用交易所报告的强平价），附覆盖率 | N3 |
+| `GET /research/forecasts?coin&days` | `research_forecast` 按模型 / 周期汇总：已结算、缺失、Brier 与基准、分块符号检验 p | N4 |
+| `GET /research/funding?coin&hours` | 最新资金费率及其历史排位 + `research_frame` 专家组 / 匹配对照组多头占比与分歧 | N5、多空对决 |
+| `GET /cycles/holding?days` | 完整已平仓周期的持仓时长分位数，盈利 / 亏损分开，按级别 | N6 |
+| `GET /cycles/closed?hours&min_streak` | 最近平仓的完整周期 + 之前的连胜数及其起点是否已知（自然键） | 连胜终结者 |
+
 ## 部署
 
 `scripts/deploy-common.sh` 的 `ensure_env_file` 在 `data/alphascope.env` 没有 `ALPHASCOPE_FEED_TOKEN` 这一行时生成一个随机令牌；运维人员把它改成空值即关闭 Feed。Newsroom 安装脚本只读取这个值，从不修改 AlphaScope 的配置。

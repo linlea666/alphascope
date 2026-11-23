@@ -57,7 +57,51 @@ Format: $format. Style: $style_name."""
 
 MODEL_TEST_SYSTEM = "You are a connectivity check. Reply with one JSON object only."
 
+# Each reporter role is the base reporter plus a beat; they write from the same packet with different questions.
+BEATS = {
+    "breaking": "Your beat is breaking news: what just changed, how big, how risky. Lead with the single most "
+                "important verified fact; one sentence of context; no history lesson.",
+    "investigator": "Your beat is whale investigations: this trader's verified record, earlier big trades and how "
+                    "they ended, habits and changes in behaviour. Never speculate about who the trader is.",
+    "data": "Your beat is data research: rarity, rankings, distributions, sample sizes and what the numbers can "
+            "and cannot show. Always state the sample and coverage.",
+    "derivatives": "Your beat is derivatives risk: notional versus estimated margin, leverage, distance to the "
+                   "reported liquidation price, what a move of the given size would mean. Never announce a "
+                   "liquidation that is not confirmed.",
+    "historian": "Your beat is the running story: how this trader's position developed chapter by chapter, what "
+                 "earlier coverage said and what happened since. Separate what was known then from now.",
+}
+EDITOR_SYSTEM = REPORTER_SYSTEM + """
+
+You are now the {lang} desk editor. You receive the current draft and the fact packet. Rewrite it into natural,
+idiomatic {lang} for this account's readers: add useful local context the facts support, cut filler, keep every
+number traceable to the packet. Do not translate word for word and do not add new claims."""
+FACT_CHECK_SYSTEM = REPORTER_SYSTEM + """
+
+You are now the fact checker. You receive a draft and the claims guard's findings. Produce a corrected draft that
+fixes every finding by rewording or by using the packet's facts and display strings. If a sentence cannot be
+supported by the packet, remove it. You cannot change the rules or the facts."""
+DRAFT_FIX_USER = """Revise the current draft for $account_handle ($account_name), language $language.
+Event $event_id. Style: $style_name."""
+
 SEEDS = {
     "eic": {"version": 1, "system": EIC_SYSTEM, "user": EIC_USER},
     "reporter": {"version": 1, "system": REPORTER_SYSTEM, "user": REPORTER_USER},
+    **{f"reporter_{k}": {"version": 1, "system": REPORTER_SYSTEM + "\n\n" + beat, "user": REPORTER_USER}
+       for k, beat in BEATS.items()},
+    "editor_zh": {"version": 1, "system": EDITOR_SYSTEM.replace("{lang}", "Chinese"), "user": DRAFT_FIX_USER},
+    "editor_en": {"version": 1, "system": EDITOR_SYSTEM.replace("{lang}", "English"), "user": DRAFT_FIX_USER},
+    "fact_checker": {"version": 1, "system": FACT_CHECK_SYSTEM, "user": DRAFT_FIX_USER},
 }
+REPORTER_ROLES = tuple(f"reporter_{k}" for k in BEATS)
+# which reporter a class goes to unless the editor-in-chief or an editor picks another
+DEFAULT_REPORTER = {"whale_open": "reporter_breaking", "flip": "reporter_breaking", "whale_add": "reporter_breaking",
+                    "whale_close": "reporter_breaking", "underwater_add": "reporter_derivatives",
+                    "liquidation": "reporter_derivatives", "near_liquidation": "reporter_derivatives",
+                    "notable_trader_move": "reporter_investigator"}
+
+
+def default_reporter(event_class: str) -> str:
+    if event_class.startswith("column:"):
+        return "reporter_historian" if event_class in ("column:recap", "column:dossier") else "reporter_data"
+    return DEFAULT_REPORTER.get(event_class, "reporter")

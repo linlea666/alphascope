@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from nr.api import admin, articles, auth, desk
+from nr.api import admin, articles, auth, desk, public, studio
 
 # Bound to 127.0.0.1: the web app's server-side proxy is the only client; every route checks the session itself.
 app = FastAPI(title="AlphaScope Newsroom API", version="0.1.0")
@@ -8,6 +8,8 @@ app.include_router(auth.router)
 app.include_router(desk.router)
 app.include_router(articles.router)
 app.include_router(admin.router)
+app.include_router(studio.router)
+app.include_router(public.router)
 
 
 @app.get("/healthz")

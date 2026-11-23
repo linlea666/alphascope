@@ -25,7 +25,7 @@ from nr.feed import health
 router = APIRouter(prefix="/api", tags=["admin"])
 ADMIN = require_roles("admin")
 CHIEF = require_roles("admin", "editor_in_chief")
-EDITABLE_SETTINGS = ("detect", "gate", "budgets", "ai", "guard", "review")
+EDITABLE_SETTINGS = ("detect", "gate", "budgets", "ai", "guard", "review", "columns")
 
 
 @router.get("/dashboard")
@@ -88,6 +88,7 @@ class AccountIn(BaseModel):
     daily_post_budget: int = Field(5, ge=0, le=100)
     min_gap_minutes: int = Field(60, ge=0)
     long_post_allowed: bool = False
+    rpa_enabled: bool = False
     authorization_status: Literal["pending", "authorized", "expired", "revoked"] = "pending"
     authorization_expires_at: str | None = None
     authorization_note: str | None = Field(None, max_length=1000)
@@ -210,7 +211,7 @@ def sources(s: Session = Depends(get_session), user: CurrentUser = Depends(activ
 
 class ModelIn(BaseModel):
     name: str = Field(max_length=64)
-    protocol: Literal["openai_chat", "anthropic_messages"]
+    protocol: Literal["openai_chat", "openai_responses", "anthropic_messages"]
     base_url: str = Field(pattern=r"^https?://", max_length=300)
     model: str = Field(max_length=128)
     api_key: str | None = Field(None, max_length=500)
@@ -222,12 +223,19 @@ class ModelIn(BaseModel):
     max_concurrency: int = Field(2, ge=1, le=8)
     input_usd_per_mtok: float = Field(0, ge=0)
     output_usd_per_mtok: float = Field(0, ge=0)
+    extra_body: dict = Field(default_factory=dict)
     enabled: bool = True
 
 
-MODEL_COLS = """id, name, protocol, base_url, model, auth_header, anthropic_version, json_mode, timeout_s, max_retries,
+MODEL_COLS = """id, name, protocol, base_url, model, auth_header, anthropic_version, json_mode, extra_body, timeout_s, max_retries,
     max_concurrency, input_usd_per_mtok, output_usd_per_mtok, enabled, last_test_at, last_test_ok, last_test_detail,
     api_key_secret IS NOT NULL AS has_key"""
+
+
+@router.get("/ai/model-options")
+def model_options(s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
+    """Names only, for the desk's model pickers: no URLs, no keys."""
+    return rows(s, "SELECT id, name, model, last_test_ok FROM ai_model_config WHERE enabled ORDER BY id")
 
 
 @router.get("/ai/models")
@@ -240,8 +248,9 @@ def create_model(body: ModelIn, s: Session = Depends(get_session), user: Current
     d = body.model_dump()
     key = d.pop("api_key")
     d["api_key_secret"] = encrypt(key) if key else None
-    mid = s.execute(text(f"INSERT INTO ai_model_config ({', '.join(d)}) VALUES ({', '.join(':' + k for k in d)}) "
-                         "RETURNING id"), d).scalar_one()
+    d["extra_body"] = json.dumps(d["extra_body"])
+    cols = ", ".join("CAST(:extra_body AS jsonb)" if k == "extra_body" else ":" + k for k in d)
+    mid = s.execute(text(f"INSERT INTO ai_model_config ({', '.join(d)}) VALUES ({cols}) RETURNING id"), d).scalar_one()
     audit.record(s, "ai.model_create", "ai_model", mid, user_id=user.id, after={k: v for k, v in d.items()
                                                                                 if k != "api_key_secret"})
     s.commit()
@@ -252,7 +261,8 @@ def create_model(body: ModelIn, s: Session = Depends(get_session), user: Current
 def update_model(model_id: int, body: ModelIn, s: Session = Depends(get_session), user: CurrentUser = Depends(ADMIN)):
     d = body.model_dump()
     key = d.pop("api_key")
-    sets = ", ".join(f"{k} = :{k}" for k in d)
+    d["extra_body"] = json.dumps(d["extra_body"])
+    sets = ", ".join(f"{k} = CAST(:{k} AS jsonb)" if k == "extra_body" else f"{k} = :{k}" for k in d)
     if key:  # an empty key keeps the stored one
         sets += ", api_key_secret = :secret"
     n = s.execute(text(f"UPDATE ai_model_config SET {sets}, updated_at = now() WHERE id = :id"),

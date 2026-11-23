@@ -10,11 +10,12 @@ export type Field = {
   name: string;
   label: string;
   type?: "text" | "number" | "checkbox" | "select" | "textarea" | "json" | "list" | "password" | "numbers";
-  options?: string[];
+  options?: (string | { value: string; label: string })[];
   value?: unknown;
   required?: boolean;
   placeholder?: string;
   wide?: boolean;
+  numeric?: boolean;
 };
 
 /** A small generic form: collects typed values, sends them through the proxy, shows the result or the error. */
@@ -43,6 +44,7 @@ export function FieldForm({ fields, path, method = "POST", submitLabel, showResu
             const s = raw === null ? "" : String(raw);
             if (fd.type === "checkbox") body[fd.name] = raw === "on";
             else if (fd.type === "number") body[fd.name] = s === "" ? null : Number(s);
+            else if (fd.type === "select" && fd.numeric) body[fd.name] = s === "" ? null : Number(s);
             else if (fd.type === "json") body[fd.name] = s.trim() ? JSON.parse(s) : {};
             else if (fd.type === "list") body[fd.name] = s.split(",").map((x) => x.trim()).filter(Boolean);
             else if (fd.type === "numbers") body[fd.name] = s.split(",").map((x) => x.trim()).filter(Boolean).map(Number);
@@ -70,7 +72,9 @@ export function FieldForm({ fields, path, method = "POST", submitLabel, showResu
             <input type="checkbox" name={fd.name} defaultChecked={Boolean(fd.value)} className="ml-2" />
           ) : fd.type === "select" ? (
             <select name={fd.name} defaultValue={String(fd.value ?? "")} className={input}>
-              {fd.options!.map((o) => <option key={o} value={o}>{o}</option>)}
+              {fd.options!.map((o) => typeof o === "string"
+                ? <option key={o} value={o}>{o}</option>
+                : <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           ) : fd.type === "textarea" || fd.type === "json" ? (
             <textarea name={fd.name} className={`${input} ${fd.type === "json" ? "h-28 font-mono text-xs" : "h-40"}`} placeholder={fd.placeholder}

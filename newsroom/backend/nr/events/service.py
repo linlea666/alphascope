@@ -30,8 +30,8 @@ def add_evidence(s: Session, event_id: int, kind: str, ref_id: int, content_hash
 def link_story(s: Session, event_id: int, trader_id: int, trader_key: str, event_class: str) -> int:
     """Phase 1 stories: one saga per trader; every event of that trader is a chapter in order."""
     sid = s.execute(text("""
-        INSERT INTO news_story (story_key, kind, trader_id) VALUES (:k, 'trader_saga', :t)
-        ON CONFLICT (story_key) DO UPDATE SET last_event_at = now(), status = 'active' RETURNING id"""),
+        INSERT INTO news_story (story_key, kind, trader_id, last_event_at) VALUES (:k, 'trader_saga', :t, now())
+        ON CONFLICT (story_key) DO UPDATE SET last_event_at = now(), status = 'active', closed_at = NULL RETURNING id"""),
         {"k": f"trader:{trader_key}", "t": trader_id}).scalar_one()
     s.execute(text("SELECT id FROM news_story WHERE id = :s FOR UPDATE"), {"s": sid})
     seq = s.execute(text("SELECT coalesce(max(seq), 0) + 1 FROM story_event WHERE story_id = :s"), {"s": sid}).scalar()
