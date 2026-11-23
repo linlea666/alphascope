@@ -485,6 +485,8 @@ def contrast_crowd(f: Facts, event: dict, position: dict | None, crowd: dict) ->
             n = int(row["timing_traders"]) if row else 0
             f.add(fid, "count", n, fmt.count(n), "coin_positions.sides.timing_traders", coverage=cc,
                   label="traders with a statistically significant timing record (q < 0.1)")
+            f.usd(f"{fid}_notional_usd", "notional", D(row["timing_notional"]) if row else Decimal(0),
+                  "coin_positions.sides.timing_notional", coverage=cc)
     if position and same:
         size = D(position["notional_usd"])
         if D(same["notional"]) > 0:

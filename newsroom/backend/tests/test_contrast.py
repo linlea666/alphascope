@@ -46,6 +46,7 @@ def test_book_crowd_and_archive_contrasts_carry_their_coverage(sf):
     assert [o["coin"] for o in opp["value"]] == ["ETH"] and opp["display"]["zh"] == ["ETH 空单 1500万美元"]
     assert fact(pk, "crowd.same_side_rank")["value"] == 2 and fact(pk, "crowd.share_of_same_side")["value"] == "0.15"
     assert fact(pk, "crowd.timing_same_side")["value"] == 4 and fact(pk, "crowd.timing_opposite_side")["value"] == 3
+    assert fact(pk, "crowd.timing_opposite_side_notional_usd")["display"]["zh"][0] == "400万美元"
     assert fact(pk, "contrast.coin_cycles")["value"] == 3 and fact(pk, "contrast.coin_winning_cycles")["value"] == 2
     assert Decimal(fact(pk, "contrast.vs_largest_prior_cycle")["value"]) == 3
     last = fact(pk, "contrast.last_same_side_net_usd")
