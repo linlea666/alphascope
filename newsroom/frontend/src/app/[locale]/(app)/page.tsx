@@ -1,5 +1,6 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { Action } from "@/components/Action";
+import { AiReadiness } from "@/components/AiReadiness";
 import { ClassLabel, StateBadge } from "@/components/badges";
 import { Badge, Empty, PageHeader, Panel, Stat, td, th } from "@/components/ui";
 import { Link } from "@/i18n/routing";
@@ -31,6 +32,7 @@ export default async function DashboardPage() {
             tone="danger" confirm={t("emergencyHint")}>{t("emergencyOn")}</Action>
         )}
       </PageHeader>
+      <AiReadiness />
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Stat label={t("source")} value={d.source.reachable ? t("reachable") : t("unreachable")} sub={d.source.health_error ?? undefined} />
         <Stat label={t("radar")} value={`HL ${d.source.radar.hyperliquid} · OKX ${d.source.radar.okx}`} />

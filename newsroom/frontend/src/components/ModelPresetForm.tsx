@@ -6,17 +6,23 @@ import { FieldForm, type Field } from "./FieldForm";
 import { input } from "./ui";
 
 type Preset = { label: string; values: Record<string, unknown> };
+// Base URLs follow each provider's docs; the adapters append /chat/completions, /responses or /v1/messages themselves.
 const PRESETS: Record<string, Preset> = {
   custom: { label: "Custom", values: {} },
-  deepseek: { label: "DeepSeek 官方 · deepseek-chat", values: { name: "deepseek-chat", protocol: "openai_chat",
-    base_url: "https://api.deepseek.com", model: "deepseek-chat", json_mode: "json_object", auth_header: "bearer" } },
-  deepseek_reasoner: { label: "DeepSeek 官方 · deepseek-reasoner", values: { name: "deepseek-reasoner", protocol: "openai_chat",
-    base_url: "https://api.deepseek.com", model: "deepseek-reasoner", json_mode: "none", auth_header: "bearer", timeout_s: 180 } },
-  acm_codex: { label: "aicodemirror · Codex (Responses API)", values: { name: "aicodemirror-codex", protocol: "openai_responses",
-    base_url: "https://api.aicodemirror.ai/api/codex/backend-api/codex", json_mode: "none", auth_header: "bearer",
-    extra_body: { store: false, stream: true } } },
-  acm_claude: { label: "aicodemirror · Claude (Messages API)", values: { name: "aicodemirror-claude", protocol: "anthropic_messages",
-    base_url: "https://api.aicodemirror.ai/api/claudecode", json_mode: "none", auth_header: "bearer" } },
+  deepseek: { label: "DeepSeek 官方 · deepseek-flash", values: { name: "deepseek-flash", protocol: "openai_chat",
+    base_url: "https://api.deepseek.com", model: "deepseek-flash", json_mode: "json_object", auth_header: "bearer" } },
+  deepseek_pro: { label: "DeepSeek 官方 · deepseek-v4-pro", values: { name: "deepseek-v4-pro", protocol: "openai_chat",
+    base_url: "https://api.deepseek.com", model: "deepseek-v4-pro", json_mode: "json_object", auth_header: "bearer", timeout_s: 180 } },
+  deepseek_think: { label: "DeepSeek 官方 · deepseek-v4-pro（思考模式）", values: { name: "deepseek-v4-pro-thinking", protocol: "openai_chat",
+    base_url: "https://api.deepseek.com", model: "deepseek-v4-pro", json_mode: "none", auth_header: "bearer", timeout_s: 300,
+    extra_body: { thinking: { type: "enabled" }, reasoning_effort: "high" } } },
+  deepseek_anthropic: { label: "DeepSeek 官方 · Anthropic 格式", values: { name: "deepseek-anthropic", protocol: "anthropic_messages",
+    base_url: "https://api.deepseek.com/anthropic", model: "deepseek-flash", json_mode: "none", auth_header: "bearer" } },
+  acm_chat: { label: "aicodemirror · Chat Completions", values: { name: "aicodemirror-chat", protocol: "openai_chat",
+    base_url: "https://api.aicodemirror.ai/v1", model: "gpt-6-astra", json_mode: "json_object", auth_header: "bearer", timeout_s: 180 } },
+  acm_responses: { label: "aicodemirror · Responses", values: { name: "aicodemirror-responses", protocol: "openai_responses",
+    base_url: "https://api.aicodemirror.ai/v1", model: "gpt-6-astra", json_mode: "none", auth_header: "bearer", timeout_s: 180,
+    extra_body: { store: false } } },
   openai: { label: "OpenAI 官方 (Chat Completions)", values: { name: "openai", protocol: "openai_chat",
     base_url: "https://api.openai.com/v1", json_mode: "json_object", auth_header: "bearer" } },
 };

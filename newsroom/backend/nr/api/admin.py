@@ -302,30 +302,82 @@ class AgentIn(BaseModel):
     role_description: str | None = None
 
 
+def _agent_version(s: Session, cur, user_id: int, **changes) -> int:
+    """Agent profiles are versioned: a change creates a new active version, the old one stays for the record."""
+    d = {k: cur[k] for k in ("display_name", "role_description", "model_config_id", "fallback_model_config_id",
+                             "prompt_version", "max_output_tokens", "budget_usd_per_task")} | changes
+    if not s.execute(text("SELECT 1 FROM prompt_template WHERE key = :k AND version = :v"),
+                     {"k": cur["prompt_key"], "v": d["prompt_version"]}).scalar():
+        raise HTTPException(422, "prompt version does not exist")
+    s.execute(text("UPDATE ai_agent_profile SET active = false WHERE id = :i"), {"i": cur["id"]})
+    return s.execute(text("""
+        INSERT INTO ai_agent_profile (agent_key, version, display_name, role_description, model_config_id,
+          fallback_model_config_id, prompt_key, prompt_version, max_output_tokens, budget_usd_per_task, created_by)
+        VALUES (:k, :v, :display_name, :role_description, :model_config_id, :fallback_model_config_id, :pk,
+          :prompt_version, :max_output_tokens, :budget_usd_per_task, :u) RETURNING id"""),
+        d | {"k": cur["agent_key"], "v": cur["version"] + 1, "pk": cur["prompt_key"], "u": user_id}).scalar_one()
+
+
 @router.put("/ai/agents/{agent_key}")
 def new_agent_version(agent_key: str, body: AgentIn, s: Session = Depends(get_session),
                       user: CurrentUser = Depends(ADMIN)):
-    """Agent profiles are versioned: a change creates a new active version, the old one stays for the record."""
     cur = one(s, "SELECT * FROM ai_agent_profile WHERE agent_key = :k AND active", {"k": agent_key})
     if cur is None:
         raise HTTPException(404, "agent not found")
-    pv = body.prompt_version or cur["prompt_version"]
-    if not s.execute(text("SELECT 1 FROM prompt_template WHERE key = :k AND version = :v"),
-                     {"k": cur["prompt_key"], "v": pv}).scalar():
-        raise HTTPException(422, "prompt version does not exist")
-    s.execute(text("UPDATE ai_agent_profile SET active = false WHERE id = :i"), {"i": cur["id"]})
-    nid = s.execute(text("""
-        INSERT INTO ai_agent_profile (agent_key, version, display_name, role_description, model_config_id,
-          fallback_model_config_id, prompt_key, prompt_version, max_output_tokens, budget_usd_per_task, created_by)
-        VALUES (:k, :v, :d, :r, :m, :f, :pk, :pv, :mo, :b, :u) RETURNING id"""),
-        {"k": agent_key, "v": cur["version"] + 1, "d": body.display_name or cur["display_name"],
-         "r": body.role_description or cur["role_description"], "m": body.model_config_id,
-         "f": body.fallback_model_config_id, "pk": cur["prompt_key"], "pv": pv, "mo": body.max_output_tokens,
-         "b": body.budget_usd_per_task, "u": user.id}).scalar_one()
+    nid = _agent_version(s, cur, user.id, model_config_id=body.model_config_id,
+                         fallback_model_config_id=body.fallback_model_config_id,
+                         prompt_version=body.prompt_version or cur["prompt_version"],
+                         max_output_tokens=body.max_output_tokens, budget_usd_per_task=body.budget_usd_per_task,
+                         display_name=body.display_name or cur["display_name"],
+                         role_description=body.role_description or cur["role_description"])
     audit.record(s, "ai.agent_version", "ai_agent", agent_key, user_id=user.id, before={"version": cur["version"]},
                  after=body.model_dump())
     s.commit()
     return {"id": nid, "version": cur["version"] + 1}
+
+
+class BindIn(BaseModel):
+    model_config_id: int
+    fallback_model_config_id: int | None = None
+    only_unbound: bool = True
+
+
+@router.post("/ai/agents/bind")
+def bind_agents(body: BindIn, s: Session = Depends(get_session), user: CurrentUser = Depends(ADMIN)):
+    """One click for the common setup: every role (or every role without a model yet) gets this model."""
+    for mid in filter(None, (body.model_config_id, body.fallback_model_config_id)):
+        if not s.execute(text("SELECT 1 FROM ai_model_config WHERE id = :i AND enabled"), {"i": mid}).scalar():
+            raise HTTPException(422, f"model {mid} not found or disabled")
+    changed = []
+    for cur in s.execute(text("SELECT * FROM ai_agent_profile WHERE active ORDER BY agent_key")).mappings().all():
+        if body.only_unbound and cur["model_config_id"] is not None:
+            continue
+        _agent_version(s, cur, user.id, model_config_id=body.model_config_id,
+                       fallback_model_config_id=body.fallback_model_config_id)
+        changed.append(cur["agent_key"])
+    audit.record(s, "ai.agent_bind", "ai_agent", None, user_id=user.id, after=body.model_dump() | {"agents": changed})
+    s.commit()
+    return {"changed": changed}
+
+
+def ai_readiness(s: Session) -> dict:
+    """Why AI work is (not) running, in one place: no URLs or keys, so every signed-in user may see it."""
+    models = rows(s, "SELECT id, name, model, last_test_ok FROM ai_model_config WHERE enabled ORDER BY id")
+    usable = {m["id"] for m in models}
+    agents = rows(s, "SELECT agent_key, model_config_id FROM ai_agent_profile WHERE active ORDER BY agent_key")
+    bound = {a["agent_key"]: a["model_config_id"] in usable for a in agents}
+    # reporter_* roles fall back to the base reporter's models; eic and reporter must have their own
+    unbound = [k for k, ok in bound.items() if not ok and not (k.startswith("reporter_") and bound.get("reporter"))]
+    waiting = rows(s, """SELECT kind, count(*) AS n, max(last_error) AS last_error FROM job
+                         WHERE status = 'queued' AND kind IN ('eic_evaluate', 'draft_generate') GROUP BY kind""")
+    return {"enabled": settings_store.get(s, "ai")["enabled"], "models": models,
+            "tested_ok": [m["id"] for m in models if m["last_test_ok"]],
+            "core_unbound": [k for k in ("eic", "reporter") if k in unbound], "unbound": unbound, "waiting": waiting}
+
+
+@router.get("/ai/status")
+def ai_status(s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
+    return ai_readiness(s)
 
 
 @router.get("/ai/prompts")

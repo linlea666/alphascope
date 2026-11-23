@@ -1,5 +1,6 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { Action } from "@/components/Action";
+import { AiReadiness } from "@/components/AiReadiness";
 import { FieldForm } from "@/components/FieldForm";
 import { ModelPresetForm } from "@/components/ModelPresetForm";
 import { Badge, Empty, KV, PageHeader, Panel, td, th } from "@/components/ui";
@@ -95,7 +96,7 @@ async function Models() {
   const fields = (m?: Model) => [
     { name: "name", label: "name", value: m?.name, required: true },
     { name: "protocol", label: t("protocol"), type: "select" as const, options: ["openai_chat", "openai_responses", "anthropic_messages"], value: m?.protocol ?? "openai_chat" },
-    { name: "base_url", label: t("baseUrl"), value: m?.base_url, required: true, placeholder: "https://www.aicodemirror.com/api/... or https://api.example.com/v1", wide: true },
+    { name: "base_url", label: t("baseUrl"), value: m?.base_url, required: true, placeholder: "https://api.deepseek.com · https://api.aicodemirror.ai/v1", wide: true },
     { name: "model", label: t("model"), value: m?.model, required: true },
     { name: "api_key", label: t("apiKey"), type: "password" as const },
     { name: "auth_header", label: "auth header", type: "select" as const, options: ["bearer", "x-api-key"], value: m?.auth_header ?? "bearer" },
@@ -111,6 +112,7 @@ async function Models() {
   ];
   return (
     <div className="space-y-5">
+      <AiReadiness />
       {models.map((m) => (
         <Panel key={m.id} title={<span>{m.name} · {m.model} <Badge tone={m.last_test_ok ? "up" : m.last_test_ok === false ? "down" : "neutral"}>{t("lastTest")}: {String(m.last_test_ok ?? "—")}</Badge> {!m.has_key && <Badge tone="warn">no key</Badge>}</span>}
           hint={`${m.protocol} · ${m.base_url} · ${m.json_mode}`}>
@@ -131,8 +133,21 @@ async function Agents() {
     nrGetOptional<Model[]>("ai/models")]);
   if (!agents || !models) return <NoAccess />;
   const modelOpts = [{ value: "", label: "—" }, ...models.map((m) => ({ value: String(m.id), label: `${m.name} · ${m.model}` }))];
+  const usable = models.filter((m) => m.enabled);
+  const best = usable.find((m) => m.last_test_ok) ?? usable[0];
   return (
     <div className="space-y-5">
+      <AiReadiness />
+      {usable.length > 0 && (
+        <Panel title={tx("bindTitle")} hint={tx("bindHint")}>
+          <FieldForm path="ai/agents/bind" submitLabel={tx("bind")} fields={[
+            { name: "model_config_id", label: t("primaryModel"), type: "select", numeric: true, required: true,
+              value: best?.id ?? "", options: modelOpts.slice(1) },
+            { name: "fallback_model_config_id", label: t("fallbackModel"), type: "select", numeric: true, value: "", options: modelOpts },
+            { name: "only_unbound", label: tx("onlyUnbound"), type: "checkbox", value: true },
+          ]} />
+        </Panel>
+      )}
       {agents.filter((a) => a.active).map((a) => (
         <Panel key={a.id} title={`${a.display_name} (${a.agent_key} v${a.version})`} hint={a.role_description}>
           <KV k={t("primaryModel")} v={a.model_name ?? "—"} />

@@ -24,9 +24,12 @@ sudo newsroom/start.sh install
 
 ## 4. 首次配置（网页）
 
-1. 系统管理 → AI 模型：选预设（DeepSeek 官方、aicodemirror Codex/Claude、OpenAI）或自定义，填密钥和单价 → 测试模型。
-   aicodemirror 的 Cloudflare 目前拦截本服务器 IP（2026-11-23 实测：本机 401、服务器 403），需要服务商放行后才能用。
-2. 系统管理 → AI 角色：给 `eic` 和 `reporter` 选主模型和备用模型（会生成新版本）。
+1. 系统管理 → AI 模型：选预设或自定义，填密钥和单价（单价为 0 时费用和每日预算都不会生效），保存后点「测试模型」。
+   - DeepSeek 官方：地址 `https://api.deepseek.com`，模型 `deepseek-flash` 或 `deepseek-v4-pro`；思考模式在 extra body 里加 `{"thinking": {"type": "enabled"}, "reasoning_effort": "high"}`。Anthropic 格式的地址是 `https://api.deepseek.com/anthropic`。
+   - aicodemirror：地址 `https://api.aicodemirror.ai/v1`（程序会自己拼 `/chat/completions` 或 `/responses`），模型名用它文档里列出的（例如 `gpt-6-astra`）。返回「无可用渠道」表示模型名不受支持。
+     它的 Cloudflare 目前拦截本服务器 IP（2026-11-23 实测：本机 401、服务器 403），需要服务商放行后才能用。
+2. 系统管理 → AI 角色：用「一键绑定模型」给所有角色选主模型和备用模型，或者逐个设置（每次修改生成新版本）。
+   **没有选模型的角色不会工作**：AI 评估和写稿会一直排队，驾驶舱、AI 稿件页顶部会提示是哪个角色。专项记者（reporter_*）没选时沿用通用记者的模型。
 3. 系统管理 → 提示词版本：按自己的编辑方针保存新版本，再在 AI 角色里指向它。
 4. 账号运营：三个示例账号（中文 X、英文 X、OKX 广场）默认是暂停状态。X 账号只报道 Hyperliquid，OKX 广场账号只报道 OKX。按真实 X 账号修改用户名、定位、风格，把状态改为 active，授权状态改为 authorized 并填写到期时间。
 5. 系统管理 → 用户与角色：添加成员；在账号页给成员分配账号权限。

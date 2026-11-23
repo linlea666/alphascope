@@ -1,4 +1,5 @@
 import { getLocale, getTranslations } from "next-intl/server";
+import { AiReadiness } from "@/components/AiReadiness";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { ClassLabel, StateBadge } from "@/components/badges";
 import { Badge, Empty, PageHeader, Panel, button, input, td, th } from "@/components/ui";
@@ -16,20 +17,14 @@ type D = { versions: V[]; failures: { created_at: string; purpose: string; model
 export default async function DraftsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const [t, locale] = await Promise.all([getTranslations("drafts"), getLocale()]);
-  const [d, models] = await Promise.all([
-    nrGet<D>("drafts/ai", { days: sp.days ?? 7, model: sp.model, guard: sp.guard }),
-    nrGet<{ id: number }[]>("ai/model-options")]);
+  const d = await nrGet<D>("drafts/ai", { days: sp.days ?? 7, model: sp.model, guard: sp.guard });
   const waiting = d.waiting.reduce((n, w) => n + Number(w.n), 0);
   return (
     <>
       <PageHeader title={t("title")} subtitle={t("subtitle")}>
         <AutoRefresh active={waiting > 0} label={`${t("refreshing")} (${waiting})`} />
       </PageHeader>
-      {models.length === 0 && (
-        <div className="mb-4 rounded border border-warn/40 bg-warn/10 px-4 py-3 text-sm text-warn">
-          {t("noModel")} <Link className="underline" href="/settings?tab=ai">→</Link>
-        </div>
-      )}
+      <AiReadiness />
       <form className="mb-4 flex flex-wrap gap-2 text-sm">
         <input name="days" defaultValue={sp.days ?? "7"} className={`${input} w-20`} title={t("days")} />
         <select name="model" defaultValue={sp.model ?? ""} className={`${input} w-56`}>

@@ -159,3 +159,30 @@ def test_model_test_never_echoes_the_key(client, sf, monkeypatch):
     assert r["ok"] is False and "sk-secret-123" not in str(r)
     listed = client.get("/api/ai/models", headers=h).json()
     assert listed[0]["has_key"] is True and "sk-secret-123" not in str(listed) and "api_key_secret" not in listed[0]
+
+
+def test_ai_status_names_unbound_roles_and_one_click_binds_them(client, sf):
+    """The production failure mode: models were added but no role selected one, so every AI job waited silently."""
+    newsroom(sf, model=False)
+    with sf() as s:
+        make_user(s, "root", ["admin"])
+        make_user(s, "ana", ["analyst"])
+        s.commit()
+    h, ana = login(client, "root"), login(client, "ana")
+    mid = client.post("/api/ai/models", json={"name": "ds", "protocol": "openai_chat", "base_url": "https://api.deepseek.com",
+                                              "model": "deepseek-flash", "api_key": "sk-x", "json_mode": "json_object"},
+                      headers=h).json()["id"]
+    st = client.get("/api/ai/status", headers=ana).json()
+    assert st["core_unbound"] == ["eic", "reporter"] and "sk-x" not in str(st) and "base_url" not in str(st)
+    client.put("/api/ai/agents/eic", json={"model_config_id": mid}, headers=h)
+    assert client.post("/api/ai/agents/bind", json={"model_config_id": mid}, headers=ana).status_code == 403
+    changed = client.post("/api/ai/agents/bind", json={"model_config_id": mid, "fallback_model_config_id": None},
+                          headers=h).json()["changed"]
+    assert "eic" not in changed and "reporter" in changed  # only_unbound leaves a deliberate choice alone
+    st = client.get("/api/ai/status", headers=ana).json()
+    assert st["core_unbound"] == [] and st["unbound"] == []
+    agents = [a for a in client.get("/api/ai/agents", headers=h).json() if a["active"]]
+    assert {a["model_config_id"] for a in agents} == {mid}
+    eic = [a for a in client.get("/api/ai/agents", headers=h).json() if a["agent_key"] == "eic"]
+    assert sorted(a["version"] for a in eic) == [1, 2]  # versioned, the old profile is kept
+    assert client.post("/api/ai/agents/bind", json={"model_config_id": 999}, headers=h).status_code == 422
