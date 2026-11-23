@@ -46,7 +46,7 @@ def parts_of(headline: str, body: str, thread: list | None) -> dict[str, str]:
 def load(s: Session, article_id: int) -> dict:
     a = s.execute(text("""
         SELECT a.*, ne.current_fact_packet_id, ne.gate_status, ne.state AS event_state, acc.long_post_allowed,
-               acc.style_key, acc.handle, acc.status AS account_status
+               acc.style_key, acc.handle, acc.status AS account_status, acc.platform
         FROM article a JOIN news_event ne ON ne.id = a.news_event_id JOIN editorial_account acc ON acc.id = a.account_id
         WHERE a.id = :i"""), {"i": article_id}).mappings().first()
     if a is None:
@@ -70,7 +70,8 @@ def guard(s: Session, art: dict, packet_id: int, parts: dict[str, str], facts_us
     return run_guard(parts, packet, facts_used=facts_used, version_packet_id=packet_id,
                      current_packet_id=art["current_fact_packet_id"], long_post_allowed=art["long_post_allowed"],
                      allow=g["allow_numbers"], forbidden=style_forbidden(s, art["style_key"]), duplicate=dup,
-                     dup_block=g["duplicate_block"], dup_warn=g["duplicate_warn"])
+                     dup_block=g["duplicate_block"], dup_warn=g["duplicate_warn"],
+                     platform=settings_store.get(s, "platforms").get(art["platform"]))
 
 
 def save_version(s: Session, article_id: int, d: Draft, *, origin: str, user_id: int | None = None,

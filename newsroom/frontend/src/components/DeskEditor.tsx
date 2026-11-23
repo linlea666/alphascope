@@ -33,7 +33,7 @@ export function GuardList({ report }: { report: GuardReport | null }) {
         <Badge tone={report.status === "pass" ? "up" : report.status === "warn" ? "warn" : "down"}>
           {t("guard")}: {report.status === "pass" ? t("guardPass") : report.status === "warn" ? t("guardWarn") : t("guardFail")}
         </Badge>
-        <span className="text-muted">{t("xLength")} {report.x_length}/280</span>
+        <span className="text-muted">{t("xLength")} {report.x_length}/{report.length_limit ?? 280}</span>
       </div>
       {report.findings.map((f, i) => (
         <div key={i} className={f.severity === "fail" ? "text-down" : "text-warn"}>

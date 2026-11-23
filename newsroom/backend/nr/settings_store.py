@@ -28,6 +28,10 @@ DEFAULTS: dict[str, dict] = {
     # four_eyes: the author of the current version may not approve it (turn on once there is more than one editor)
     "review": {"four_eyes": False},
     "columns": {"disabled": []},
+    # per publishing platform: length limit (X counts CJK double and links as 23) and the hosts a post URL may use.
+    # OKX Square publishes no official limit we could find: 1000 characters is a conservative default to adjust.
+    "platforms": {"x": {"limit": 280, "weighted": True, "hosts": ["x.com", "twitter.com"]},
+                  "okx_square": {"limit": 1000, "weighted": False, "hosts": ["okx.com", "www.okx.com"]}},
     "guard": {"allow_numbers": ["24h", "7d", "30d", "90d", "24小时", "7天", "30天", "90天"],
               "duplicate_block": 0.45, "duplicate_warn": 0.30, "duplicate_hours": 72},
 }

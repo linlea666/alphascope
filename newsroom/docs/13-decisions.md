@@ -35,3 +35,8 @@
 ## ADR-8 网页默认只监听本机
 - 决定：`NEWSROOM_WEB_HOST=localhost`，通过 SSH 隧道或 TLS 反代访问。不用 `127.0.0.1`：Next.js 的中间件重写会在内部请求 `localhost`，监听地址必须与之解析一致，否则页面全部 500。
 - 理由：现有服务器没有 HTTPS 反代；会话 cookie 不应在明文 HTTP 上跨公网传输。
+
+## ADR-9 Hyperliquid 为主，OKX 内容只发 OKX 广场
+- 背景：Hyperliquid 数据链上公开、可复核；OKX、币安的数据可以被平台随时隐藏或改变。
+- 决定：账号增加 `platform` 与 `venues`；X 账号只承接 Hyperliquid 内容和混合栏目，OKX 内容只分给 OKX 广场账号；栏目标注依赖的交易所，门禁只检查对应数据源；强平阶梯、持仓时长、连胜、资金费率背离只用 Hyperliquid 数据。
+- 结果：OKX 停止提供数据时，只有 OKX 广场的内容暂停。

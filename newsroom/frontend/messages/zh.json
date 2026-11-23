@@ -201,7 +201,7 @@
     "guardPass": "通过",
     "guardWarn": "有提醒",
     "guardFail": "未通过",
-    "xLength": "X 长度",
+    "xLength": "长度",
     "origin": "来源",
     "ai": "AI",
     "human": "人工",
@@ -266,7 +266,9 @@
     "edit": "编辑",
     "permissions": "成员权限",
     "userId": "用户 ID",
-    "brand": "品牌"
+    "brand": "品牌",
+    "platform": "发布平台",
+    "venues": "报道的交易所（逗号分隔：hyperliquid, okx；X 账号建议只填 hyperliquid）"
   },
   "publications": {
     "title": "发布记录",

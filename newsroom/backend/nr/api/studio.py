@@ -37,7 +37,7 @@ def list_columns(s: Session = Depends(get_session), user: CurrentUser = Depends(
         FROM news_event WHERE column_key IS NOT NULL ORDER BY column_key, detected_at DESC""")}
     counts = dict(s.execute(text("SELECT column_key, count(*) FROM news_event WHERE column_key IS NOT NULL "
                                  "GROUP BY 1")).all())
-    return [{"key": c.key, "zh": c.zh, "en": c.en, "cadence": c.cadence, "phase": c.phase,
+    return [{"key": c.key, "zh": c.zh, "en": c.en, "cadence": c.cadence, "phase": c.phase, "venue": c.venue,
              "enabled": c.key not in disabled, "issues": counts.get(c.key, 0), "latest": latest.get(c.key)}
             for c in COLUMNS.values()]
 

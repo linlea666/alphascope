@@ -13,6 +13,7 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
+from nr import settings_store
 from nr.ai.runner import call_json
 from nr.ai.schemas import DraftOut
 from nr.articles.versions import Draft, current_version, save_version
@@ -28,7 +29,7 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
         raise ValueError(f"unknown mode {mode}")
     with sf() as s:
         a = s.execute(text("""
-            SELECT asg.*, acc.handle, acc.display_name, acc.language, acc.positioning, acc.audience_profile,
+            SELECT asg.*, acc.handle, acc.display_name, acc.language, acc.positioning, acc.audience_profile, acc.platform,
                    acc.long_post_allowed, coalesce(asg.style_key, acc.style_key) AS style, ar.id AS article_id,
                    ne.current_fact_packet_id, ne.event_class, ne.coin, ne.gate_status
             FROM assignment asg JOIN editorial_account acc ON acc.id = asg.account_id
@@ -48,6 +49,7 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
             WHERE ar.news_event_id = :e AND ar.id <> :a AND ar.status <> 'killed'"""),
             {"e": a["news_event_id"], "a": a["article_id"]}).mappings()]
         current = current_version(s, a["article_id"])
+        platform_rule = {k: v for k, v in settings_store.get(s, "platforms").get(a["platform"], {}).items() if k != "hosts"}
     if mode != "draft" and current is None:
         raise HTTPException(409, "there is no draft to revise yet")
     agent = {"draft": a["agent_key"] or "reporter", "polish": f"editor_{a['language']}", "fix": "fact_checker"}[mode]
@@ -61,7 +63,9 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
 
     data = {"fact_packet": packet_for_model(packet),
             "account": {"handle": a["handle"], "language": a["language"], "positioning": a["positioning"],
-                        "audience": a["audience_profile"], "long_posts_allowed": a["long_post_allowed"]},
+                        "audience": a["audience_profile"], "long_posts_allowed": a["long_post_allowed"],
+                        "platform": a["platform"], "platform_rule": platform_rule,
+                        "note": "Write for this platform. The length rule here replaces any X limit in your instructions."},
             "style": dict(style) if style else None,
             "assignment": {"angle": a["angle"], "reason": a["reason"], "format": a["format"]},
             "other_drafts_for_this_event": others}

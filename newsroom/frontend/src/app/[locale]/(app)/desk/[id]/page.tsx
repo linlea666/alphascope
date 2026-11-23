@@ -13,7 +13,7 @@ import type { Account, Me, Packet, Version } from "@/lib/types";
 
 type ArticleDetail = {
   article: { id: number; news_event_id: number; account_id: number; handle: string; account_name: string; language: string; status: string;
-    current_version_id: number | null; current_fact_packet_id: number; current_fact_version: number; gate_status: string;
+    current_version_id: number | null; current_fact_packet_id: number; platform: string; current_fact_version: number; gate_status: string;
     event_class: string; coin: string; authorization_status: string; authorization_expires_at: string | null; stale_reason: string | null };
   versions: Version[];
   publications: { id: number; x_url: string; published_at: string; status: string; matches_version: boolean }[];
@@ -80,7 +80,7 @@ export default async function DeskPage({ params }: { params: Promise<{ id: strin
         </div>
         <div className="space-y-5">
           <Panel title={t("publish")}>
-            <KV k={tc("account")} v={`@${a.handle} · ${a.account_name}`} />
+            <KV k={tc("account")} v={`${a.platform === "okx_square" ? "OKX 广场" : "X"} · @${a.handle} · ${a.account_name}`} />
             <KV k={t("authorization")} v={<Badge tone={a.authorization_status === "authorized" ? "up" : "warn"}>{a.authorization_status}</Badge>} />
             <KV k={t("expires")} v={fmtTime(a.authorization_expires_at, locale, account?.timezone)} />
             {account && <p className="mt-2 text-xs text-muted">{account.positioning}</p>}
@@ -89,7 +89,7 @@ export default async function DeskPage({ params }: { params: Promise<{ id: strin
               <div className="mt-4 space-y-3 border-t border-border pt-4">
                 <div className="text-xs text-muted">{ts("schedule")}</div>
                 <ScheduleForm articleId={a.id} />
-                <PublishForm articleId={a.id} handle={a.handle} text={postText} />
+                <PublishForm articleId={a.id} handle={a.handle} text={postText} platform={a.platform} />
               </div>
             )}
             {d.publications.map((p) => (

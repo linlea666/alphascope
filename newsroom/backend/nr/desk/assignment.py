@@ -10,13 +10,18 @@ from nr.events.states import InvalidTransition, transition
 
 
 def account_fits(s: Session, account_id: int, event_id: int) -> tuple[bool, str]:
-    a = s.execute(text("""SELECT acc.status, acc.allowed_event_classes, acc.min_score, ne.event_class, ne.score
+    a = s.execute(text("""SELECT acc.status, acc.allowed_event_classes, acc.min_score, acc.venues, acc.platform,
+                                 ne.event_class, ne.score, ne.venue
                           FROM editorial_account acc, news_event ne WHERE acc.id = :a AND ne.id = :e"""),
                   {"a": account_id, "e": event_id}).mappings().first()
     if a is None:
         return False, "unknown account or event"
     if a["status"] != "active":
         return False, f"account is {a['status']}"
+    # 'multi' (columns mixing venues) counts as Hyperliquid material: OKX-only material is for OKX Square accounts
+    venue = "hyperliquid" if a["venue"] == "multi" else a["venue"]
+    if a["venues"] and venue not in a["venues"]:
+        return False, f"{a['venue']} material is outside this account's venues ({', '.join(a['venues'])})"
     if a["allowed_event_classes"] and a["event_class"] not in a["allowed_event_classes"]:
         return False, f"{a['event_class']} is outside this account's beat"
     if (a["score"] or 0) < a["min_score"]:

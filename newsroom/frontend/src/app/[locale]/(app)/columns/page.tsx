@@ -7,7 +7,7 @@ import { Link } from "@/i18n/routing";
 import { nrGet } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
 
-type Col = { key: string; zh: string; en: string; cadence: string; phase: string; enabled: boolean; issues: number;
+type Col = { key: string; zh: string; en: string; cadence: string; phase: string; venue: string; enabled: boolean; issues: number;
   latest: { id: number; period_key: string; state: string; gate_status: string; detected_at: string; blocking_issues: { code: string; detail: string }[] } | null };
 
 export default async function ColumnsPage() {
@@ -24,7 +24,7 @@ export default async function ColumnsPage() {
             {cols.map((c) => (
               <tr key={c.key} className="border-b border-border/60 align-top">
                 <td className={td}>{locale === "zh" ? c.zh : c.en}<div className="font-mono text-[11px] text-muted">{c.key}</div></td>
-                <td className={td}><Badge tone="accent">{c.phase}</Badge> {!c.enabled && <Badge tone="warn">off</Badge>}</td>
+                <td className={td}><Badge tone="accent">{c.phase}</Badge> <Badge tone={c.venue === "okx" ? "warn" : "neutral"}>{c.venue === "okx" ? "OKX → OKX 广场" : c.venue}</Badge> {!c.enabled && <Badge tone="warn">off</Badge>}</td>
                 <td className={td}>{t(c.cadence as "weekly")}</td>
                 <td className={`${td} num`}>{c.issues}</td>
                 <td className={`${td} whitespace-normal`}>

@@ -74,8 +74,10 @@ def dashboard(s: Session = Depends(get_session), user: CurrentUser = Depends(act
 
 
 class AccountIn(BaseModel):
-    handle: str = Field(pattern=r"^[A-Za-z0-9_]{1,15}$")
+    handle: str = Field(pattern=r"^[A-Za-z0-9_.\-]{1,40}$")  # X handles are up to 15; OKX Square names longer
     display_name: str = Field(max_length=100)
+    platform: Literal["x", "okx_square"] = "x"
+    venues: list[Literal["hyperliquid", "okx"]] = Field(default_factory=lambda: ["hyperliquid"])
     language: Literal["zh", "en"]
     status: Literal["active", "paused", "retired"] = "paused"
     brand: str | None = Field(None, max_length=64)

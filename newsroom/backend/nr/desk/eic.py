@@ -19,7 +19,8 @@ from nr.guard.duplicates import similarity
 
 def accounts_brief(s: Session, event_id: int) -> list[dict]:
     rows = s.execute(text("""
-        SELECT a.id, a.handle, a.display_name, a.language, a.positioning, a.audience_profile, a.allowed_event_classes,
+        SELECT a.id, a.handle, a.display_name, a.platform, a.venues, a.language, a.positioning, a.audience_profile,
+               a.allowed_event_classes, a.long_post_allowed,
                a.min_score, a.daily_post_budget,
                (SELECT json_agg(x) FROM (SELECT v.headline, pr.published_at FROM publication_record pr
                   JOIN article_version v ON v.id = pr.article_version_id
@@ -60,7 +61,9 @@ def evaluate_event(sf: sessionmaker, event_id: int, now: datetime, job_id: int |
         ev, packet = event_brief(s, event_id)
         if ev["state"] not in ("candidate", "evaluated") or ev["gate_status"] != "pass":
             return {"skipped": f"event is {ev['state']} / gate {ev['gate_status']}"}
-        accounts = accounts_brief(s, event_id)
+        accounts = [a for a in accounts_brief(s, event_id) if assignment.account_fits(s, a["id"], event_id)[0]]
+        if not accounts:  # e.g. OKX material while no OKX Square account is active: nothing to ask a model
+            return {"skipped": "no active account covers this event"}
         story = story_so_far(s, ev["story_id"], event_id)
         if ev["state"] == "candidate":
             transition(s, event_id, "evaluating", actor_kind="ai", reason="editor-in-chief evaluation")

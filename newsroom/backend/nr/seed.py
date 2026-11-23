@@ -26,12 +26,20 @@ STYLES = [
 ]
 ACCOUNTS = [
     {"handle": "alphascope_cn", "display_name": "AlphaScope 中文", "language": "zh", "timezone": "Asia/Shanghai",
-     "style_key": "zh_data_explainer", "positioning": "中文加密交易者的巨鲸与衍生品数据解读：只讲可核验的数据。",
+     "style_key": "zh_data_explainer", "venues": ["hyperliquid"],
+     "positioning": "中文加密交易者的 Hyperliquid 巨鲸与衍生品数据解读：只讲链上可核验的数据。",
      "audience_profile": {"region": "中文社区", "depth": "进阶", "interests": ["巨鲸", "杠杆与强平", "交易员档案"]}},
     {"handle": "alphascope_global", "display_name": "AlphaScope Global", "language": "en", "timezone": "UTC",
-     "style_key": "en_market_desk", "positioning": "Verified whale and positioning data from an observed sample of "
-                                                   "Hyperliquid and OKX traders, for a global audience.",
+     "style_key": "en_market_desk", "venues": ["hyperliquid"],
+     "positioning": "Verified on-chain whale and positioning data from an observed sample of Hyperliquid traders, "
+                    "for a global audience.",
      "audience_profile": {"region": "global", "depth": "intermediate", "interests": ["whales", "derivatives risk"]}},
+    # OKX data can disappear at any time; OKX material goes to OKX's own Square, never to the X accounts
+    {"handle": "alphascope_okx_square", "display_name": "AlphaScope · OKX 广场", "language": "zh",
+     "timezone": "Asia/Shanghai", "style_key": "zh_data_explainer", "platform": "okx_square", "venues": ["okx"],
+     "long_post_allowed": True,
+     "positioning": "OKX 带单员的可核验数据：榜单与真实可跟单收益、离榜之后、强平与风险。只发在 OKX 广场。",
+     "audience_profile": {"region": "OKX 用户", "depth": "进阶", "interests": ["带单员", "跟单收益", "风险"]}},
 ]
 AGENTS = [
     {"agent_key": "eic", "display_name": "AI 总编辑 / Editor-in-chief",
@@ -72,10 +80,12 @@ def seed(s: Session) -> dict:
     for a in ACCOUNTS:
         out["accounts"] += s.execute(text("""
             INSERT INTO editorial_account (handle, display_name, language, timezone, style_key, positioning,
-                                           audience_profile, status, brand)
-            VALUES (:h, :d, :l, :tz, :st, :p, CAST(:ap AS jsonb), 'paused', 'AlphaScope') ON CONFLICT DO NOTHING"""),
+                                           audience_profile, status, brand, platform, venues, long_post_allowed)
+            VALUES (:h, :d, :l, :tz, :st, :p, CAST(:ap AS jsonb), 'paused', 'AlphaScope', :pf, :v, :lp)
+            ON CONFLICT DO NOTHING"""),
             {"h": a["handle"], "d": a["display_name"], "l": a["language"], "tz": a["timezone"], "st": a["style_key"],
-             "p": a["positioning"], "ap": json.dumps(a["audience_profile"], ensure_ascii=False)}).rowcount
+             "p": a["positioning"], "ap": json.dumps(a["audience_profile"], ensure_ascii=False),
+             "pf": a.get("platform", "x"), "v": a["venues"], "lp": a.get("long_post_allowed", False)}).rowcount
     for key, p in SEEDS.items():
         out["prompts"] += s.execute(text("""
             INSERT INTO prompt_template (key, version, system_text, user_template, sha256, notes)

@@ -40,7 +40,7 @@ export function ReviewButtons({ articleId, status }: { articleId: number; status
   );
 }
 
-export function PublishForm({ articleId, handle, text }: { articleId: number; handle: string; text: string }) {
+export function PublishForm({ articleId, handle, text, platform = "x" }: { articleId: number; handle: string; text: string; platform?: string }) {
   const t = useTranslations("desk");
   const tc = useTranslations("common");
   const router = useRouter();
@@ -69,7 +69,8 @@ export function PublishForm({ articleId, handle, text }: { articleId: number; ha
           setError((e as Error).message);
         }
       }}>
-        <input name="x_url" className={input} placeholder={`https://x.com/${handle}/status/…`} required />
+        <input name="x_url" className={input} required
+          placeholder={platform === "okx_square" ? "https://www.okx.com/…/square/post/…" : `https://x.com/${handle}/status/…`} />
         <label className="block text-xs text-muted">{t("publishedAt")}
           <input name="published_at" type="datetime-local" className={input} required defaultValue={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)} />
         </label>

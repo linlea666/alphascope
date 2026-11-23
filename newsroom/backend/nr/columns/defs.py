@@ -27,6 +27,7 @@ class Column:
     cadence: str  # weekly | monthly | daily | hourly | trigger
     build: Callable[[Session, FeedClient, datetime, dict], list[ColumnIssue]]
     phase: str
+    venue: str  # hyperliquid | okx | multi: which source the gate checks and which accounts may carry it
 
 
 def _usd(f: Facts, fid: str, v, source: str, kind: str = "notional", **x) -> None:
@@ -107,9 +108,9 @@ def board_dropouts(s: Session, c: FeedClient, now: datetime, params: dict) -> li
 def liq_ladder(s: Session, c: FeedClient, now: datetime, params: dict) -> list[ColumnIssue]:
     out = []
     for coin in params.get("coins", COINS):
-        d = c.research("structure", "/market/structure", {"coin": coin})
-        it = ColumnIssue("liq_ladder", f"{week_key(now)}-{coin}", coin=coin, title_zh=f"{coin} 强平价阶梯",
-                         title_en=f"{coin} liquidation ladder")
+        d = c.research("structure", "/market/structure", {"coin": coin, "venue": "hyperliquid"})
+        it = ColumnIssue("liq_ladder", f"{week_key(now)}-{coin}", coin=coin, title_zh=f"{coin} 强平价阶梯（Hyperliquid）",
+                         title_en=f"{coin} liquidation ladder (Hyperliquid)")
         f = it.facts
         f.constraints |= {"OBSERVED_SAMPLE", "NOTIONAL_NOT_MARGIN"}
         if not d.get("ref"):
@@ -193,7 +194,8 @@ def funding_divergence(s: Session, c: FeedClient, now: datetime, params: dict) -
     out = []
     for coin in params.get("coins", COINS):
         d = c.research("funding", "/research/funding", {"coin": coin, "hours": 6}, "frames", "funding.frame")
-        frames = [fr for fr in d["frames"] if fr["divergence"] is not None and (fr["smart_n"] or 0) >= 5]
+        frames = [fr for fr in d["frames"] if fr["divergence"] is not None and (fr["smart_n"] or 0) >= 5
+                  and fr["venue"] == "hyperliquid"]
         pc = _pctile(d["funding"]["percentile"])
         if not frames or pc is None:
             continue
@@ -233,7 +235,7 @@ def funding_divergence(s: Session, c: FeedClient, now: datetime, params: dict) -
 # ---- N6 holding profile -----------------------------------------------------------------------------------------
 
 def holding_profile(s: Session, c: FeedClient, now: datetime, params: dict) -> list[ColumnIssue]:
-    d = c.research("holding", "/cycles/holding", {"days": 90}, "rows", "holding.row")
+    d = c.research("holding", "/cycles/holding", {"days": 90, "venue": "hyperliquid"}, "rows", "holding.row")
     it = ColumnIssue("holding_profile", month_key(now), title_zh="谁拿得住：盈利单与亏损单的持仓时长",
                      title_en="Who holds: time in winners vs losers")
     f = it.facts
@@ -387,8 +389,8 @@ def long_short_duel(s: Session, c: FeedClient, now: datetime, params: dict) -> l
 # ---- P3 streak breaker (trigger) ---------------------------------------------------------------------------------
 
 def streak_breaker(s: Session, c: FeedClient, now: datetime, params: dict) -> list[ColumnIssue]:
-    d = c.research("closed", "/cycles/closed", {"hours": 48, "min_streak": params.get("min_streak", 4)}, "rows",
-                   "closed.row")
+    d = c.research("closed", "/cycles/closed", {"hours": 48, "min_streak": params.get("min_streak", 4),
+                                                 "venue": "hyperliquid"}, "rows", "closed.row")
     out = []
     for r in d["rows"]:
         net = D(r["realized_pnl"]) - D(r["fees"])
@@ -514,16 +516,16 @@ def recap(s: Session, c: FeedClient, now: datetime, params: dict) -> list[Column
 
 
 COLUMNS: dict[str, Column] = {col.key: col for col in (
-    Column("weekly_scorecard", "一周巨鲸成绩单", "Weekly whale scorecard", "weekly", weekly_scorecard, "P2"),
-    Column("long_short_duel", "多空对决", "Long/short duel", "weekly", long_short_duel, "P3"),
-    Column("streak_breaker", "连胜终结者", "Streak breaker", "hourly", streak_breaker, "P3"),
-    Column("recap", "故事复盘", "Story recap", "trigger", recap, "P3"),
-    Column("dossier", "交易员真实性调查", "Trader dossier", "trigger", dossier, "P3"),
-    Column("copy_vs_board", "榜单收益 vs 真实可跟单收益", "Board ROI vs copyable returns", "weekly", copy_vs_board, "N1"),
-    Column("board_dropouts", "榜单幸存者偏差追踪", "Board survivorship", "weekly", board_dropouts, "N2"),
-    Column("liq_ladder", "强平价阶梯周报", "Liquidation ladder", "weekly", liq_ladder, "N3"),
-    Column("forecast_ledger", "预测公开账本", "Forecast ledger", "monthly", forecast_ledger, "N4"),
-    Column("funding_divergence", "资金费率与巨鲸方向背离", "Funding vs specialists", "daily", funding_divergence, "N5"),
-    Column("holding_profile", "谁拿得住：持仓时长画像", "Who holds: holding times", "monthly", holding_profile, "N6"),
-    Column("style_changes", "风格变迁档案", "Style change archive", "monthly", style_changes, "N7"),
+    Column("weekly_scorecard", "一周巨鲸成绩单", "Weekly whale scorecard", "weekly", weekly_scorecard, "P2", "multi"),
+    Column("long_short_duel", "多空对决", "Long/short duel", "weekly", long_short_duel, "P3", "multi"),
+    Column("streak_breaker", "连胜终结者", "Streak breaker", "hourly", streak_breaker, "P3", "hyperliquid"),
+    Column("recap", "故事复盘", "Story recap", "trigger", recap, "P3", "trader"),
+    Column("dossier", "交易员真实性调查", "Trader dossier", "trigger", dossier, "P3", "trader"),
+    Column("copy_vs_board", "榜单收益 vs 真实可跟单收益", "Board ROI vs copyable returns", "weekly", copy_vs_board, "N1", "okx"),
+    Column("board_dropouts", "榜单幸存者偏差追踪", "Board survivorship", "weekly", board_dropouts, "N2", "okx"),
+    Column("liq_ladder", "强平价阶梯周报", "Liquidation ladder", "weekly", liq_ladder, "N3", "hyperliquid"),
+    Column("forecast_ledger", "预测公开账本", "Forecast ledger", "monthly", forecast_ledger, "N4", "hyperliquid"),
+    Column("funding_divergence", "资金费率与巨鲸方向背离", "Funding vs specialists", "daily", funding_divergence, "N5", "hyperliquid"),
+    Column("holding_profile", "谁拿得住：持仓时长画像", "Who holds: holding times", "monthly", holding_profile, "N6", "hyperliquid"),
+    Column("style_changes", "风格变迁档案", "Style change archive", "monthly", style_changes, "N7", "multi"),
 )}

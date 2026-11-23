@@ -201,7 +201,7 @@
     "guardPass": "Pass",
     "guardWarn": "Warnings",
     "guardFail": "Fail",
-    "xLength": "X length",
+    "xLength": "Length",
     "origin": "Origin",
     "ai": "AI",
     "human": "Human",
@@ -266,7 +266,9 @@
     "edit": "Edit",
     "permissions": "Member permissions",
     "userId": "User ID",
-    "brand": "Brand"
+    "brand": "Brand",
+    "platform": "Platform",
+    "venues": "Venues covered (comma-separated: hyperliquid, okx; X accounts: hyperliquid)"
   },
   "publications": {
     "title": "Publications",

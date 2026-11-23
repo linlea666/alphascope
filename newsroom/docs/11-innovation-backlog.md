@@ -169,9 +169,9 @@
 
 | 创意 | 栏目 key | 周期 | 状态 |
 |---|---|---|---|
-| N1 排行榜收益 vs 真实可跟单收益 | `copy_vs_board` | 每周一 | 已上线 |
-| N2 榜单幸存者偏差追踪 | `board_dropouts` | 每周一 | 已上线 |
-| N3 强平价阶梯周报 | `liq_ladder` | 每周一（BTC、ETH） | 已上线 |
+| N1 排行榜收益 vs 真实可跟单收益 | `copy_vs_board` | 每周一 | 已上线，只发 OKX 广场 |
+| N2 榜单幸存者偏差追踪 | `board_dropouts` | 每周一 | 已上线，只发 OKX 广场 |
+| N3 强平价阶梯周报 | `liq_ladder` | 每周一（BTC、ETH，只用 Hyperliquid） | 已上线 |
 | N4 预测公开账本 | `forecast_ledger` | 每月 1 日 | 已上线 |
 | N5 资金费率与巨鲸方向背离 | `funding_divergence` | 每小时检查，满足条件当天出一期 | 已上线 |
 | N6 谁拿得住：持仓时长画像 | `holding_profile` | 每月 1 日 | 已上线 |

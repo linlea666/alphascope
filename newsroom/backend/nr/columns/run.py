@@ -31,7 +31,7 @@ def packet(it: ColumnIssue, blocking: list[dict]) -> dict:
     return {
         "schema": builder.SCHEMA, "builder_version": "columns-1",
         "source": {"system": "alphascope", "feed_schema": "feed.v1", "column": it.column, "period": it.period_key},
-        "subject": {"trader_ref": it.title_en, "trader_key": it.trader_key, "venue": "multi",
+        "subject": {"trader_ref": it.title_en, "trader_key": it.trader_key, "venue": issue_venue(it),
                     "identity": "unknown" if it.trader_key else "n/a", "title": {"zh": it.title_zh, "en": it.title_en}},
         "event": {"class": f"column:{it.column}", "coin": it.coin, "direction": None, "escalation_level": 0,
                   "liquidation_status": "none"},
@@ -41,8 +41,18 @@ def packet(it: ColumnIssue, blocking: list[dict]) -> dict:
     }
 
 
+def issue_venue(it: ColumnIssue) -> str:
+    col = COLUMNS[it.column]
+    if col.venue == "trader":
+        return "okx" if (it.trader_key or "").startswith("okx:") else "hyperliquid"
+    return col.venue
+
+
 def store(s: Session, it: ColumnIssue, now: datetime) -> dict:
-    blocking = list(it.blocking) + health.source_blockers(s, "hyperliquid", now, settings_store.get(s, "gate"))
+    venue = issue_venue(it)
+    # an OKX column only depends on OKX staying available, and never holds back Hyperliquid columns
+    blocking = list(it.blocking) + health.source_blockers(s, "okx" if venue == "okx" else "hyperliquid", now,
+                                                          settings_store.get(s, "gate"))
     content = packet(it, blocking)
     trader_id = None
     if it.trader_key:
@@ -54,10 +64,10 @@ def store(s: Session, it: ColumnIssue, now: datetime) -> dict:
     eid = s.execute(text("""
         INSERT INTO news_event (dedupe_key, event_class, rule_version, trader_id, venue, coin, column_key, period_key,
                                 column_params, score, score_breakdown, score_version, priority)
-        VALUES (:k, :c, 'col1', :t, 'multi', :coin, :col, :period, CAST(:params AS jsonb), :score,
+        VALUES (:k, :c, 'col1', :t, :venue, :coin, :col, :period, CAST(:params AS jsonb), :score,
                 CAST(:bd AS jsonb), 'col1', 'p2')
         ON CONFLICT (dedupe_key) DO NOTHING RETURNING id"""),
-        {"k": dedupe_key(it), "c": f"column:{it.column}", "t": trader_id, "coin": it.coin, "col": it.column,
+        {"k": dedupe_key(it), "c": f"column:{it.column}", "t": trader_id, "venue": venue, "coin": it.coin, "col": it.column,
          "period": it.period_key, "params": json.dumps(it.params), "score": COLUMN_SCORE,
          "bd": json.dumps({"version": "col1", "total": COLUMN_SCORE, "components": {"scheduled_column": {
              "points": COLUMN_SCORE, "max": 100, "note": "scheduled editorial column", "inputs": {}}}})}).scalar()

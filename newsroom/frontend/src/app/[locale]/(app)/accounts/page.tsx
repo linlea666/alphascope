@@ -16,6 +16,8 @@ export default async function AccountsPage() {
     { name: "handle", label: t("handle"), value: a?.handle, required: true },
     { name: "display_name", label: t("name"), value: a?.display_name, required: true },
     { name: "language", label: tc("language"), type: "select", options: ["zh", "en"], value: a?.language ?? "zh" },
+    { name: "platform", label: t("platform"), type: "select", options: [{ value: "x", label: "X" }, { value: "okx_square", label: "OKX 广场 / OKX Square" }], value: a?.platform ?? "x" },
+    { name: "venues", label: t("venues"), type: "list", value: a?.venues ?? ["hyperliquid"], placeholder: "hyperliquid, okx" },
     { name: "status", label: tc("status"), type: "select", options: ["active", "paused", "retired"], value: a?.status ?? "paused" },
     { name: "brand", label: t("brand"), value: a?.brand ?? "AlphaScope" },
     { name: "timezone", label: t("timezone"), value: a?.timezone ?? "UTC", required: true },
@@ -38,7 +40,7 @@ export default async function AccountsPage() {
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
       <div className="space-y-5">
         {accounts.map((a, i) => (
-          <Panel key={a.id} title={<span>@{a.handle} · {a.display_name} <StateBadge state={a.status} /> <Badge tone={a.authorization_status === "authorized" ? "up" : "warn"}>{a.authorization_status}</Badge></span>}
+          <Panel key={a.id} title={<span>@{a.handle} · {a.display_name} <Badge tone="accent">{a.platform === "okx_square" ? "OKX 广场" : "X"}</Badge> <Badge>{(a.venues ?? []).join(", ") || "all"}</Badge> <StateBadge state={a.status} /> <Badge tone={a.authorization_status === "authorized" ? "up" : "warn"}>{a.authorization_status}</Badge></span>}
             hint={`${a.language} · ${a.timezone} · ${a.style_key ?? ""} · ${fmtTime(a.authorization_expires_at, locale, a.timezone)}`}>
             <p className="mb-3 text-sm">{a.positioning}</p>
             <details><summary className="cursor-pointer text-sm text-accent">{t("edit")}</summary>

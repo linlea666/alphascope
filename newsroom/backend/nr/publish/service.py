@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
@@ -17,6 +18,25 @@ from nr.articles import versions
 from nr.events.states import InvalidTransition, transition
 
 X_URL = re.compile(r"^https://(?:x|twitter)\.com/([A-Za-z0-9_]{1,15})/status/(\d{5,25})(?:[/?#].*)?$")
+
+
+def post_id_for(s: Session, platform: str, handle: str, url: str) -> str:
+    """The post's id from its URL, after checking the URL belongs to the account's platform (and, on X, to the
+    account itself)."""
+    if platform == "x":
+        m = X_URL.match(url)
+        if not m:
+            raise HTTPException(422, "not an X post URL (https://x.com/<handle>/status/<id>)")
+        if m.group(1).lower() != handle.lstrip("@").lower():
+            raise HTTPException(422, f"the post belongs to @{m.group(1)}, not to @{handle.lstrip('@')}")
+        return m.group(2)
+    hosts = settings_store.get(s, "platforms").get(platform, {}).get("hosts", [])
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not any(parsed.hostname == h or (parsed.hostname or "").endswith("." + h)
+                                           for h in hosts):
+        raise HTTPException(422, f"not a {platform} post URL (expected https on {', '.join(hosts)})")
+    ids = re.findall(r"\d{6,}", parsed.path)  # OKX Square post ids are long numbers; fall back to the URL itself
+    return ids[-1] if ids else hashlib.sha256(url.encode()).hexdigest()[:24]
 
 
 def submit(s: Session, article_id: int, user_id: int) -> None:
@@ -99,11 +119,7 @@ def mark_published(s: Session, article_id: int, user_id: int, x_url: str, publis
     blockers = publish_blockers(s, art["account_id"], now)
     if blockers:
         raise HTTPException(423, "; ".join(blockers))
-    m = X_URL.match(x_url.strip())
-    if not m:
-        raise HTTPException(422, "not an X post URL (https://x.com/<handle>/status/<id>)")
-    if m.group(1).lower() != art["handle"].lstrip("@").lower():
-        raise HTTPException(422, f"the post belongs to @{m.group(1)}, not to @{art['handle'].lstrip('@')}")
+    post_id = post_id_for(s, art["platform"], art["handle"], x_url.strip())
     if published_at > now + timedelta(minutes=5):
         raise HTTPException(422, "published_at is in the future")
     v = versions.current_version(s, article_id)
@@ -122,7 +138,7 @@ def mark_published(s: Session, article_id: int, user_id: int, x_url: str, publis
         INSERT INTO publication_record (article_id, article_version_id, account_id, x_post_id, x_url, published_at,
           recorded_by, final_text, final_text_hash, matches_version, guard_report)
         VALUES (:a, :v, :acc, :pid, :url, :at, :u, :t, :h, :mv, CAST(:g AS jsonb)) RETURNING id"""),
-        {"a": article_id, "v": v["id"], "acc": art["account_id"], "pid": m.group(2), "url": x_url.strip(),
+        {"a": article_id, "v": v["id"], "acc": art["account_id"], "pid": post_id, "url": x_url.strip(),
          "at": published_at, "u": user_id, "t": posted, "h": h, "mv": final_text is None or posted == v["body"],
          "g": json.dumps(report, ensure_ascii=False, default=str)}).scalar_one()
     versions.set_status(s, article_id, "published")
