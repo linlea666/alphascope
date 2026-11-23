@@ -223,3 +223,20 @@ def test_prompt_versions_switch_in_bulk_and_only_unused_ones_can_be_deleted(clie
     assert client.delete(f"/api/ai/prompts/reporter/{v}", headers=h).status_code == 200
     with sf() as s, pytest.raises(Exception, match="has been used"):
         s.execute(text("DELETE FROM prompt_template WHERE key = 'reporter' AND version = 4"))
+
+
+def test_onboarding_checklist_follows_the_data(client, sf):
+    from tests.helpers import newsroom
+    newsroom(sf, accounts_active=False)
+    h = login(client, "chief")
+    steps = {x["key"]: x["done"] for x in client.get("/api/onboarding", headers=h).json()["steps"]}
+    assert steps == {"model": False, "bind": True, "account": False, "prompts": False, "trial": False, "publish": False}
+    with sf() as s:
+        s.execute(text("UPDATE ai_model_config SET last_test_ok = true"))
+        s.execute(text("UPDATE editorial_account SET status = 'active'"))
+        s.execute(text("UPDATE user_role SET role = 'admin' WHERE user_id = (SELECT id FROM app_user WHERE username = 'chief')"))
+        s.commit()
+    client.post("/api/ai/agents/prompt-version", json={"agent_keys": ["reporter", "reporter_breaking", "reporter_data",
+                "reporter_investigator", "reporter_derivatives", "reporter_historian"]}, headers=h)
+    steps = {x["key"]: x["done"] for x in client.get("/api/onboarding", headers=h).json()["steps"]}
+    assert steps["model"] and steps["account"] and steps["prompts"] and not steps["trial"]

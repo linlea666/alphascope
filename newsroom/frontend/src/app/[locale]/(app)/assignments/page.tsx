@@ -3,6 +3,7 @@ import { BoardControls } from "@/components/BoardRow";
 import { ClassLabel, StateBadge } from "@/components/badges";
 import { Badge, Empty, PageHeader, Panel, td, th } from "@/components/ui";
 import { Link } from "@/i18n/routing";
+import { named } from "@/lib/glossary";
 import { nrGet } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
 
@@ -13,7 +14,9 @@ const ROLES = ["reporter", "reporter_breaking", "reporter_investigator", "report
 
 export default async function AssignmentsPage({ searchParams }: { searchParams: Promise<{ mine?: string }> }) {
   const mine = (await searchParams).mine === "1";
-  const [t, locale, list] = await Promise.all([getTranslations("board"), getLocale(), nrGet<Row[]>("assignments", { mine })]);
+  const [t, locale, list, tr] = await Promise.all([getTranslations("board"), getLocale(), nrGet<Row[]>("assignments", { mine }),
+    getTranslations("roles")]);
+  const roles = ROLES.map((key) => ({ key, name: named(tr, key).name }));
   return (
     <>
       <PageHeader title={t("title")} subtitle={t("subtitle")}>
@@ -34,14 +37,14 @@ export default async function AssignmentsPage({ searchParams }: { searchParams: 
                     <div className="max-w-xs text-xs text-muted">{a.angle}</div>
                   </td>
                   <td className={td}>@{a.handle} · {a.language}</td>
-                  <td className={td}><span className="font-mono text-xs">{a.agent_key}</span>{a.needs_human && <Badge tone="warn">!</Badge>}</td>
+                  <td className={td}><span className="text-xs" title={a.agent_key}>{named(tr, a.agent_key).name}</span>{a.needs_human && <Badge tone="warn">!</Badge>}</td>
                   <td className={td}>
                     <StateBadge state={a.status} /> {a.article_status && <StateBadge state={a.article_status} />}
                     <div className="text-xs text-muted">{a.claimed_by ?? ""}{a.reviewer ? ` → ${a.reviewer}` : ""}</div>
                   </td>
                   <td className={`${td} text-xs`}>{fmtTime(a.due_at, locale)}</td>
                   <td className={td}>
-                    <BoardControls id={a.id} claimed={Boolean(a.claimed_by)} roles={ROLES} />
+                    <BoardControls id={a.id} claimed={Boolean(a.claimed_by)} roles={roles} />
                     {a.article_id && <Link className="text-xs text-accent" href={`/desk/${a.article_id}`}>{t("open")}</Link>}
                   </td>
                 </tr>

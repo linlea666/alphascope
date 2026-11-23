@@ -7,7 +7,7 @@ import { Badge, Empty, KV, PageHeader, Panel, td, th } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { nrGet, nrGetOptional } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
-import { named } from "@/lib/glossary";
+import { auditName, named, word } from "@/lib/glossary";
 
 const TABS = ["sources", "ai", "agents", "prompts", "styles", "users", "costs", "rules", "jobs", "rpa", "audit"] as const;
 type Tab = (typeof TABS)[number];
@@ -56,7 +56,7 @@ async function NoAccess() {
 }
 
 async function Sources({ locale }: { locale: string }) {
-  const t = await getTranslations("settings");
+  const [t, ts, tr] = await Promise.all([getTranslations("settings"), getTranslations("sourcesX"), getTranslations("sourcesX.words")]);
   const d = await nrGet<{ overview: { reachable: boolean; radar: Record<string, string>; cursor: number | null; head_id: number | null; backlog: number | null; last_sync_ok_at: string | null; health_error: string | null };
     connections: { name: string; base_url: string; last_ok_at: string | null; last_error: string | null; last_error_at: string | null }[];
     runs: { id: number; mode: string; status: string; started_at: string; fetched: number; inserted: number; backlog: number | null; error: string | null }[];
@@ -65,22 +65,22 @@ async function Sources({ locale }: { locale: string }) {
   return (
     <div className="grid gap-5 xl:grid-cols-2">
       <Panel title={t("sources")}>
-        <KV k="reachable" v={<Badge tone={o.reachable ? "up" : "down"}>{String(o.reachable)}</Badge>} />
-        <KV k="radar" v={`HL ${o.radar.hyperliquid} · OKX ${o.radar.okx}`} />
+        <KV k={ts("reachable")} v={<Badge tone={o.reachable ? "up" : "down"}>{o.reachable ? ts("yes") : ts("no")}</Badge>} />
+        <KV k={ts("radar")} v={`Hyperliquid ${word(tr, o.radar.hyperliquid)} · OKX ${word(tr, o.radar.okx)}`} />
         <KV k={t("cursor")} v={o.cursor ?? "—"} />
         <KV k={t("head")} v={o.head_id ?? "—"} />
-        <KV k="backlog" v={o.backlog ?? "—"} />
-        <KV k="last sync" v={fmtTime(o.last_sync_ok_at, locale)} />
+        <KV k={ts("backlog")} v={o.backlog ?? "—"} />
+        <KV k={ts("lastSync")} v={fmtTime(o.last_sync_ok_at, locale)} />
         {o.health_error && <p className="mt-2 text-xs text-down">{o.health_error}</p>}
-        {d.connections.map((c) => <p key={c.name} className="mt-2 text-xs text-muted">{c.name}: {c.base_url} · ok {fmtTime(c.last_ok_at, locale)} {c.last_error && `· ${c.last_error}`}</p>)}
+        {d.connections.map((c) => <p key={c.name} className="mt-2 text-xs text-muted">{c.name}: {c.base_url} · {ts("lastOk")} {fmtTime(c.last_ok_at, locale)} {c.last_error && `· ${c.last_error}`}</p>)}
       </Panel>
       <Panel title={t("runs")}>
         <table className="w-full text-xs">
           <tbody>
             {d.runs.map((r) => (
               <tr key={r.id} className="border-b border-border/60">
-                <td className={td}>{fmtTime(r.started_at, locale)}</td><td className={td}>{r.mode}</td>
-                <td className={td}><Badge tone={r.status === "success" ? "up" : "down"}>{r.status}</Badge></td>
+                <td className={td}>{fmtTime(r.started_at, locale)}</td><td className={td}>{word(tr, r.mode)}</td>
+                <td className={td}><Badge tone={r.status === "success" ? "up" : "down"}>{word(tr, r.status)}</Badge></td>
                 <td className={`${td} num`}>{r.fetched}/{r.inserted}</td><td className={`${td} num`}>{r.backlog ?? "—"}</td>
                 <td className={`${td} max-w-xs truncate text-down`}>{r.error}</td>
               </tr>
@@ -93,35 +93,41 @@ async function Sources({ locale }: { locale: string }) {
 }
 
 async function Models() {
-  const t = await getTranslations("settings");
+  const [t, tm, tpr] = await Promise.all([getTranslations("settings"), getTranslations("modelForm"), getTranslations("protocols")]);
   const models = await nrGetOptional<Model[]>("ai/models");
   if (!models) return <NoAccess />;
+  const f = (name: string) => ({ name, label: tm(`${name}.name`), help: tm(`${name}.help`) });
+  const opts = (vals: string[]) => vals.map((v) => ({ value: v, label: tpr.has(v) ? tpr(v) : v }));
   const fields = (m?: Model) => [
-    { name: "name", label: "name", value: m?.name, required: true },
-    { name: "protocol", label: t("protocol"), type: "select" as const, options: ["openai_chat", "openai_responses", "anthropic_messages"], value: m?.protocol ?? "openai_chat" },
-    { name: "base_url", label: t("baseUrl"), value: m?.base_url, required: true, placeholder: "https://api.deepseek.com · https://api.aicodemirror.ai/v1", wide: true },
-    { name: "model", label: t("model"), value: m?.model, required: true },
-    { name: "api_key", label: t("apiKey"), type: "password" as const },
-    { name: "auth_header", label: "auth header", type: "select" as const, options: ["bearer", "x-api-key"], value: m?.auth_header ?? "bearer" },
-    { name: "anthropic_version", label: "anthropic-version", value: m?.anthropic_version ?? "2023-06-01" },
-    { name: "json_mode", label: t("jsonMode"), type: "select" as const, options: ["json_object", "json_schema", "none"], value: m?.json_mode ?? "json_object" },
-    { name: "timeout_s", label: "timeout (s)", type: "number" as const, value: m?.timeout_s ?? 90 },
-    { name: "max_retries", label: "retries", type: "number" as const, value: m?.max_retries ?? 2 },
-    { name: "max_concurrency", label: "concurrency", type: "number" as const, value: m?.max_concurrency ?? 2 },
-    { name: "input_usd_per_mtok", label: `${t("price")} · in`, type: "number" as const, value: m?.input_usd_per_mtok ?? 0 },
-    { name: "output_usd_per_mtok", label: `${t("price")} · out`, type: "number" as const, value: m?.output_usd_per_mtok ?? 0 },
-    { name: "extra_body", label: "extra body (JSON)", type: "json" as const, value: m?.extra_body ?? {} },
-    { name: "enabled", label: "enabled", type: "checkbox" as const, value: m?.enabled ?? true },
+    { ...f("name"), value: m?.name, required: true },
+    { ...f("protocol"), type: "select" as const, options: opts(["openai_chat", "openai_responses", "anthropic_messages"]), value: m?.protocol ?? "openai_chat" },
+    { ...f("base_url"), value: m?.base_url, required: true, placeholder: "https://api.deepseek.com · https://api.aicodemirror.ai/v1", wide: true },
+    { ...f("model"), value: m?.model, required: true },
+    { ...f("api_key"), type: "password" as const },
+    { ...f("auth_header"), type: "select" as const, options: ["bearer", "x-api-key"], value: m?.auth_header ?? "bearer" },
+    { ...f("anthropic_version"), value: m?.anthropic_version ?? "2023-06-01" },
+    { ...f("json_mode"), type: "select" as const, options: opts(["json_object", "json_schema", "none"]), value: m?.json_mode ?? "json_object" },
+    { ...f("timeout_s"), type: "number" as const, value: m?.timeout_s ?? 90 },
+    { ...f("max_retries"), type: "number" as const, value: m?.max_retries ?? 2 },
+    { ...f("max_concurrency"), type: "number" as const, value: m?.max_concurrency ?? 2 },
+    { ...f("input_usd_per_mtok"), type: "number" as const, value: m?.input_usd_per_mtok ?? 0 },
+    { ...f("output_usd_per_mtok"), type: "number" as const, value: m?.output_usd_per_mtok ?? 0 },
+    { ...f("extra_body"), type: "json" as const, value: m?.extra_body ?? {} },
+    { ...f("enabled"), type: "checkbox" as const, value: m?.enabled ?? true },
   ];
+  const tested = (ok: boolean | null) => (ok ? tm("lastTestOk") : ok === false ? tm("lastTestFail") : tm("lastTestNone"));
   return (
     <div className="space-y-5">
       <AiReadiness />
       {models.map((m) => (
-        <Panel key={m.id} title={<span>{m.name} · {m.model} <Badge tone={m.last_test_ok ? "up" : m.last_test_ok === false ? "down" : "neutral"}>{t("lastTest")}: {String(m.last_test_ok ?? "—")}</Badge> {!m.has_key && <Badge tone="warn">no key</Badge>}</span>}
-          hint={`${m.protocol} · ${m.base_url} · ${m.json_mode}`}>
+        <Panel key={m.id} title={<span>{m.name} · {m.model} <Badge tone={m.last_test_ok ? "up" : m.last_test_ok === false ? "down" : "neutral"}>{t("lastTest")}: {tested(m.last_test_ok)}</Badge> {!m.has_key && <Badge tone="warn">{tm("noKey")}</Badge>}</span>}
+          hint={`${tpr.has(m.protocol) ? tpr(m.protocol) : m.protocol} · ${m.base_url} · ${tpr.has(m.json_mode) ? tpr(m.json_mode) : m.json_mode}`}>
           <FieldForm fields={[]} path={`ai/models/${m.id}/test`} submitLabel={t("testModel")} showResult />
-          {m.last_test_detail && <pre className="mt-2 max-h-40 overflow-auto rounded bg-panel-2 p-2 text-xs">{JSON.stringify(m.last_test_detail, null, 2)}</pre>}
-          <details className="mt-3"><summary className="cursor-pointer text-sm text-accent">edit</summary>
+          {m.last_test_detail && (
+            <details className="mt-2"><summary className="cursor-pointer text-xs text-muted">{tm("testDetail")}</summary>
+              <pre className="mt-1 max-h-40 overflow-auto rounded bg-panel-2 p-2 text-xs">{JSON.stringify(m.last_test_detail, null, 2)}</pre></details>
+          )}
+          <details className="mt-3"><summary className="cursor-pointer text-sm text-accent">{tm("edit")}</summary>
             <div className="mt-3"><FieldForm fields={fields(m)} path={`ai/models/${m.id}`} method="PUT" /></div></details>
         </Panel>
       ))}
@@ -295,26 +301,30 @@ async function Prompts({ locale }: { locale: string }) {
 }
 
 async function Users({ locale }: { locale: string }) {
-  const t = await getTranslations("settings");
+  const [t, tu, ts] = await Promise.all([getTranslations("settings"), getTranslations("userRoles"), getTranslations("usersX")]);
   const users = await nrGetOptional<User[]>("users");
   if (!users) return <NoAccess />;
-  const roles = "admin, editor_in_chief, editor, reporter, reviewer, account_operator, analyst";
+  const roleOpts = ["admin", "editor_in_chief", "editor", "reporter", "reviewer", "account_operator", "analyst"]
+    .map((r) => ({ value: r, label: tu(r) }));
   return (
     <div className="space-y-5">
-      <Panel>
+      <Panel hint={ts("hint")}>
         <table className="w-full text-sm">
-          <thead><tr><th className={th}>#</th><th className={th}>user</th><th className={th}>{t("roles")}</th><th className={th}>{t("active")}</th><th className={th}>login</th><th className={th} /></tr></thead>
+          <thead><tr><th className={th}>#</th><th className={th}>{ts("user")}</th><th className={th}>{t("roles")}</th><th className={th}>{t("active")}</th>
+            <th className={th}>{ts("lastLogin")}</th><th className={th} /></tr></thead>
           <tbody>
             {users.map((u) => (
               <tr key={u.id} className="border-b border-border/60 align-top">
-                <td className={td}>{u.id}</td><td className={td}>{u.username}</td><td className={td}>{u.roles.join(", ")}</td>
-                <td className={td}>{String(u.is_active)}</td><td className={`${td} text-xs text-muted`}>{fmtTime(u.last_login_at, locale)}</td>
+                <td className={td}>{u.id}</td><td className={td}>{u.username}{u.display_name && <div className="text-xs text-muted">{u.display_name}</div>}</td>
+                <td className={td}>{u.roles.map((r) => (tu.has(r) ? tu(r) : r)).join("、")}</td>
+                <td className={td}><Badge tone={u.is_active ? "up" : "neutral"}>{u.is_active ? ts("yes") : ts("no")}</Badge></td>
+                <td className={`${td} text-xs text-muted`}>{fmtTime(u.last_login_at, locale)}</td>
                 <td className={td}>
-                  <details><summary className="cursor-pointer text-xs text-accent">edit</summary>
+                  <details><summary className="cursor-pointer text-xs text-accent">{ts("edit")}</summary>
                     <div className="mt-2 w-96"><FieldForm path={`users/${u.id}`} method="PATCH" fields={[
-                      { name: "roles", label: roles, type: "list", value: u.roles },
+                      { name: "roles", label: t("roles"), type: "multi", value: u.roles, options: roleOpts },
                       { name: "is_active", label: t("active"), type: "checkbox", value: u.is_active },
-                      { name: "reset_password", label: t("resetPassword"), type: "password" },
+                      { name: "reset_password", label: t("resetPassword"), type: "password", help: ts("resetHelp") },
                     ]} /></div>
                   </details>
                 </td>
@@ -325,10 +335,10 @@ async function Users({ locale }: { locale: string }) {
       </Panel>
       <Panel title={t("addUser")}>
         <FieldForm path="users" fields={[
-          { name: "username", label: "username", required: true },
-          { name: "display_name", label: "display name" },
-          { name: "password", label: "password", type: "password", required: true },
-          { name: "roles", label: roles, type: "list", required: true },
+          { name: "username", label: ts("username"), required: true },
+          { name: "display_name", label: ts("displayName") },
+          { name: "password", label: ts("password"), type: "password", required: true, help: ts("passwordHelp") },
+          { name: "roles", label: t("roles"), type: "multi", required: true, options: roleOpts, wide: true },
         ]} />
       </Panel>
     </div>
@@ -336,7 +346,8 @@ async function Users({ locale }: { locale: string }) {
 }
 
 async function Costs({ locale }: { locale: string }) {
-  const t = await getTranslations("settings");
+  const [t, tr, tp, tcs] = await Promise.all([getTranslations("settings"), getTranslations("roles"), getTranslations("callPurposes"),
+    getTranslations("callStatus")]);
   const d = await nrGetOptional<{ by_day: { day: string; agent_key: string; calls: number; cost: number }[]; by_status: { status: string; n: number }[];
     recent: { id: number; created_at: string; agent_key: string; purpose: string; model: string; status: string; cost_usd: number; latency_ms: number | null; error: string | null }[] }>("ai/costs");
   if (!d) return <NoAccess />;
@@ -344,45 +355,96 @@ async function Costs({ locale }: { locale: string }) {
     <div className="grid gap-5 xl:grid-cols-2">
       <Panel title={t("costs")}>
         <table className="w-full text-sm"><tbody>
-          {d.by_day.map((r, i) => <tr key={i} className="border-b border-border/60"><td className={td}>{fmtTime(r.day, locale)}</td><td className={td}>{r.agent_key}</td><td className={`${td} num`}>{r.calls}</td><td className={`${td} num`}>${Number(r.cost).toFixed(4)}</td></tr>)}
+          {d.by_day.map((r, i) => <tr key={i} className="border-b border-border/60"><td className={td}>{fmtTime(r.day, locale)}</td><td className={td}>{named(tr, r.agent_key).name}</td><td className={`${td} num`}>{r.calls}</td><td className={`${td} num`}>${Number(r.cost).toFixed(4)}</td></tr>)}
         </tbody></table>
-        <div className="mt-3 flex flex-wrap gap-1">{d.by_status.map((s) => <Badge key={s.status} tone={s.status === "ok" ? "up" : "warn"}>{s.status}: {s.n}</Badge>)}</div>
+        <div className="mt-3 flex flex-wrap gap-1">{d.by_status.map((s) => <Badge key={s.status} tone={s.status === "ok" ? "up" : "warn"}>{word(tcs, s.status)}: {s.n}</Badge>)}</div>
       </Panel>
       <Panel title={t("calls")}>
         <table className="w-full text-xs"><tbody>
-          {d.recent.map((r) => <tr key={r.id} className="border-b border-border/60"><td className={td}>{fmtTime(r.created_at, locale)}</td><td className={td}>{r.purpose}</td><td className={td}>{r.model}</td><td className={td}><Badge tone={r.status === "ok" ? "up" : "down"}>{r.status}</Badge></td><td className={`${td} num`}>${Number(r.cost_usd).toFixed(4)}</td><td className={`${td} max-w-xs truncate text-muted`}>{r.error}</td></tr>)}
+          {d.recent.map((r) => <tr key={r.id} className="border-b border-border/60"><td className={td}>{fmtTime(r.created_at, locale)}</td><td className={td}>{named(tr, r.agent_key).name} · {word(tp, r.purpose)}</td><td className={td}>{r.model}</td><td className={td}><Badge tone={r.status === "ok" ? "up" : "down"}>{word(tcs, r.status)}</Badge></td><td className={`${td} num`}>${Number(r.cost_usd).toFixed(4)}</td><td className={`${td} max-w-xs truncate text-muted`}>{r.error}</td></tr>)}
         </tbody></table>
       </Panel>
     </div>
   );
 }
 
+const HOUSE_STYLES = ["whale_alert", "degen", "dossier", "crowd", "outcome", "one_liner", "portfolio"];
+
 async function Rules() {
-  const t = await getTranslations("settings");
-  const s = await nrGet<Record<string, Record<string, unknown>>>("settings");
+  const [t, tr, tf, tx] = await Promise.all([getTranslations("settings"), getTranslations("roles"), getTranslations("settingFields"),
+    getTranslations("rulesX")]);
+  const [s, styles] = await Promise.all([nrGet<Record<string, Record<string, unknown>>>("settings"),
+    nrGet<{ key: string; name: string; language: string }[]>("styles")]);
+  const field = (section: string, key: string) => (tf.has(`${section}__${key}.name`)
+    ? { label: tf(`${section}__${key}.name`), help: tf(`${section}__${key}.desc`) } : { label: key });
+  const zhName = (k: string) => styles.find((x) => x.key === `zh_${k}`)?.name ?? k;
+  const styleOpts = HOUSE_STYLES.map((k) => ({ value: `{language}_${k}`, label: zhName(k) }));
+  const byReporter = (s.styles?.by_reporter ?? {}) as Record<string, string>;
+  const reporters = ["reporter_breaking", "reporter_investigator", "reporter_data", "reporter_derivatives", "reporter_historian", "reporter"];
   return (
     <div className="space-y-5">
-      <p className="text-xs text-muted">{t("ruleHint")}</p>
-      {["detect", "gate", "budgets", "ai", "guard", "review"].map((k) => (
-        <Panel key={k} title={k}>
-          <SettingsJson keyName={k} value={s[k]} />
+      <Panel title={tx("aiTitle")} hint={tx("aiHint")}>
+        <FieldForm path="settings/ai" method="PUT" fields={[
+          { name: "enabled", ...field("ai", "enabled"), type: "checkbox", value: s.ai.enabled },
+          { name: "auto_eic", ...field("ai", "auto_eic"), type: "checkbox", value: s.ai.auto_eic },
+        ]} />
+      </Panel>
+      <Panel title={tx("stylesTitle")} hint={tx("stylesHint")}>
+        <FieldForm path="settings/styles" method="PUT" fields={reporters.map((r) => ({
+          name: `by_reporter.${r}`, label: named(tr, r).name, help: named(tr, r).desc ?? undefined, type: "select" as const,
+          value: byReporter[r] ?? "", options: styleOpts }))} />
+      </Panel>
+      <div className="grid gap-5 xl:grid-cols-2">
+        <Panel title={tx("scoresTitle")} hint={tx("scoresHint")}>
+          <FieldForm path="settings/detect" method="PUT" fields={[
+            { name: "candidate_score", ...field("detect", "candidate_score"), type: "number", value: s.detect.candidate_score },
+            { name: "auto_eic_score", ...field("detect", "auto_eic_score"), type: "number", value: s.detect.auto_eic_score },
+          ]} />
         </Panel>
-      ))}
+        <Panel title={tx("deskTitle")}>
+          <FieldForm path="settings/desk" method="PUT" fields={[
+            { name: "language", ...field("desk", "language"), type: "select", value: s.desk?.language ?? "zh",
+              options: [{ value: "zh", label: "中文" }, { value: "en", label: "English" }] },
+          ]} />
+          <div className="mt-4">
+            <FieldForm path="settings/review" method="PUT" fields={[
+              { name: "four_eyes", ...field("review", "four_eyes"), type: "checkbox", value: s.review.four_eyes },
+            ]} />
+          </div>
+          <div className="mt-4">
+            <FieldForm path="settings/budgets" method="PUT" fields={[
+              { name: "global_daily_usd", ...field("budgets", "global_daily_usd"), type: "number", value: s.budgets.global_daily_usd },
+            ]} />
+          </div>
+        </Panel>
+      </div>
+      <details>
+        <summary className="cursor-pointer text-sm text-accent">{tx("advanced")}</summary>
+        <p className="my-3 text-xs text-muted">{t("ruleHint")} {tx("advancedHint")}</p>
+        <div className="space-y-5">
+          {["detect", "gate", "budgets", "guard", "columns"].map((k) => (
+            <Panel key={k} title={tx.has(`section.${k}`) ? tx(`section.${k}`) : k}>
+              <SettingsJson keyName={k} value={s[k]} labels={(key) => field(k, key)} />
+            </Panel>
+          ))}
+        </div>
+      </details>
     </div>
   );
 }
 
-function SettingsJson({ keyName, value }: { keyName: string; value: Record<string, unknown> }) {
+function SettingsJson({ keyName, value, labels }: { keyName: string; value: Record<string, unknown>;
+  labels: (key: string) => { label: string; help?: string } }) {
   return <FieldForm path={`settings/${keyName}`} method="PUT" fields={Object.entries(value).map(([k, v]) => (
-    typeof v === "boolean" ? { name: k, label: k, type: "checkbox" as const, value: v }
-      : typeof v === "number" ? { name: k, label: k, type: "number" as const, value: v }
-        : Array.isArray(v) && v.every((x) => typeof x === "number") ? { name: k, label: k, type: "numbers" as const, value: v }
-          : Array.isArray(v) ? { name: k, label: k, type: "list" as const, value: v }
-            : { name: k, label: k, type: "json" as const, value: v }))} />;
+    typeof v === "boolean" ? { name: k, ...labels(k), type: "checkbox" as const, value: v }
+      : typeof v === "number" ? { name: k, ...labels(k), type: "number" as const, value: v }
+        : Array.isArray(v) && v.every((x) => typeof x === "number") ? { name: k, ...labels(k), type: "numbers" as const, value: v }
+          : Array.isArray(v) ? { name: k, ...labels(k), type: "list" as const, value: v }
+            : { name: k, ...labels(k), type: "json" as const, value: v }))} />;
 }
 
 async function Jobs({ locale }: { locale: string }) {
-  const t = await getTranslations("settings");
+  const [t, tj, tjs] = await Promise.all([getTranslations("settings"), getTranslations("jobKinds"), getTranslations("jobStatus")]);
   const jobs = await nrGetOptional<{ id: number; kind: string; payload: Record<string, unknown>; status: string; attempts: number; max_attempts: number; last_error: string | null; created_at: string; run_after: string }[]>("jobs");
   if (!jobs) return <NoAccess />;
   return (
@@ -390,8 +452,9 @@ async function Jobs({ locale }: { locale: string }) {
       <table className="w-full text-xs"><tbody>
         {jobs.map((j) => (
           <tr key={j.id} className="border-b border-border/60">
-            <td className={td}>#{j.id}</td><td className={td}>{j.kind}</td><td className={td}>{JSON.stringify(j.payload)}</td>
-            <td className={td}><Badge tone={j.status === "done" ? "up" : j.status === "dead" ? "down" : "neutral"}>{j.status}</Badge> {j.attempts}/{j.max_attempts}</td>
+            <td className={td}>#{j.id}</td><td className={td}>{word(tj, j.kind)}</td>
+            <td className={`${td} max-w-xs truncate text-muted`} title={JSON.stringify(j.payload)}>{JSON.stringify(j.payload)}</td>
+            <td className={td}><Badge tone={j.status === "done" ? "up" : j.status === "dead" ? "down" : "neutral"}>{word(tjs, j.status)}</Badge> {j.attempts}/{j.max_attempts}</td>
             <td className={td}>{fmtTime(j.created_at, locale)}</td><td className={`${td} max-w-xs truncate text-down`}>{j.last_error}</td>
             <td className={td}>{j.status === "dead" && <Action path={`jobs/${j.id}/retry`}>{t("retry")}</Action>}</td>
           </tr>
@@ -402,6 +465,7 @@ async function Jobs({ locale }: { locale: string }) {
 }
 
 async function Audit({ locale }: { locale: string }) {
+  const [tg, ta, ts] = await Promise.all([getTranslations("auditGroups"), getTranslations("auditActions"), getTranslations("usersX")]);
   const rows = await nrGetOptional<{ id: number; at: string; actor_kind: string; username: string | null; action: string; object_type: string; object_id: string | null; reason: string | null }[]>("audit");
   if (!rows) return <NoAccess />;
   return (
@@ -409,8 +473,10 @@ async function Audit({ locale }: { locale: string }) {
       <table className="w-full text-xs"><tbody>
         {rows.map((r) => (
           <tr key={r.id} className="border-b border-border/60">
-            <td className={td}>{fmtTime(r.at, locale)}</td><td className={td}>{r.actor_kind} {r.username}</td><td className={td}>{r.action}</td>
-            <td className={td}>{r.object_type} {r.object_id}</td><td className={`${td} text-muted`}>{r.reason}</td>
+            <td className={td}>{fmtTime(r.at, locale)}</td>
+            <td className={td}>{r.username ?? (ts.has(`actor.${r.actor_kind}`) ? ts(`actor.${r.actor_kind}`) : r.actor_kind)}</td>
+            <td className={td} title={r.action}>{auditName(tg, ta, r.action)}</td>
+            <td className={`${td} text-muted`}>{r.object_type} {r.object_id}</td><td className={`${td} text-muted`}>{r.reason}</td>
           </tr>
         ))}
       </tbody></table>
@@ -427,17 +493,17 @@ async function Styles() {
     <div className="space-y-5">
       <Panel title={tx("newStyle")}>
         <FieldForm path="styles" fields={[
-          { name: "key", label: "key (zh_xxx / en_xxx)", required: true },
-          { name: "language", label: "language", type: "select", options: ["zh", "en"], value: "zh" },
-          { name: "name", label: "name", required: true },
+          { name: "key", label: tx("styleKey"), required: true, help: tx("styleKeyHelp"), placeholder: "zh_my_style" },
+          { name: "language", label: tx("styleLang"), type: "select", options: [{ value: "zh", label: "中文" }, { value: "en", label: "English" }], value: "zh" },
+          { name: "name", label: tx("styleName"), required: true },
           { name: "guide", label: tx("guide"), type: "textarea", required: true },
           { name: "forbidden", label: tx("forbidden"), type: "list" },
-          { name: "structure", label: "structure (JSON)", type: "json", value: {} },
+          { name: "structure", label: tx("styleStructure"), type: "json", value: {}, help: tx("styleStructureHelp") },
         ]} />
       </Panel>
       <div className="grid gap-3 md:grid-cols-2">
         {[...latest.values()].map((st) => (
-          <Panel key={st.key} title={`${st.name} · ${st.key} v${st.version}`} hint={st.guide}>
+          <Panel key={st.key} title={<>{st.name} <span className="text-xs font-normal text-muted">{st.key} · {tx("styleVersion", { v: st.version })}</span></>} hint={st.guide}>
             <p className="text-xs text-muted">{st.forbidden.join(" · ")}</p>
           </Panel>
         ))}

@@ -6,26 +6,31 @@ import { nrGet, nrGetOptional } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
 import type { Account } from "@/lib/types";
 
-const CLASSES = "whale_open, flip, whale_add, underwater_add, whale_close, liquidation, near_liquidation, notable_trader_move";
+const CLASSES = ["whale_open", "flip", "whale_add", "underwater_add", "whale_close", "liquidation", "near_liquidation", "notable_trader_move"];
 
 export default async function AccountsPage() {
-  const [t, tc, locale, accounts, styles] = await Promise.all([getTranslations("accounts"), getTranslations("common"), getLocale(),
-    nrGet<Account[]>("accounts"), nrGet<{ key: string }[]>("styles")]);
+  const tcl = await getTranslations("classes");
+  const [t, tc, tw, locale, accounts, styles] = await Promise.all([getTranslations("accounts"), getTranslations("common"),
+    getTranslations("statusWords"), getLocale(), nrGet<Account[]>("accounts"), nrGet<{ key: string; name: string }[]>("styles")]);
   const styleKeys = [...new Set(styles.map((s) => s.key))];
+  const styleOpts = styleKeys.map((k) => ({ value: k, label: `${styles.find((s) => s.key === k)?.name ?? k}（${k.startsWith("zh_") ? "中文" : "English"}）` }));
+  const styleName = (k: string | null) => (k ? styles.find((s) => s.key === k)?.name ?? k : "");
   const fields = (a?: Account): Field[] => [
     { name: "handle", label: t("handle"), value: a?.handle, required: true },
     { name: "display_name", label: t("name"), value: a?.display_name, required: true },
-    { name: "language", label: tc("language"), type: "select", options: ["zh", "en"], value: a?.language ?? "zh" },
+    { name: "language", label: tc("language"), type: "select", options: [{ value: "zh", label: "中文" }, { value: "en", label: "English" }], value: a?.language ?? "zh" },
     { name: "platform", label: t("platform"), type: "select", options: [{ value: "x", label: "X" }, { value: "okx_square", label: "OKX 广场 / OKX Square" }], value: a?.platform ?? "x" },
     { name: "venues", label: t("venues"), type: "list", value: a?.venues ?? ["hyperliquid"], placeholder: "hyperliquid, okx" },
-    { name: "status", label: tc("status"), type: "select", options: ["active", "paused", "retired"], value: a?.status ?? "paused" },
+    { name: "status", label: tc("status"), type: "select", options: ["active", "paused", "retired"].map((v) => ({ value: v, label: tw(v) })),
+      value: a?.status ?? "paused", help: t("statusHelp") },
     { name: "brand", label: t("brand"), value: a?.brand ?? "AlphaScope" },
     { name: "timezone", label: t("timezone"), value: a?.timezone ?? "UTC", required: true },
-    { name: "style_key", label: t("style"), type: "select", options: styleKeys, value: a?.style_key ?? styleKeys[0] },
+    { name: "style_key", label: t("style"), type: "select", options: styleOpts, value: a?.style_key ?? styleKeys[0], help: t("styleHelp") },
     { name: "min_score", label: t("minScore"), type: "number", value: a?.min_score ?? 0 },
     { name: "daily_post_budget", label: t("budget"), type: "number", value: a?.daily_post_budget ?? 5 },
     { name: "min_gap_minutes", label: t("gap"), type: "number", value: a?.min_gap_minutes ?? 60 },
-    { name: "allowed_event_classes", label: t("classes"), type: "list", value: a?.allowed_event_classes ?? [], placeholder: CLASSES, wide: true },
+    { name: "allowed_event_classes", label: t("classes"), type: "multi", value: a?.allowed_event_classes ?? [], wide: true,
+      options: CLASSES.map((c) => ({ value: c, label: tcl(c) })), help: t("classesHelp") },
     { name: "long_post_allowed", label: t("longPosts"), type: "checkbox", value: a?.long_post_allowed },
     { name: "link_in_thread", label: t("linkInThread"), type: "checkbox", value: a?.link_in_thread ?? true },
     { name: "rpa_enabled", label: "RPA", type: "checkbox", value: a?.rpa_enabled },
@@ -41,8 +46,9 @@ export default async function AccountsPage() {
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
       <div className="space-y-5">
         {accounts.map((a, i) => (
-          <Panel key={a.id} title={<span>@{a.handle} · {a.display_name} <Badge tone="accent">{a.platform === "okx_square" ? "OKX 广场" : "X"}</Badge> <Badge>{(a.venues ?? []).join(", ") || "all"}</Badge> <StateBadge state={a.status} /> <Badge tone={a.authorization_status === "authorized" ? "up" : ["revoked", "expired"].includes(a.authorization_status) ? "down" : "neutral"}>{a.authorization_status}</Badge></span>}
-            hint={`${a.language} · ${a.timezone} · ${a.style_key ?? ""} · ${fmtTime(a.authorization_expires_at, locale, a.timezone)}`}>
+          <Panel key={a.id} title={<span>@{a.handle} · {a.display_name} <Badge tone="accent">{a.platform === "okx_square" ? "OKX 广场" : "X"}</Badge> <Badge>{(a.venues ?? []).join(", ") || "all"}</Badge> <StateBadge state={a.status} /> <Badge tone={a.authorization_status === "authorized" ? "up" : ["revoked", "expired"].includes(a.authorization_status) ? "down" : "neutral"}>{t("authShort")}：{tw(a.authorization_status)}</Badge></span>}
+            hint={`${a.language === "zh" ? "中文" : "English"} · ${a.timezone} · ${t("style")}：${styleName(a.style_key)}`
+              + (a.authorization_expires_at ? ` · ${t("authUntil")} ${fmtTime(a.authorization_expires_at, locale, a.timezone)}` : "")}>
             <p className="mb-3 text-sm">{a.positioning}</p>
             <details><summary className="cursor-pointer text-sm text-accent">{t("edit")}</summary>
               <div className="mt-3"><FieldForm fields={fields(a)} path={`accounts/${a.id}`} method="PUT" /></div>

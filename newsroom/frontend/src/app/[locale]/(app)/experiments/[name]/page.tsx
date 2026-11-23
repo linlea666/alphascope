@@ -4,6 +4,7 @@ import { ClassLabel } from "@/components/badges";
 import { Empty, PageHeader, Panel } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { nrGet } from "@/lib/api";
+import { factName } from "@/lib/glossary";
 
 type Pair = { pair_id: number; event: { id: number; event_class: string; coin: string; direction: string | null; venue: string };
   facts: { id: string; label: string | null; display: string | null }[]; constraints: { code: string; text: string }[];
@@ -12,7 +13,7 @@ type D = { experiment: string; pairs: number; my_votes: number; pair: Pair | nul
 
 export default async function ReviewPage({ params }: { params: Promise<{ name: string }> }) {
   const { name } = await params;
-  const t = await getTranslations("experiments");
+  const [t, tf] = await Promise.all([getTranslations("experiments"), getTranslations("factNames")]);
   const d = await nrGet<D>(`experiments/${name}/next`);
   const p = d.pair;
   return (
@@ -38,7 +39,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ name: s
             <ul className="space-y-1 text-xs">
               {p.facts.map((f) => (
                 <li key={f.id} className="flex justify-between gap-3 border-b border-border/40 pb-1">
-                  <span className="text-muted">{f.id}{f.label && <div className="text-[11px] opacity-70">{f.label}</div>}</span>
+                  <span className="text-muted" title={f.id}>{factName(tf, f.id, f.label)}</span>
                   <span className="text-right">{f.display}</span>
                 </li>
               ))}

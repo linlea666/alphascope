@@ -9,8 +9,8 @@ const STATE_TONE: Record<string, "neutral" | "warn" | "up" | "down" | "accent"> 
 };
 
 export async function StateBadge({ state }: { state: string }) {
-  const t = await getTranslations("states");
-  return <Badge tone={STATE_TONE[state] ?? "neutral"}>{t.has(state) ? t(state) : state}</Badge>;
+  const [t, tw] = await Promise.all([getTranslations("states"), getTranslations("statusWords")]);
+  return <Badge tone={STATE_TONE[state] ?? "neutral"}>{t.has(state) ? t(state) : tw.has(state) ? tw(state) : state}</Badge>;
 }
 
 export async function ClassLabel({ cls }: { cls: string }) {
@@ -18,8 +18,15 @@ export async function ClassLabel({ cls }: { cls: string }) {
   return <>{t.has(cls) ? t(cls) : cls}</>;
 }
 
-export function GateBadge({ status }: { status: string }) {
-  return <Badge tone={status === "pass" ? "up" : status === "blocked" ? "down" : "neutral"}>{status}</Badge>;
+export async function GateBadge({ status }: { status: string }) {
+  const t = await getTranslations("statusWords");
+  return <Badge tone={status === "pass" ? "up" : status === "blocked" ? "down" : "neutral"}>{t.has(status) ? t(status) : status}</Badge>;
+}
+
+/** A gate block in words, the code kept in the tooltip. */
+export async function GateCodes({ issues }: { issues: { code: string; detail: string }[] }) {
+  const t = await getTranslations("gateCodes");
+  return <>{issues.map((b) => <Badge key={b.code} tone="down" title={`${b.code}: ${b.detail}`}>{t.has(b.code) ? t(b.code) : b.code}</Badge>)}</>;
 }
 
 export function GuardBadge({ status, label }: { status: string; label: string }) {

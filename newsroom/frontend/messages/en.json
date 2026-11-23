@@ -90,7 +90,9 @@
     "emergencyOn": "Activate emergency stop",
     "emergencyOff": "Lift emergency stop",
     "emergencyHint": "Stops all publication records and AI work; sync and detection keep running.",
-    "emergencyReason": "Reason"
+    "emergencyReason": "Reason",
+    "aiOn": "AI on",
+    "aiOff": "AI off"
   },
   "events": {
     "title": "News radar",
@@ -141,7 +143,9 @@
     "story": "Story",
     "trader": "Trader",
     "needsHuman": "Needs a human call (similar angles)",
-    "points": "pts"
+    "points": "pts",
+    "factDetail": "Source",
+    "kindCol": "Kind"
   },
   "classes": {
     "whale_open": "Large open",
@@ -233,7 +237,10 @@
     "noVersion": "No version yet",
     "whyNow": "Why now",
     "openQuestion": "Open question",
-    "ledeFacts": "Lede facts"
+    "ledeFacts": "Lede facts",
+    "promptV": "prompt v",
+    "factsVersion": "facts v{v}",
+    "factsVersionHint": "The facts version this was written from; newer facts mean re-checking"
   },
   "library": {
     "title": "Library",
@@ -261,7 +268,7 @@
     "audience": "Audience profile (JSON)",
     "timezone": "Time zone",
     "style": "Style",
-    "classes": "Allowed event types (comma-separated, empty = all)",
+    "classes": "Event types it takes",
     "minScore": "Minimum score",
     "budget": "Daily post budget",
     "gap": "Minimum gap (minutes)",
@@ -276,7 +283,12 @@
     "brand": "Brand",
     "platform": "Platform",
     "venues": "Venues covered (comma-separated: hyperliquid, okx; X accounts: hyperliquid)",
-    "linkInThread": "Add the full address and link as the thread's last post"
+    "linkInThread": "Add the full address and link as the thread's last post",
+    "styleHelp": "Used when no reporter style applies; reporters' defaults are under Settings → Rules",
+    "statusHelp": "Active: gets coverage; paused: trials only; retired: unused",
+    "authShort": "Authorization",
+    "classesHelp": "None ticked = every event type",
+    "authUntil": "authorized until"
   },
   "publications": {
     "title": "Publications",
@@ -427,7 +439,14 @@
     "bindTitle": "Bind a model to all roles",
     "bindHint": "Sets the same primary and fallback model on the roles; each gets a new version (old ones are kept). You can still change a single role later.",
     "onlyUnbound": "Only roles without a model",
-    "bind": "Bind"
+    "bind": "Bind",
+    "styleKey": "Style key",
+    "styleKeyHelp": "zh_ for Chinese, en_ for English, e.g. zh_my_style; saving the same key adds a version",
+    "styleLang": "Language",
+    "styleName": "Style name",
+    "styleStructure": "Structure (JSON, optional)",
+    "styleStructureHelp": "e.g. {\"lines\": \"3-5\", \"emoji\": \"0-2\", \"link_in_body\": true}",
+    "styleVersion": "v{v}"
   },
   "drafts": {
     "title": "AI drafts",
@@ -440,7 +459,11 @@
     "current": "Current version",
     "trial": "Trial",
     "open": "Open",
-    "refreshing": "Generating; this page refreshes itself"
+    "refreshing": "Generating; this page refreshes itself",
+    "colDraft": "Draft",
+    "colWriter": "Written by",
+    "colGuard": "Fact check",
+    "promptV": "prompt v"
   },
   "trial": {
     "title": "Quick trial",
@@ -596,7 +619,8 @@
     "bStyle": "Arm B style",
     "bModel": "Arm B model (for a model comparison)",
     "sameModel": "Same as above",
-    "armsTitle": "Arms"
+    "armsTitle": "Arms",
+    "modelNo": "model #{id}"
   },
   "rating": {
     "title": "Rate this version",
@@ -696,6 +720,668 @@
     "fact_checker": {
       "name": "Fact checker",
       "desc": "Runs when you click Fix: rewrites a draft to clear the checker's findings."
+    }
+  },
+  "guardCodes": {
+    "UNMATCHED_NUMBER": {
+      "what": "This number isn't in the facts",
+      "fix": "Use a figure from the facts (rounding is fine) or drop it"
+    },
+    "UNMATCHED_DATE": {
+      "what": "This date isn't in the facts",
+      "fix": "Drop the date or use one from the facts"
+    },
+    "UNMATCHED_TIME": {
+      "what": "This time isn't in the facts",
+      "fix": "No clock times: say 'just' / 'in the past few hours'"
+    },
+    "LIQ_NOT_IN_FACTS": {
+      "what": "Says liquidated, but there is no liquidation",
+      "fix": "Say 'near liquidation' or 'liquidation price' instead"
+    },
+    "LIQ_UNCONFIRMED": {
+      "what": "Unconfirmed liquidation without 'suspected'",
+      "fix": "Add 'suspected' in the same sentence"
+    },
+    "PNL_CALLED_REALIZED": {
+      "what": "Unrealized P&L called realized",
+      "fix": "Say 'unrealized' / 'on paper'"
+    },
+    "PNL_NOT_MARKED_UNREALIZED": {
+      "what": "Open P&L not marked unrealized",
+      "fix": "Say 'unrealized'"
+    },
+    "PNL_SIGN": {
+      "what": "Profit and loss the wrong way round",
+      "fix": "Positive in the facts is a gain, negative a loss"
+    },
+    "EXACT_TIME_CLAIM": {
+      "what": "Exact time claimed, only a window is known",
+      "fix": "Say 'between' or 'just'"
+    },
+    "OPEN_NOT_OBSERVED": {
+      "what": "Says 'just opened', but the position was first seen",
+      "fix": "Say 'holds' / 'spotted' / 'added'"
+    },
+    "NOTIONAL_AS_MARGIN": {
+      "what": "Position value written as his own money",
+      "fix": "Only cite margin as the estimate, with '~'"
+    },
+    "WHOLE_MARKET_CLAIM": {
+      "what": "Claims the whole market",
+      "fix": "Say 'among the wallets we track'"
+    },
+    "IDENTITY_CLAIM": {
+      "what": "Guesses who's behind it or implies inside info",
+      "fix": "Drop it; a rhetorical 'Does he know something??' is fine"
+    },
+    "ADVICE_OR_GUARANTEE": {
+      "what": "Trading advice or a guarantee",
+      "fix": "Remove it; stick to the facts"
+    },
+    "STYLE_PHRASE": {
+      "what": "A phrase on the style's avoid list",
+      "fix": "Rephrase (a warning, not a block)"
+    },
+    "RATIO_AS_INCREASE": {
+      "what": "'X times higher' is ambiguous",
+      "fix": "Write 'X times as large'"
+    },
+    "RECENCY_STALE": {
+      "what": "More than 3 hours since it was seen: not 'just' any more",
+      "fix": "Drop 'just' or regenerate"
+    },
+    "UNKNOWN_FACT": {
+      "what": "Cites facts not in the packet",
+      "fix": "Untick those facts"
+    },
+    "FACT_PACKET_SUPERSEDED": {
+      "what": "The facts changed after this version was written",
+      "fix": "Regenerate, or check and save again"
+    },
+    "TOO_LONG": {
+      "what": "Over the platform's length limit",
+      "fix": "Cut a line or a number, or make it a thread"
+    },
+    "NEAR_DUPLICATE": {
+      "what": "Too close to another draft",
+      "fix": "Rewrite from another angle"
+    },
+    "NEAR_DUPLICATE_WARN": {
+      "what": "Similar to another draft",
+      "fix": "Consider rewording (warning)"
+    }
+  },
+  "gateCodes": {
+    "SOURCE_STALE": "Data source is stale",
+    "TRADER_STALE": "This trader's data is stale",
+    "CONTRADICTED_BY_CONTEXT": "The position was gone when we checked (in and out fast?)",
+    "MISSING_PRICE": "No price on the observation",
+    "FIRST_SEEN_ONLY": "Already held when first seen: not an open",
+    "CONTEXT_UNAVAILABLE": "Trader details unavailable",
+    "SYNC_BACKLOG": "Sync backlog",
+    "INSUFFICIENT_SAMPLE": "Not enough sample",
+    "STALE_RESEARCH": "Research data is stale"
+  },
+  "constraintCodes": {
+    "OBSERVED_SAMPLE": "Our tracked sample, not the whole market",
+    "NO_IDENTITY": "Who's behind the wallet is unknown",
+    "NOTIONAL_NOT_MARGIN": "Position value is not his money",
+    "PNL_UNREALIZED": "Open P&L is unrealized",
+    "TIME_WINDOW_ONLY": "Only a time window is known",
+    "FIRST_SEEN_NOT_OPEN": "Already open when first seen",
+    "LIQ_SUSPECTED_ONLY": "Liquidation only suspected",
+    "PNL_ESTIMATED_FROM_MARK": "Closing P&L estimated from the mark",
+    "ACCOUNT_RATIO_UNAVAILABLE": "Account value unreliable",
+    "HISTORY_UNAVAILABLE": "No complete trade archive",
+    "OKX_LEAD_ASSETS": "OKX assets are the lead account only",
+    "CROWD_SAMPLE": "Crowd figures are a sample snapshot",
+    "HEDGE_POSSIBLE": "Big opposite positions: maybe a hedge",
+    "ARCHIVE_PARTIAL": "The trade archive covers part of his history",
+    "RADAR_SINCE": "Radar memory starts when we began tracking",
+    "LEADERBOARD_PNL": "Leaderboard P&L includes unrealized"
+  },
+  "factNames": {
+    "change__notional_usd": "Size of this change",
+    "change__size_before": "Size before",
+    "change__size_after": "Size after",
+    "change__mark_px": "Price when seen",
+    "change__window": "When (window)",
+    "change__time": "When",
+    "change__observations": "Observations",
+    "change__recency": "How long ago",
+    "episode__first_seen_at": "First seen",
+    "episode__opened_at": "Opened at",
+    "episode__opened_window": "Opened between",
+    "episode__added_notional_usd": "Added so far",
+    "episode__increases": "Adds",
+    "episode__peak_notional_usd": "Peak size",
+    "episode__path": "Position path",
+    "position__size": "Size",
+    "position__notional_usd": "Position value",
+    "position__mark_px": "Mark price",
+    "position__entry_px": "Avg entry",
+    "position__leverage": "Leverage",
+    "position__implied_margin_usd": "Est. margin",
+    "position__liq_px": "Liq. price",
+    "position__liq_distance": "To liquidation",
+    "position__unrealized_pnl_usd": "Unrealized P&L",
+    "position__observed_at": "Observed at",
+    "position__opened_at": "Opened at (venue)",
+    "trader__account_value_usd": "Account value",
+    "trader__position_to_account": "Position / account",
+    "trader__okx_lead_assets_usd": "OKX lead assets",
+    "trader__twr_90d": "90-day return",
+    "trader__max_drawdown_90d": "90-day max drawdown",
+    "trader__record": "Verified record",
+    "trader__venue_nickname": "Venue nickname",
+    "trader__alltime_pnl_usd": "All-time P&L (leaderboard)",
+    "trader__month_pnl_usd": "30-day P&L",
+    "trader__pnl_series": "All-time P&L curve",
+    "history__complete_cycles": "Complete cycles",
+    "history__winning_cycles": "Winning cycles",
+    "history__net_realized_usd": "Net, complete cycles",
+    "history__largest_prior_notional_usd": "Largest before",
+    "history__since": "Archive since",
+    "history__win_streak": "Win streak",
+    "contrast__archive_since": "Trade archive since",
+    "contrast__coin_cycles": "Cycles on this coin",
+    "contrast__coin_winning_cycles": "Winning cycles on this coin",
+    "contrast__largest_prior_cycle_usd": "Largest earlier cycle on this coin",
+    "contrast__vs_largest_prior_cycle": "× his largest earlier cycle",
+    "contrast__last_same_side_closed_at": "Last trade this way closed",
+    "contrast__last_same_side_net_usd": "Last trade this way, net",
+    "contrast__last_same_side_peak_usd": "Last trade this way, peak",
+    "contrast__last_same_side_held": "Last trade this way, held",
+    "radar__since": "Tracked since",
+    "radar__prior_positions": "Earlier positions on this coin",
+    "radar__prior_same_side": "…same side",
+    "radar__largest_prior_peak_usd": "Largest earlier peak",
+    "radar__vs_largest_prior_peak": "× largest earlier peak",
+    "book__positions": "Open positions",
+    "book__gross_notional_usd": "Total position value",
+    "book__share": "Share of his book",
+    "book__rank": "Rank in his book",
+    "book__opposite": "Big opposite positions",
+    "book__total_upl_usd": "Total unrealized P&L",
+    "book__opened_24h": "Positions opened in 24h",
+    "book__opened_24h_coins": "Coins opened in 24h",
+    "crowd__as_of": "Crowd snapshot at",
+    "crowd__sample_traders": "Wallets we track",
+    "crowd__same_side_traders": "Same-side wallets",
+    "crowd__same_side_notional_usd": "Same-side total",
+    "crowd__opposite_side_traders": "Opposite-side wallets",
+    "crowd__opposite_side_notional_usd": "Opposite-side total",
+    "crowd__share_of_same_side": "Share of same side",
+    "crowd__same_side_rank": "Rank on its side",
+    "crowd__timing_same_side": "Proven timers, same side",
+    "crowd__timing_opposite_side": "Proven timers, opposite",
+    "crowd__timing_same_side_notional_usd": "Proven timers' total, same side",
+    "crowd__timing_opposite_side_notional_usd": "Proven timers' total, opposite",
+    "close__entry_px": "Entry before close",
+    "close__liq_px": "Liq. price before close",
+    "close__leverage": "Leverage before close",
+    "close__pnl_estimate_usd": "Est. closing P&L",
+    "liquidation__status": "Liquidation status",
+    "liquidation__fill_time": "Liquidation fill",
+    "liquidation__closed_pnl_usd": "Realized at liquidation",
+    "liquidation__close_time": "Liquidated at",
+    "liquidation__realized_pnl_usd": "Realized at liquidation"
+  },
+  "jobKinds": {
+    "build_facts": "Build facts",
+    "eic_evaluate": "Editor-in-chief review",
+    "draft_generate": "AI draft",
+    "column_build": "Build column",
+    "card_render": "Render card",
+    "experiment_create": "Prepare experiment"
+  },
+  "jobStatus": {
+    "queued": "Queued",
+    "running": "Running",
+    "done": "Done",
+    "failed": "Failed, will retry",
+    "dead": "Failed",
+    "cancelled": "Cancelled"
+  },
+  "callPurposes": {
+    "eic_evaluate": "EIC review",
+    "draft_generate": "Draft",
+    "draft_polish": "Polish",
+    "draft_fix": "Fix",
+    "model_test": "Model test"
+  },
+  "callStatus": {
+    "ok": "OK",
+    "http_error": "HTTP error",
+    "timeout": "Timeout",
+    "truncated": "Truncated",
+    "schema_invalid": "Wrong format",
+    "semantic_invalid": "Failed the rules, sent back",
+    "budget_exceeded": "Over budget"
+  },
+  "sources": {
+    "eic_ai": "AI editor-in-chief",
+    "editor": "Editor",
+    "trial": "Trial"
+  },
+  "statusWords": {
+    "active": "Active",
+    "paused": "Paused",
+    "retired": "Retired",
+    "pending": "Not set",
+    "authorized": "Authorized",
+    "expired": "Expired",
+    "revoked": "Revoked",
+    "pass": "Pass",
+    "warn": "Warning",
+    "fail": "Fail",
+    "blocked": "Blocked",
+    "planned": "Planned",
+    "claimed": "Claimed by RPA"
+  },
+  "protocols": {
+    "openai_chat": "OpenAI-compatible (chat/completions)",
+    "openai_responses": "OpenAI Responses",
+    "anthropic_messages": "Anthropic Messages",
+    "json_object": "JSON mode (most models)",
+    "json_schema": "Strict JSON schema",
+    "none": "None (asked in the prompt)"
+  },
+  "userRoles": {
+    "admin": "Admin",
+    "editor_in_chief": "Editor-in-chief",
+    "editor": "Editor",
+    "reporter": "Reporter",
+    "reviewer": "Reviewer",
+    "account_operator": "Account operator",
+    "analyst": "Analyst (read-only)"
+  },
+  "eicWords": {
+    "cover": "Cover",
+    "hold": "Hold",
+    "no_coverage": "Skip",
+    "single_post": "Single post",
+    "thread": "Thread",
+    "card_post": "Card post",
+    "now": "Now",
+    "within_2h": "Within 2h",
+    "today": "Today",
+    "identity_risk": "Identity risk",
+    "stale_risk": "Stale risk",
+    "liquidation_unconfirmed": "Liquidation unconfirmed",
+    "low_sample": "Low sample",
+    "duplicate_risk": "Duplicate risk",
+    "other": "Other"
+  },
+  "guardParts": {
+    "headline": "Headline",
+    "body": "Body",
+    "facts_used": "Facts used",
+    "thread": "Thread post"
+  },
+  "auditGroups": {
+    "account": "Account",
+    "ai": "AI",
+    "article": "Article",
+    "assignment": "Assignment",
+    "auth": "Sign-in",
+    "column": "Column",
+    "correction": "Correction",
+    "eic": "EIC",
+    "emergency_stop": "Emergency stop",
+    "event": "Event",
+    "experiment": "Experiment",
+    "plan": "Schedule",
+    "publication": "Publication",
+    "rpa": "RPA",
+    "settings": "Settings",
+    "style": "Style",
+    "user": "User"
+  },
+  "auditActions": {
+    "create": "created",
+    "update": "updated",
+    "permissions": "permissions",
+    "authorization_expired": "authorization expired",
+    "agent_bind": "models bound",
+    "agent_prompt_switch": "prompt switched",
+    "agent_version": "role changed",
+    "model_create": "model added",
+    "model_test": "model tested",
+    "model_update": "model changed",
+    "prompt_delete": "prompt deleted",
+    "prompt_version": "new prompt version",
+    "accept_version": "version accepted",
+    "approve": "approved",
+    "compare_models": "compared models",
+    "copy_text": "copied text",
+    "kill": "killed",
+    "rate": "rated",
+    "request_changes": "changes requested",
+    "restore": "restored",
+    "submit": "submitted",
+    "trash": "trashed",
+    "trial": "trial",
+    "version": "version saved",
+    "accept": "accepted",
+    "reject": "rejected",
+    "login": "signed in",
+    "password_change": "password changed",
+    "run": "ran",
+    "handle": "handled",
+    "evaluate": "evaluated",
+    "evaluate_requested": "review requested",
+    "state": "state changed",
+    "request": "requested",
+    "vote": "voted",
+    "cancel": "cancelled",
+    "record": "recorded",
+    "retract": "retracted",
+    "claim": "claimed",
+    "failed": "failed",
+    "published": "published",
+    "token_rotated": "token rotated",
+    "create_admin": "admin created",
+    "reset_password": "password reset"
+  },
+  "settingFields": {
+    "ai__enabled": {
+      "name": "AI on",
+      "desc": "Off pauses every AI draft and review"
+    },
+    "ai__auto_eic": {
+      "name": "Automatic coverage",
+      "desc": "High-scoring events go to the AI editor-in-chief"
+    },
+    "detect__candidate_score": {
+      "name": "Candidate score",
+      "desc": "Events below this are dismissed"
+    },
+    "detect__auto_eic_score": {
+      "name": "Auto-review score",
+      "desc": "Only events above this go to the EIC"
+    },
+    "budgets__global_daily_usd": {
+      "name": "Daily AI budget (USD)",
+      "desc": "Needs model prices to work"
+    },
+    "review__four_eyes": {
+      "name": "Four eyes",
+      "desc": "Authors can't approve their own drafts"
+    },
+    "desk__language": {
+      "name": "Desk language",
+      "desc": "Language of notes written for editors"
+    },
+    "detect__open_usd": {
+      "name": "Big open threshold (USD, per venue)",
+      "desc": "Opens above this are news"
+    },
+    "detect__add_usd": {
+      "name": "Big add threshold",
+      "desc": "Adds above this are news"
+    },
+    "detect__close_usd": {
+      "name": "Big close threshold",
+      "desc": "Closes above this are news"
+    },
+    "detect__underwater_add_usd": {
+      "name": "Underwater add threshold",
+      "desc": ""
+    },
+    "detect__liq_usd": {
+      "name": "Liquidation threshold",
+      "desc": ""
+    },
+    "detect__notable_usd": {
+      "name": "Proven trader threshold",
+      "desc": ""
+    },
+    "detect__tiers_usd": {
+      "name": "Size tiers",
+      "desc": "A follow-up needs a new tier"
+    },
+    "detect__near_liq_min_usd": {
+      "name": "Near-liquidation minimum size",
+      "desc": ""
+    },
+    "detect__near_liq_bands": {
+      "name": "Near-liquidation bands",
+      "desc": "0.03 = 3%"
+    },
+    "detect__refresh_hours": {
+      "name": "Refresh window (hours)",
+      "desc": ""
+    },
+    "detect__max_event_age_hours": {
+      "name": "Max event age (hours)",
+      "desc": ""
+    },
+    "gate__max_backlog": {
+      "name": "Max sync backlog",
+      "desc": ""
+    },
+    "gate__max_sync_age_minutes": {
+      "name": "Max sync age (min)",
+      "desc": ""
+    },
+    "gate__max_health_age_minutes": {
+      "name": "Max health age (min)",
+      "desc": ""
+    },
+    "budgets__agent_daily_usd": {
+      "name": "Daily budget per role",
+      "desc": ""
+    },
+    "guard__allow_numbers": {
+      "name": "Allowed number phrases",
+      "desc": "e.g. 24h, 7d"
+    },
+    "guard__duplicate_block": {
+      "name": "Duplicate block threshold",
+      "desc": ""
+    },
+    "guard__duplicate_warn": {
+      "name": "Duplicate warning threshold",
+      "desc": ""
+    },
+    "guard__duplicate_hours": {
+      "name": "Duplicate window (hours)",
+      "desc": ""
+    },
+    "columns__disabled": {
+      "name": "Disabled columns",
+      "desc": "Column keys, comma-separated"
+    }
+  },
+  "scoreParts": {
+    "size_abs": "Size",
+    "size_vs_account": "Size vs account",
+    "size_vs_own_history": "Size vs his history",
+    "trader_record": "Trader record",
+    "risk": "Risk",
+    "market_relevance": "Coin relevance",
+    "continuity": "Story continuity",
+    "penalties": "Penalties"
+  },
+  "episodeFields": {
+    "start_kind": "How it started",
+    "start_precision": "Start precision",
+    "start_from": "Earliest start",
+    "start_to": "Latest start",
+    "status": "Status",
+    "peak_notional": "Peak size",
+    "added_notional": "Added so far",
+    "n_increases": "Adds"
+  },
+  "obsKinds": {
+    "open": "Open",
+    "increase": "Add",
+    "decrease": "Reduce",
+    "close": "Close",
+    "flip": "Flip",
+    "first_seen": "First seen",
+    "reconstructed": "Reconstructed",
+    "exact": "Exact",
+    "window": "Window",
+    "unknown": "Unknown",
+    "closed": "Closed",
+    "flipped": "Flipped"
+  },
+  "modelForm": {
+    "name": {
+      "name": "Name",
+      "help": "Your label for it, e.g. deepseek-flash"
+    },
+    "protocol": {
+      "name": "API format",
+      "help": "Most providers: OpenAI-compatible; Claude's own API: Anthropic"
+    },
+    "base_url": {
+      "name": "Base URL",
+      "help": "From the provider's docs, e.g. https://api.deepseek.com"
+    },
+    "model": {
+      "name": "Model name",
+      "help": "From the provider's docs"
+    },
+    "api_key": {
+      "name": "API key",
+      "help": "Stored encrypted and never shown again; leave empty to keep it"
+    },
+    "auth_header": {
+      "name": "Auth header",
+      "help": "Usually bearer; Anthropic's API uses x-api-key"
+    },
+    "anthropic_version": {
+      "name": "anthropic-version",
+      "help": "Anthropic API only; keep the default"
+    },
+    "json_mode": {
+      "name": "JSON output",
+      "help": "Most models: JSON mode"
+    },
+    "timeout_s": {
+      "name": "Timeout (s)",
+      "help": "How long one call may take"
+    },
+    "max_retries": {
+      "name": "Retries",
+      "help": "On network errors or rate limits"
+    },
+    "max_concurrency": {
+      "name": "Concurrency",
+      "help": "Calls at the same time"
+    },
+    "input_usd_per_mtok": {
+      "name": "Input price (USD / 1M tokens)",
+      "help": "Needed for costs and budgets"
+    },
+    "output_usd_per_mtok": {
+      "name": "Output price (USD / 1M tokens)",
+      "help": "Needed for costs and budgets"
+    },
+    "extra_body": {
+      "name": "Extra body (JSON)",
+      "help": "Added to every request as is"
+    },
+    "enabled": {
+      "name": "Enabled",
+      "help": "Off: no role calls this model"
+    },
+    "edit": "Edit this model",
+    "noKey": "no key",
+    "testDetail": "Last test details",
+    "lastTestOk": "passed",
+    "lastTestFail": "failed",
+    "lastTestNone": "not tested"
+  },
+  "usersX": {
+    "hint": "Roles decide what someone can do: admins run settings, editors-in-chief every account and publishing, editors write and review, reviewers review, account operators record posts, analysts read.",
+    "user": "User",
+    "lastLogin": "Last sign-in",
+    "yes": "Active",
+    "no": "Inactive",
+    "edit": "Edit",
+    "resetHelp": "Resets this user's password; they change it at next sign-in",
+    "username": "Username",
+    "displayName": "Display name",
+    "password": "Initial password",
+    "passwordHelp": "At least 10 characters; changed at first sign-in",
+    "actor": {
+      "user": "User",
+      "ai": "AI",
+      "system": "System"
+    }
+  },
+  "rulesX": {
+    "aiTitle": "AI switches",
+    "aiHint": "Off pauses every AI draft and review; queued work waits.",
+    "stylesTitle": "Default style per reporter",
+    "stylesHint": "The voice each reporter writes in (Chinese accounts get the Chinese version, English ones the English). A single assignment or trial can pick another.",
+    "scoresTitle": "Coverage thresholds",
+    "scoresHint": "Events are scored 0–100 on size, risk, record and more.",
+    "deskTitle": "Desk",
+    "advanced": "Advanced (detection thresholds, data gate, budget details, guard)",
+    "advancedHint": "Rarely needs changes; know what a field does first.",
+    "section": {
+      "detect": "Detection",
+      "gate": "Data gate",
+      "budgets": "Budget details",
+      "guard": "Fact check",
+      "columns": "Columns"
+    }
+  },
+  "sourcesX": {
+    "reachable": "AlphaScope reachable",
+    "yes": "yes",
+    "no": "no",
+    "radar": "Radar",
+    "backlog": "Backlog",
+    "lastSync": "Last good sync",
+    "lastOk": "last OK",
+    "words": {
+      "ok": "OK",
+      "lagging": "Lagging",
+      "stale": "Stale",
+      "empty": "No data",
+      "success": "Success",
+      "partial": "Partial",
+      "failed": "Failed",
+      "error": "Error",
+      "incremental": "Incremental",
+      "replay": "Replay",
+      "backfill": "Backfill"
+    }
+  },
+  "onboarding": {
+    "title": "Getting started",
+    "intro": "Do these six steps in order and the system finds news and drafts posts on its own; you review and publish. This box disappears when you're done.",
+    "go": "Go",
+    "model": {
+      "title": "Add an AI model and test it",
+      "how": "Settings → AI models: pick a preset, add the key, click Test"
+    },
+    "bind": {
+      "title": "Bind the AI roles to the model",
+      "how": "AI roles: 'Bind a model to all roles'"
+    },
+    "account": {
+      "title": "Turn on at least one account",
+      "how": "Accounts: set the status to Active (authorization is optional)"
+    },
+    "prompts": {
+      "title": "Put the reporters on the newest prompts",
+      "how": "AI roles: 'Every role to its newest version'"
+    },
+    "trial": {
+      "title": "Try a draft",
+      "how": "Open an event on the radar and use Quick trial with a few styles"
+    },
+    "publish": {
+      "title": "Review and record the first post",
+      "how": "Library: submit, approve, post it, then Record publication in the editor"
     }
   }
 }

@@ -24,6 +24,8 @@ sudo newsroom/start.sh install
 
 ## 4. 首次配置（网页）
 
+驾驶舱顶部有「上手清单」，按顺序列出下面这些步骤、哪步已完成、点哪里去做；全部完成后自动收起。后台各处显示中文名（角色、检查问题、事实字段、任务、操作记录等），原始代码放在鼠标悬停提示里；表单字段旁的「?」是说明。
+
 1. 系统管理 → AI 模型：选预设或自定义，填密钥和单价（单价为 0 时费用和每日预算都不会生效），保存后点「测试模型」。
    - DeepSeek 官方：地址 `https://api.deepseek.com`，模型 `deepseek-flash` 或 `deepseek-v4-pro`；extra body 填 `{"thinking": {"type": "disabled"}}` 关闭思考（DeepSeek 默认开启思考，思考内容占用输出上限，稿件会被截断）。Anthropic 格式的地址是 `https://api.deepseek.com/anthropic`。
    - aicodemirror：地址 `https://api.aicodemirror.ai/v1`（程序会自己拼 `/chat/completions` 或 `/responses`），模型名用它文档里列出的（例如 `gpt-6-astra`）。返回「无可用渠道」表示模型名不受支持。

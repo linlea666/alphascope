@@ -366,8 +366,8 @@ def switch_prompt_version(body: PromptSwitchIn, s: Session = Depends(get_session
         else:
             _agent_version(s, cur, user.id, prompt_version=want)
             changed.append(key)
-    audit.record(s, "ai.agent_prompt_switch", "ai_agent", ",".join(changed) or "-", user_id=user.id,
-                 after={**body.model_dump(), "changed": changed})
+    audit.record(s, "ai.agent_prompt_switch", "ai_agent", f"{len(changed)} roles", user_id=user.id,
+                 after={**body.model_dump(), "changed": changed})  # the roles are listed in `after`
     s.commit()
     return {"changed": changed, "skipped": skipped}
 
@@ -414,6 +414,26 @@ def ai_readiness(s: Session) -> dict:
 @router.get("/ai/status")
 def ai_status(s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
     return ai_readiness(s)
+
+
+@router.get("/onboarding")
+def onboarding(s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
+    """The getting-started checklist, each step done or not, computed from the data rather than remembered."""
+    ready = ai_readiness(s)
+    one_of = lambda sql: bool(s.execute(text(sql)).scalar())  # noqa: E731
+    behind = s.execute(text("""
+        SELECT count(*) FROM ai_agent_profile a WHERE a.active AND a.agent_key LIKE 'reporter%'
+          AND a.prompt_version < (SELECT max(version) FROM prompt_template p WHERE p.key = a.prompt_key)""")).scalar()
+    steps = [
+        ("model", bool(ready["tested_ok"]), "ai"),
+        ("bind", bool(ready["models"]) and not ready["core_unbound"], "agents"),
+        ("account", one_of("SELECT 1 FROM editorial_account WHERE status = 'active' LIMIT 1"), None),
+        ("prompts", behind == 0, "agents"),
+        ("trial", one_of("SELECT 1 FROM article_version WHERE origin = 'ai' LIMIT 1"), None),
+        ("publish", one_of("SELECT 1 FROM publication_record LIMIT 1"), None),
+    ]
+    return {"steps": [{"key": k, "done": done, "tab": tab} for k, done, tab in steps],
+            "done": all(d for _, d, _ in steps)}
 
 
 @router.get("/ai/prompts")

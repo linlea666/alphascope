@@ -37,7 +37,7 @@ export default async function ResultsPage({ params }: { params: Promise<{ name: 
           <div className="mb-3 space-y-1 text-xs text-muted">
             {(["a", "b"] as const).map((k) => { const c = r.arms_config[k]; return (
               <div key={k}>{k === "a" ? t("armA") : t("armB")}：v{c.prompt_version}{c.variant ? ` (${c.variant})` : ""}
-                {" · "}{c.style_key ?? t("styleDefault")}{c.model_config_id ? ` · model #${c.model_config_id}` : ""}</div>); })}
+                {" · "}{c.style_key ?? t("styleDefault")}{c.model_config_id ? ` · ${t("modelNo", { id: c.model_config_id })}` : ""}</div>); })}
           </div>
           <table className="w-full text-sm">
             <thead><tr><th className={th} /><th className={th}>{t("armA")}</th><th className={th}>{t("armB")}</th></tr></thead>

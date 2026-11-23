@@ -6,6 +6,7 @@ import { Badge, Empty, PageHeader, Panel, button, input, td, th } from "@/compon
 import { Link } from "@/i18n/routing";
 import { nrGet } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
+import { named, parsePromptRef, word } from "@/lib/glossary";
 
 type V = { id: number; article_id: number; version_no: number; model: string | null; agent_key: string | null; prompt_ref: string | null;
   headline: string; body: string; guard_status: string; length: number | null; created_at: string; is_current: boolean;
@@ -17,7 +18,8 @@ type D = { versions: V[]; failures: { created_at: string; purpose: string; model
 
 export default async function DraftsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const [t, locale] = await Promise.all([getTranslations("drafts"), getLocale()]);
+  const [t, locale, tr, tst, tj, tp, tcs] = await Promise.all([getTranslations("drafts"), getLocale(), getTranslations("roles"),
+    getTranslations("statusWords"), getTranslations("jobKinds"), getTranslations("callPurposes"), getTranslations("callStatus")]);
   const d = await nrGet<D>("drafts/ai", { days: sp.days ?? 7, model: sp.model, guard: sp.guard });
   const waiting = d.waiting.reduce((n, w) => n + Number(w.n), 0);
   return (
@@ -33,7 +35,8 @@ export default async function DraftsPage({ searchParams }: { searchParams: Promi
           {d.models.map((m) => <option key={m.model} value={m.model}>{m.model}</option>)}
         </select>
         <select name="guard" defaultValue={sp.guard ?? ""} className={`${input} w-40`}>
-          <option value="">{t("allGuard")}</option><option value="pass">pass</option><option value="warn">warn</option><option value="fail">fail</option>
+          <option value="">{t("allGuard")}</option>
+          {["pass", "warn", "fail"].map((g) => <option key={g} value={g}>{word(tst, g)}</option>)}
         </select>
         <button className={button}>OK</button>
       </form>
@@ -42,7 +45,7 @@ export default async function DraftsPage({ searchParams }: { searchParams: Promi
           <Panel title={`${d.versions.length}`}>
             {d.versions.length === 0 ? <Empty>—</Empty> : (
               <table className="w-full text-sm">
-                <thead><tr><th className={th}>#</th><th className={th}>draft</th><th className={th}>model</th><th className={th}>guard</th><th className={th} /></tr></thead>
+                <thead><tr><th className={th}>#</th><th className={th}>{t("colDraft")}</th><th className={th}>{t("colWriter")}</th><th className={th}>{t("colGuard")}</th><th className={th} /></tr></thead>
                 <tbody>
                   {d.versions.map((v) => (
                     <tr key={v.id} className={`border-b border-border/60 align-top ${v.deleted ? "opacity-50" : ""}`}>
@@ -67,9 +70,10 @@ export default async function DraftsPage({ searchParams }: { searchParams: Promi
                           </a>
                         )}
                       </td>
-                      <td className={`${td} text-xs`}>{v.model}<div className="text-muted">{v.agent_key}</div>
+                      <td className={`${td} text-xs`}>{named(tr, v.agent_key).name}<div className="text-muted">{v.model}
+                        {parsePromptRef(v.prompt_ref) && ` · ${t("promptV")}${parsePromptRef(v.prompt_ref)!.version}`}</div>
                         <div className="text-muted">${Number(v.cost_usd ?? 0).toFixed(4)} · {v.latency_ms ?? "—"}ms</div></td>
-                      <td className={td}><Badge tone={v.guard_status === "pass" ? "up" : v.guard_status === "warn" ? "warn" : "down"}>{v.guard_status}</Badge>
+                      <td className={td}><Badge tone={v.guard_status === "pass" ? "up" : v.guard_status === "warn" ? "warn" : "down"}>{word(tst, v.guard_status)}</Badge>
                         <div className="text-xs text-muted">{v.length ?? "—"}</div></td>
                       <td className={td}><Link className="text-xs text-accent" href={`/desk/${v.article_id}`}>{t("open")}</Link></td>
                     </tr>
@@ -82,13 +86,13 @@ export default async function DraftsPage({ searchParams }: { searchParams: Promi
         <div className="space-y-5">
           <Panel title={t("waiting")}>
             {d.waiting.length === 0 ? <Empty>—</Empty> : d.waiting.map((w) => (
-              <div key={w.kind} className="text-sm">{w.kind}: <b>{w.n}</b>{w.last_error && <div className="text-xs text-warn">{w.last_error}</div>}</div>
+              <div key={w.kind} className="text-sm">{word(tj, w.kind)}: <b>{w.n}</b>{w.last_error && <div className="text-xs text-warn">{w.last_error}</div>}</div>
             ))}
           </Panel>
           <Panel title={t("failures")}>
             {d.failures.length === 0 ? <Empty>—</Empty> : d.failures.map((f, i) => (
               <div key={i} className="mb-2 border-b border-border/60 pb-2 text-xs">
-                <span className="text-muted">{fmtTime(f.created_at, locale)}</span> {f.purpose} · {f.model} · <Badge tone="down">{f.status}</Badge>
+                <span className="text-muted">{fmtTime(f.created_at, locale)}</span> {word(tp, f.purpose)} · {f.model} · <Badge tone="down">{word(tcs, f.status)}</Badge>
                 {f.article_id && <> <Link className="text-accent" href={`/desk/${f.article_id}`}>#{f.article_id}</Link></>}
                 <div className="text-down">{f.error}</div>
               </div>

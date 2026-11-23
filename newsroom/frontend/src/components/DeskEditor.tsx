@@ -1,14 +1,16 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { bff } from "@/lib/bff";
+import { factName, named, parsePromptRef, partName, word } from "@/lib/glossary";
 import type { Fact, GuardReport, Version } from "@/lib/types";
 import { DiffView } from "./AiStudio";
 import { Badge, button, input, primary } from "./ui";
 
 function Highlighted({ text, report, part }: { text: string; report: GuardReport | null; part: string }) {
+  const tg = useTranslations("guardCodes");
   const spans = (report?.findings ?? []).filter((f) => f.part === part && f.span).sort((a, b) => a.span![0] - b.span![0]);
   if (!spans.length) return null;
   const out: React.ReactNode[] = [];
@@ -17,7 +19,7 @@ function Highlighted({ text, report, part }: { text: string; report: GuardReport
     const [a, b] = f.span!;
     if (a < at) return;
     out.push(text.slice(at, a));
-    out.push(<mark key={i} title={`${f.code}: ${f.detail}`} className={f.severity === "fail" ? "bg-down/30 text-text" : "bg-warn/30 text-text"}>{text.slice(a, b)}</mark>);
+    out.push(<mark key={i} title={tg.has(`${f.code}.what`) ? `${tg(`${f.code}.what`)}：${tg(`${f.code}.fix`)}` : `${f.code}: ${f.detail}`} className={f.severity === "fail" ? "bg-down/30 text-text" : "bg-warn/30 text-text"}>{text.slice(a, b)}</mark>);
     at = b;
   });
   out.push(text.slice(at));
@@ -26,6 +28,8 @@ function Highlighted({ text, report, part }: { text: string; report: GuardReport
 
 export function GuardList({ report }: { report: GuardReport | null }) {
   const t = useTranslations("desk");
+  const tg = useTranslations("guardCodes");
+  const tp = useTranslations("guardParts");
   if (!report) return null;
   return (
     <div className="space-y-1 text-xs">
@@ -35,11 +39,15 @@ export function GuardList({ report }: { report: GuardReport | null }) {
         </Badge>
         <span className="text-muted">{t("xLength")} {report.x_length}/{report.length_limit ?? 280}</span>
       </div>
-      {report.findings.map((f, i) => (
-        <div key={i} className={f.severity === "fail" ? "text-down" : "text-warn"}>
-          [{f.part}] <b>{f.code}</b> {f.text && <code>“{f.text}”</code>} — {f.detail}
-        </div>
-      ))}
+      {report.findings.map((f, i) => {
+        const known = tg.has(`${f.code}.what`);
+        return (
+          <div key={i} className={f.severity === "fail" ? "text-down" : "text-warn"}>
+            [{partName(tp, f.part)}] <b>{known ? tg(`${f.code}.what`) : f.code}</b> {f.text && <code>“{f.text}”</code>}
+            {known ? <span className="text-muted"> — {tg(`${f.code}.fix`)}</span> : <> — {f.detail}</>}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -54,7 +62,17 @@ export function DeskEditor({ articleId, status, current, versions, facts, curren
   editable: boolean;
 }) {
   const t = useTranslations("desk");
+  const tf = useTranslations("factNames");
+  const tr = useTranslations("roles");
+  const tst = useTranslations("statusWords");
+  const locale = useLocale() as "zh" | "en";
   const router = useRouter();
+  const origin = (v: Version) => {
+    if (v.origin !== "ai") return `${t("human")} · ${v.author ?? ""}`;
+    const ref = parsePromptRef(v.prompt_ref);
+    return [t("ai"), named(tr, v.agent_key ?? ref?.role).name, v.model, ref ? `${t("promptV")}${ref.version}${ref.language ? ` (${ref.language})` : ""}` : null]
+      .filter(Boolean).join(" · ");
+  };
   const [headline, setHeadline] = useState(current?.headline ?? "");
   const [body, setBody] = useState(current?.body ?? "");
   const [thread, setThread] = useState((current?.thread ?? []).join("\n"));
@@ -100,7 +118,7 @@ export function DeskEditor({ articleId, status, current, versions, facts, curren
             <label key={f.id} className="flex items-center gap-1">
               <input type="checkbox" checked={used.includes(f.id)} disabled={!editable}
                 onChange={(e) => setUsed(e.target.checked ? [...used, f.id] : used.filter((x) => x !== f.id))} />
-              <span className="font-mono">{f.id}</span>
+              <span title={f.id}>{factName(tf, f.id, f.label)} <span className="text-muted">{(f.display[locale] ?? f.display.zh)?.[0] ?? ""}</span></span>
             </label>
           ))}
         </div>
@@ -119,14 +137,14 @@ export function DeskEditor({ articleId, status, current, versions, facts, curren
       <GuardList report={report} />
       {current && (
         <div className="grid gap-1 rounded border border-border p-2 text-xs text-muted">
-          <div>{t("origin")}: {current.origin === "ai" ? `${t("ai")} · ${current.model ?? ""} · ${current.prompt_ref ?? ""}` : `${t("human")} · ${current.author ?? ""}`}</div>
+          <div>{t("origin")}: {origin(current)}</div>
           {current.angle && <div>{t("angle")}: {current.angle}</div>}
           {current.added_value && <div>{t("addedValue")}: {current.added_value}</div>}
           {current.difference_from_others && <div>{t("difference")}: {current.difference_from_others}</div>}
           {current.why_shareable && <div>{t("whyShareable")}: {current.why_shareable}</div>}
           {current.why_now && <div>{t("whyNow")}: {current.why_now}</div>}
           {current.open_question && <div>{t("openQuestion")}: {current.open_question}</div>}
-          {(current.lede_fact_ids?.length ?? 0) > 0 && <div>{t("ledeFacts")}: {current.lede_fact_ids!.join(", ")}</div>}
+          {(current.lede_fact_ids?.length ?? 0) > 0 && <div>{t("ledeFacts")}: {current.lede_fact_ids!.map((id) => factName(tf, id)).join("、")}</div>}
           {current.card_asset_id && (
             <a href={`/api/bff/assets/${current.card_asset_id}/file`} target="_blank" rel="noreferrer">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -148,9 +166,9 @@ export function DeskEditor({ articleId, status, current, versions, facts, curren
         {versions.map((v) => (
           <div key={v.id} className="flex flex-wrap items-center gap-2 border-b border-border/60 py-1 text-xs">
             <span>v{v.version_no}</span>
-            <Badge>{v.origin}</Badge>
-            <Badge tone={v.guard_status === "pass" ? "up" : v.guard_status === "warn" ? "warn" : "down"}>{v.guard_status}</Badge>
-            <span className="text-muted">fp v{v.fact_packet_version}</span>
+            <Badge>{v.origin === "ai" ? named(tr, v.agent_key).name || t("ai") : t("human")}</Badge>
+            <Badge tone={v.guard_status === "pass" ? "up" : v.guard_status === "warn" ? "warn" : "down"}>{word(tst, v.guard_status)}</Badge>
+            <span className="text-muted" title={t("factsVersionHint")}>{t("factsVersion", { v: v.fact_packet_version })}</span>
             {current?.id === v.id ? <Badge tone="accent">{t("current")}</Badge> : editable && (
               <button className="text-accent" onClick={() => run(async () => { await bff(`articles/${articleId}/accept-version`, "POST", { version_id: v.id }); router.refresh(); })}>{t("useVersion")}</button>
             )}

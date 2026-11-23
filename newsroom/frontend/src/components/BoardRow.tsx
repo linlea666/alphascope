@@ -7,7 +7,7 @@ import { bff } from "@/lib/bff";
 import { button, input } from "./ui";
 
 /** Claim / release, due time, reviewer and reporter role of one assignment. */
-export function BoardControls({ id, claimed, roles }: { id: number; claimed: boolean; roles: string[] }) {
+export function BoardControls({ id, claimed, roles }: { id: number; claimed: boolean; roles: { key: string; name: string }[] }) {
   const t = useTranslations("board");
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +27,7 @@ export function BoardControls({ id, claimed, roles }: { id: number; claimed: boo
         onChange={(e) => e.target.value && patch({ due_at: new Date(e.target.value).toISOString() })} />
       <select className={`${input} w-40`} defaultValue="" onChange={(e) => e.target.value && patch({ agent_key: e.target.value })}>
         <option value="">{t("reporter")}</option>
-        {roles.map((r) => <option key={r} value={r}>{r}</option>)}
+        {roles.map((r) => <option key={r.key} value={r.key}>{r.name}</option>)}
       </select>
       <input className={`${input} w-24`} placeholder={t("reviewer")}
         onKeyDown={(e) => e.key === "Enter" && patch({ reviewer_id: Number((e.target as HTMLInputElement).value) })} />

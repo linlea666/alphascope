@@ -1,6 +1,7 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { Action } from "@/components/Action";
 import { AiReadiness } from "@/components/AiReadiness";
+import { Onboarding } from "@/components/Onboarding";
 import { ClassLabel, StateBadge } from "@/components/badges";
 import { Badge, Empty, PageHeader, Panel, Stat, td, th } from "@/components/ui";
 import { Link } from "@/i18n/routing";
@@ -20,6 +21,7 @@ type Dashboard = {
 };
 
 export default async function DashboardPage() {
+  const tw = await getTranslations("statusWords");
   const [t, ts, locale, d] = await Promise.all([getTranslations("dashboard"), getTranslations("states"), getLocale(),
     nrGet<Dashboard>("dashboard")]);
   return (
@@ -32,12 +34,13 @@ export default async function DashboardPage() {
             tone="danger" confirm={t("emergencyHint")}>{t("emergencyOn")}</Action>
         )}
       </PageHeader>
+      <Onboarding />
       <AiReadiness />
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Stat label={t("source")} value={d.source.reachable ? t("reachable") : t("unreachable")} sub={d.source.health_error ?? undefined} />
         <Stat label={t("radar")} value={`HL ${d.source.radar.hyperliquid} · OKX ${d.source.radar.okx}`} />
         <Stat label={t("backlog")} value={d.source.backlog ?? "—"} sub={`${t("lastSync")} ${fmtTime(d.source.last_sync_ok_at, locale)}`} />
-        <Stat label={t("costToday")} value={`$${d.ai.cost_today.toFixed(2)} / $${d.ai.budget_today}`} sub={d.ai.enabled ? "AI on" : "AI off"} />
+        <Stat label={t("costToday")} value={`$${d.ai.cost_today.toFixed(2)} / $${d.ai.budget_today}`} sub={d.ai.enabled ? t("aiOn") : t("aiOff")} />
         <Stat label={t("queued")} value={d.ai.queued} sub={`${t("failed")}: ${d.ai.failed_24h}`} />
         <Stat label={t("corrections")} value={d.open_corrections} />
       </div>
@@ -94,7 +97,7 @@ export default async function DashboardPage() {
                 <tr key={a.id} className="border-b border-border/60">
                   <td className={td}>{a.handle}</td>
                   <td className={`${td} num`}>{a.published_today}/{a.daily_post_budget}</td>
-                  <td className={td}><StateBadge state={a.status} /> <Badge tone={a.authorization_status === "authorized" ? "up" : ["revoked", "expired"].includes(a.authorization_status) ? "down" : "neutral"}>{a.authorization_status}</Badge></td>
+                  <td className={td}><StateBadge state={a.status} /> <Badge tone={a.authorization_status === "authorized" ? "up" : ["revoked", "expired"].includes(a.authorization_status) ? "down" : "neutral"}>{tw(a.authorization_status)}</Badge></td>
                 </tr>
               ))}
             </tbody>

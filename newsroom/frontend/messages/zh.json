@@ -90,7 +90,9 @@
     "emergencyOn": "开启紧急停止",
     "emergencyOff": "解除紧急停止",
     "emergencyHint": "停止一切发布记录与 AI 任务；数据同步与检测继续运行。",
-    "emergencyReason": "停止原因"
+    "emergencyReason": "停止原因",
+    "aiOn": "AI 已开启",
+    "aiOff": "AI 已关闭"
   },
   "events": {
     "title": "新闻雷达",
@@ -141,7 +143,9 @@
     "story": "所属故事",
     "trader": "交易员",
     "needsHuman": "需人工判断（角度接近）",
-    "points": "分"
+    "points": "分",
+    "factDetail": "查看来源",
+    "kindCol": "类型"
   },
   "classes": {
     "whale_open": "大额开仓",
@@ -233,7 +237,10 @@
     "noVersion": "还没有版本",
     "whyNow": "为什么现在发",
     "openQuestion": "待跟进的问题",
-    "ledeFacts": "开头依据的事实"
+    "ledeFacts": "开头依据的事实",
+    "promptV": "提示词 v",
+    "factsVersion": "事实第 {v} 版",
+    "factsVersionHint": "写这一版时用的是第几版事实；事实更新后旧版需要重新核对"
   },
   "library": {
     "title": "稿件库",
@@ -261,7 +268,7 @@
     "audience": "受众画像（JSON）",
     "timezone": "时区",
     "style": "写作风格",
-    "classes": "允许的事件类型（逗号分隔，留空为全部）",
+    "classes": "接哪些事件类型",
     "minScore": "最低评分",
     "budget": "每日发布上限",
     "gap": "最短间隔（分钟）",
@@ -276,7 +283,12 @@
     "brand": "品牌",
     "platform": "发布平台",
     "venues": "报道的交易所（逗号分隔：hyperliquid, okx；X 账号建议只填 hyperliquid）",
-    "linkInThread": "串推最后一条自动附完整地址和链接"
+    "linkInThread": "串推最后一条自动附完整地址和链接",
+    "styleHelp": "没有指定记者风格时用这个；记者默认风格在 系统管理 → 规则 里设置",
+    "statusHelp": "启用：参与选题和写稿；暂停：不参与，但可以试写；停用：不再使用",
+    "authShort": "授权",
+    "classesHelp": "都不勾 = 所有事件类型都接",
+    "authUntil": "授权到期"
   },
   "publications": {
     "title": "发布记录",
@@ -427,7 +439,14 @@
     "bindTitle": "一键绑定模型",
     "bindHint": "给角色统一设置主模型和备用模型，每个角色生成一个新版本（旧版本保留）。之后仍可单独修改某个角色。",
     "onlyUnbound": "只改还没选模型的角色",
-    "bind": "绑定"
+    "bind": "绑定",
+    "styleKey": "风格代号",
+    "styleKeyHelp": "zh_ 开头是中文风格，en_ 开头是英文风格，例如 zh_my_style；同一代号再保存会生成新版本",
+    "styleLang": "语言",
+    "styleName": "风格名称",
+    "styleStructure": "结构设置（JSON，可留空）",
+    "styleStructureHelp": "例如 {\"lines\": \"3-5\", \"emoji\": \"0-2\", \"link_in_body\": true}",
+    "styleVersion": "第 {v} 版"
   },
   "drafts": {
     "title": "AI 稿件",
@@ -440,7 +459,11 @@
     "current": "当前版本",
     "trial": "试写",
     "open": "打开",
-    "refreshing": "生成中，页面会自动刷新"
+    "refreshing": "生成中，页面会自动刷新",
+    "colDraft": "稿件",
+    "colWriter": "谁写的",
+    "colGuard": "事实检查",
+    "promptV": "提示词 v"
   },
   "trial": {
     "title": "快速试写",
@@ -596,7 +619,8 @@
     "bStyle": "B 组风格",
     "bModel": "B 组模型（做模型对比时选）",
     "sameModel": "与上面相同",
-    "armsTitle": "两组设置"
+    "armsTitle": "两组设置",
+    "modelNo": "模型 #{id}"
   },
   "rating": {
     "title": "给这一版打分",
@@ -696,6 +720,668 @@
     "fact_checker": {
       "name": "事实核查",
       "desc": "你点「按检查意见修正」时，按事实检查发现的问题改稿。"
+    }
+  },
+  "guardCodes": {
+    "UNMATCHED_NUMBER": {
+      "what": "这个数字在事实里找不到",
+      "fix": "改成事实里的数字（可以取整），或者删掉"
+    },
+    "UNMATCHED_DATE": {
+      "what": "这个日期在事实里找不到",
+      "fix": "删掉日期，或用事实里的日期"
+    },
+    "UNMATCHED_TIME": {
+      "what": "这个时间在事实里找不到",
+      "fix": "不写具体钟点，改用「刚刚 / 过去几小时」"
+    },
+    "LIQ_NOT_IN_FACTS": {
+      "what": "说了爆仓 / 被强平，但事实里没有强平",
+      "fix": "改成「接近强平」「强平价」这类说法"
+    },
+    "LIQ_UNCONFIRMED": {
+      "what": "强平还没确认，句子里没写「疑似」",
+      "fix": "在同一句加上「疑似」"
+    },
+    "PNL_CALLED_REALIZED": {
+      "what": "把浮盈写成了已实现 / 落袋",
+      "fix": "改成「浮盈」「账面」"
+    },
+    "PNL_NOT_MARKED_UNREALIZED": {
+      "what": "提到持仓盈亏，但没标「浮」",
+      "fix": "写成「浮盈 / 浮亏」"
+    },
+    "PNL_SIGN": {
+      "what": "盈亏方向写反了",
+      "fix": "事实里是正数就是赚，负数就是亏"
+    },
+    "EXACT_TIME_CLAIM": {
+      "what": "写了精确时刻，但只知道一个时间窗口",
+      "fix": "改成「之间」或「刚刚」"
+    },
+    "OPEN_NOT_OBSERVED": {
+      "what": "写了「新开 / 刚开」，但我们是第一次看到这个仓位",
+      "fix": "改成「持有」「被发现」「加仓」"
+    },
+    "NOTIONAL_AS_MARGIN": {
+      "what": "把仓位价值写成了本金 / 保证金",
+      "fix": "说保证金只能用估算值，并带「约」"
+    },
+    "WHOLE_MARKET_CLAIM": {
+      "what": "说成了全网 / 全市场",
+      "fix": "改成「我们追踪的地址里」"
+    },
+    "IDENTITY_CLAIM": {
+      "what": "猜测了地址背后是谁，或暗示内幕",
+      "fix": "删掉身份猜测；反问「他知道些什么？」可以"
+    },
+    "ADVICE_OR_GUARANTEE": {
+      "what": "有喊单或保证收益的说法",
+      "fix": "删掉，只讲事实"
+    },
+    "STYLE_PHRASE": {
+      "what": "用了风格禁用词",
+      "fix": "换个说法（只是提醒，不拦截）"
+    },
+    "RATIO_AS_INCREASE": {
+      "what": "「高 X 倍」有歧义",
+      "fix": "改成「是……的 X 倍」"
+    },
+    "RECENCY_STALE": {
+      "what": "观测已经超过 3 小时，不能再说「刚刚」",
+      "fix": "删掉「刚刚」，或重新生成"
+    },
+    "UNKNOWN_FACT": {
+      "what": "引用了事实包里没有的事实",
+      "fix": "取消勾选这些事实"
+    },
+    "FACT_PACKET_SUPERSEDED": {
+      "what": "事实已经更新，这版是按旧事实写的",
+      "fix": "点「按最新事实重写」或手动核对后保存"
+    },
+    "TOO_LONG": {
+      "what": "超过平台字数上限",
+      "fix": "删一行或少一个数字，或改成串推"
+    },
+    "NEAR_DUPLICATE": {
+      "what": "和另一篇稿件太像",
+      "fix": "换一个角度重写"
+    },
+    "NEAR_DUPLICATE_WARN": {
+      "what": "和另一篇稿件有点像",
+      "fix": "最好换个说法（提醒）"
+    }
+  },
+  "gateCodes": {
+    "SOURCE_STALE": "数据源太久没更新",
+    "TRADER_STALE": "这个交易员的数据太久没刷新",
+    "CONTRADICTED_BY_CONTEXT": "取数据时这个仓位已经不在了（可能快进快出）",
+    "MISSING_PRICE": "缺少观测价格",
+    "FIRST_SEEN_ONLY": "第一次看到就已经持有，不能当开仓报道",
+    "CONTEXT_UNAVAILABLE": "没取到交易员详情",
+    "SYNC_BACKLOG": "数据同步积压",
+    "INSUFFICIENT_SAMPLE": "样本不够",
+    "STALE_RESEARCH": "研究数据过期"
+  },
+  "constraintCodes": {
+    "OBSERVED_SAMPLE": "只能说「我们追踪的样本」，不能说全市场",
+    "NO_IDENTITY": "不知道地址背后是谁，不能猜",
+    "NOTIONAL_NOT_MARGIN": "仓位价值不是本金",
+    "PNL_UNREALIZED": "持仓盈亏是浮动的",
+    "TIME_WINDOW_ONLY": "只知道时间窗口，不写精确时刻",
+    "FIRST_SEEN_NOT_OPEN": "首次看到时已持有，不是刚开仓",
+    "LIQ_SUSPECTED_ONLY": "强平只是疑似",
+    "PNL_ESTIMATED_FROM_MARK": "平仓盈亏是按观测价估算的",
+    "ACCOUNT_RATIO_UNAVAILABLE": "账户价值不可靠，不和仓位比",
+    "HISTORY_UNAVAILABLE": "没有完整交易档案，不谈战绩",
+    "OKX_LEAD_ASSETS": "OKX 资产只是带单账户",
+    "CROWD_SAMPLE": "多空人数和排名是样本快照",
+    "HEDGE_POSSIBLE": "账户里有反向大仓位，可能是对冲",
+    "ARCHIVE_PARTIAL": "交易档案只覆盖一段时间",
+    "RADAR_SINCE": "雷达记忆从首次追踪开始",
+    "LEADERBOARD_PNL": "排行榜盈亏含浮盈"
+  },
+  "factNames": {
+    "change__notional_usd": "这次变化的金额",
+    "change__size_before": "变化前数量",
+    "change__size_after": "变化后数量",
+    "change__mark_px": "观测时价格",
+    "change__window": "发生的时间窗口",
+    "change__time": "发生时间",
+    "change__observations": "观测次数",
+    "change__recency": "多久之前",
+    "episode__first_seen_at": "首次看到",
+    "episode__opened_at": "开仓时间",
+    "episode__opened_window": "开仓时间窗口",
+    "episode__added_notional_usd": "累计加仓",
+    "episode__increases": "加仓次数",
+    "episode__peak_notional_usd": "峰值仓位",
+    "episode__path": "仓位变化轨迹",
+    "position__size": "持仓数量",
+    "position__notional_usd": "仓位价值",
+    "position__mark_px": "标记价",
+    "position__entry_px": "开仓均价",
+    "position__leverage": "杠杆",
+    "position__implied_margin_usd": "估算保证金",
+    "position__liq_px": "强平价",
+    "position__liq_distance": "距强平",
+    "position__unrealized_pnl_usd": "浮动盈亏",
+    "position__observed_at": "观测时间",
+    "position__opened_at": "开仓时间（交易所）",
+    "trader__account_value_usd": "账户价值",
+    "trader__position_to_account": "仓位 / 账户",
+    "trader__okx_lead_assets_usd": "OKX 带单资产",
+    "trader__twr_90d": "90 天收益率",
+    "trader__max_drawdown_90d": "90 天最大回撤",
+    "trader__record": "已验证的战绩",
+    "trader__venue_nickname": "交易所昵称",
+    "trader__alltime_pnl_usd": "排行榜累计盈亏",
+    "trader__month_pnl_usd": "近 30 天盈亏",
+    "trader__pnl_series": "累计盈亏曲线",
+    "history__complete_cycles": "完整周期数",
+    "history__winning_cycles": "盈利周期数",
+    "history__net_realized_usd": "完整周期净盈亏",
+    "history__largest_prior_notional_usd": "此前最大仓位",
+    "history__since": "档案起点",
+    "history__win_streak": "连胜",
+    "contrast__archive_since": "成交档案起点",
+    "contrast__coin_cycles": "该币完整周期",
+    "contrast__coin_winning_cycles": "该币盈利周期",
+    "contrast__largest_prior_cycle_usd": "该币此前最大周期",
+    "contrast__vs_largest_prior_cycle": "是此前最大周期的几倍",
+    "contrast__last_same_side_closed_at": "上一笔同方向平仓时间",
+    "contrast__last_same_side_net_usd": "上一笔同方向净盈亏",
+    "contrast__last_same_side_peak_usd": "上一笔同方向峰值",
+    "contrast__last_same_side_held": "上一笔同方向持有时长",
+    "radar__since": "开始追踪的时间",
+    "radar__prior_positions": "此前在该币的仓位数",
+    "radar__prior_same_side": "其中同方向",
+    "radar__largest_prior_peak_usd": "此前最大峰值",
+    "radar__vs_largest_prior_peak": "是此前最大峰值的几倍",
+    "book__positions": "当前持仓数",
+    "book__gross_notional_usd": "全部仓位总值",
+    "book__share": "这笔占全部仓位",
+    "book__rank": "在他的仓位里排第几",
+    "book__opposite": "反向大仓位",
+    "book__total_upl_usd": "全部仓位合计浮盈亏",
+    "book__opened_24h": "24 小时内新出现的仓位数",
+    "book__opened_24h_coins": "新出现的币种",
+    "crowd__as_of": "多空快照时间",
+    "crowd__sample_traders": "我们追踪的地址数",
+    "crowd__same_side_traders": "同方向人数",
+    "crowd__same_side_notional_usd": "同方向总额",
+    "crowd__opposite_side_traders": "反方向人数",
+    "crowd__opposite_side_notional_usd": "反方向总额",
+    "crowd__share_of_same_side": "占同方向总额",
+    "crowd__same_side_rank": "同方向排名",
+    "crowd__timing_same_side": "同方向的择时高手",
+    "crowd__timing_opposite_side": "反方向的择时高手",
+    "crowd__timing_same_side_notional_usd": "同方向择时高手总额",
+    "crowd__timing_opposite_side_notional_usd": "反方向择时高手总额",
+    "close__entry_px": "平仓前均价",
+    "close__liq_px": "平仓前强平价",
+    "close__leverage": "平仓前杠杆",
+    "close__pnl_estimate_usd": "估算平仓盈亏",
+    "liquidation__status": "强平状态",
+    "liquidation__fill_time": "强平成交时间",
+    "liquidation__closed_pnl_usd": "强平已实现盈亏",
+    "liquidation__close_time": "强平时间",
+    "liquidation__realized_pnl_usd": "强平已实现盈亏"
+  },
+  "jobKinds": {
+    "build_facts": "整理事实",
+    "eic_evaluate": "总编辑评估",
+    "draft_generate": "AI 写稿",
+    "column_build": "生成栏目",
+    "card_render": "生成配图",
+    "experiment_create": "准备实验"
+  },
+  "jobStatus": {
+    "queued": "排队中",
+    "running": "运行中",
+    "done": "完成",
+    "failed": "失败，会重试",
+    "dead": "失败",
+    "cancelled": "已取消"
+  },
+  "callPurposes": {
+    "eic_evaluate": "总编辑评估",
+    "draft_generate": "写稿",
+    "draft_polish": "润色",
+    "draft_fix": "按检查意见修正",
+    "model_test": "测试模型"
+  },
+  "callStatus": {
+    "ok": "成功",
+    "http_error": "接口报错",
+    "timeout": "超时",
+    "truncated": "输出被截断",
+    "schema_invalid": "格式不对",
+    "semantic_invalid": "内容不合规则，已退回重写",
+    "budget_exceeded": "超出预算"
+  },
+  "sources": {
+    "eic_ai": "AI 总编辑",
+    "editor": "编辑",
+    "trial": "试写"
+  },
+  "statusWords": {
+    "active": "启用",
+    "paused": "暂停",
+    "retired": "停用",
+    "pending": "未填",
+    "authorized": "已授权",
+    "expired": "已过期",
+    "revoked": "已撤销",
+    "pass": "通过",
+    "warn": "提醒",
+    "fail": "不通过",
+    "blocked": "被拦",
+    "planned": "已排期",
+    "claimed": "RPA 已领取"
+  },
+  "protocols": {
+    "openai_chat": "OpenAI 兼容（chat/completions）",
+    "openai_responses": "OpenAI Responses 接口",
+    "anthropic_messages": "Anthropic Messages 接口",
+    "json_object": "JSON 模式（大多数模型）",
+    "json_schema": "严格 JSON Schema（支持的模型更稳）",
+    "none": "不限制（提示词里要求 JSON）"
+  },
+  "userRoles": {
+    "admin": "管理员",
+    "editor_in_chief": "总编辑",
+    "editor": "编辑",
+    "reporter": "记者",
+    "reviewer": "审稿",
+    "account_operator": "账号运营",
+    "analyst": "分析（只读）"
+  },
+  "eicWords": {
+    "cover": "报道",
+    "hold": "先等等",
+    "no_coverage": "不报道",
+    "single_post": "单条",
+    "thread": "串推",
+    "card_post": "图卡帖",
+    "now": "马上",
+    "within_2h": "2 小时内",
+    "today": "今天",
+    "identity_risk": "身份风险",
+    "stale_risk": "数据可能过期",
+    "liquidation_unconfirmed": "强平未确认",
+    "low_sample": "样本少",
+    "duplicate_risk": "可能重复",
+    "other": "其他"
+  },
+  "guardParts": {
+    "headline": "标题",
+    "body": "正文",
+    "facts_used": "引用的事实",
+    "thread": "串推第"
+  },
+  "auditGroups": {
+    "account": "账号",
+    "ai": "AI",
+    "article": "稿件",
+    "assignment": "任务",
+    "auth": "登录",
+    "column": "栏目",
+    "correction": "更正",
+    "eic": "总编辑",
+    "emergency_stop": "紧急停止",
+    "event": "事件",
+    "experiment": "实验",
+    "plan": "排期",
+    "publication": "发布",
+    "rpa": "RPA",
+    "settings": "设置",
+    "style": "风格",
+    "user": "用户"
+  },
+  "auditActions": {
+    "create": "创建",
+    "update": "修改",
+    "permissions": "改权限",
+    "authorization_expired": "授权到期",
+    "agent_bind": "绑定模型",
+    "agent_prompt_switch": "切换提示词",
+    "agent_version": "修改角色",
+    "model_create": "添加模型",
+    "model_test": "测试模型",
+    "model_update": "修改模型",
+    "prompt_delete": "删除提示词",
+    "prompt_version": "新提示词版本",
+    "accept_version": "采用版本",
+    "approve": "审核通过",
+    "compare_models": "多模型对比",
+    "copy_text": "复制文案",
+    "kill": "作废",
+    "rate": "评分",
+    "request_changes": "退回修改",
+    "restore": "恢复",
+    "submit": "提交审核",
+    "trash": "移入回收站",
+    "trial": "试写",
+    "version": "保存版本",
+    "accept": "接受",
+    "reject": "拒绝",
+    "login": "登录",
+    "password_change": "改密码",
+    "run": "运行",
+    "handle": "处理",
+    "evaluate": "评估",
+    "evaluate_requested": "请求评估",
+    "state": "状态变化",
+    "request": "发起",
+    "vote": "投票",
+    "cancel": "取消",
+    "record": "记录发布",
+    "retract": "撤稿",
+    "claim": "领取",
+    "failed": "失败",
+    "published": "已发布",
+    "token_rotated": "换令牌",
+    "create_admin": "创建管理员",
+    "reset_password": "重置密码"
+  },
+  "settingFields": {
+    "ai__enabled": {
+      "name": "AI 总开关",
+      "desc": "关掉后所有 AI 写稿和评估都暂停"
+    },
+    "ai__auto_eic": {
+      "name": "自动选题",
+      "desc": "高分事件自动交给 AI 总编辑评估"
+    },
+    "detect__candidate_score": {
+      "name": "候选分数线",
+      "desc": "低于这个分数的事件直接忽略"
+    },
+    "detect__auto_eic_score": {
+      "name": "自动选题分数线",
+      "desc": "高于这个分数才自动交给总编辑"
+    },
+    "budgets__global_daily_usd": {
+      "name": "每日 AI 总预算（美元）",
+      "desc": "模型单价为 0 时不生效"
+    },
+    "review__four_eyes": {
+      "name": "四眼原则",
+      "desc": "作者不能审核自己的稿件（多人协作时开启）"
+    },
+    "desk__language": {
+      "name": "编辑部语言",
+      "desc": "给编辑看的说明用什么语言写"
+    },
+    "detect__open_usd": {
+      "name": "大额开仓门槛（美元，按交易所）",
+      "desc": "超过这个金额的开仓才算新闻"
+    },
+    "detect__add_usd": {
+      "name": "大额加仓门槛",
+      "desc": "单次加仓超过这个金额才算"
+    },
+    "detect__close_usd": {
+      "name": "大额平仓门槛",
+      "desc": "平掉的仓位超过这个金额才算"
+    },
+    "detect__underwater_add_usd": {
+      "name": "浮亏加仓门槛",
+      "desc": "浮亏中加仓超过这个金额才算"
+    },
+    "detect__liq_usd": {
+      "name": "强平门槛",
+      "desc": "强平仓位超过这个金额才算"
+    },
+    "detect__notable_usd": {
+      "name": "战绩交易员门槛",
+      "desc": "有战绩的交易员动作超过这个金额才算"
+    },
+    "detect__tiers_usd": {
+      "name": "规模档位",
+      "desc": "跨过一个档位才会出续篇，避免同一仓位反复报"
+    },
+    "detect__near_liq_min_usd": {
+      "name": "接近强平的最小仓位",
+      "desc": ""
+    },
+    "detect__near_liq_bands": {
+      "name": "接近强平的距离档",
+      "desc": "离强平价这么近时报一次（0.03 = 3%）"
+    },
+    "detect__refresh_hours": {
+      "name": "事实刷新的时间范围（小时）",
+      "desc": "多久之内的事件会继续刷新事实"
+    },
+    "detect__max_event_age_hours": {
+      "name": "事件有效期（小时）",
+      "desc": "比这更早的变化不再当新闻"
+    },
+    "gate__max_backlog": {
+      "name": "同步积压上限",
+      "desc": "积压超过这个数就暂停出稿"
+    },
+    "gate__max_sync_age_minutes": {
+      "name": "同步最长间隔（分钟）",
+      "desc": "超过这么久没同步，事件会被拦"
+    },
+    "gate__max_health_age_minutes": {
+      "name": "健康检查最长间隔（分钟）",
+      "desc": ""
+    },
+    "budgets__agent_daily_usd": {
+      "name": "各角色每日预算",
+      "desc": "按角色分别限额，JSON 格式"
+    },
+    "guard__allow_numbers": {
+      "name": "允许的固定写法",
+      "desc": "这些写法里的数字不做核对，例如 24h、7天"
+    },
+    "guard__duplicate_block": {
+      "name": "重复拦截阈值",
+      "desc": "和其他稿件相似度超过这个值就拦"
+    },
+    "guard__duplicate_warn": {
+      "name": "重复提醒阈值",
+      "desc": "相似度超过这个值就提醒"
+    },
+    "guard__duplicate_hours": {
+      "name": "查重时间范围（小时）",
+      "desc": ""
+    },
+    "columns__disabled": {
+      "name": "停用的栏目",
+      "desc": "填栏目代号，逗号分隔"
+    }
+  },
+  "scoreParts": {
+    "size_abs": "仓位大小",
+    "size_vs_account": "相对账户的大小",
+    "size_vs_own_history": "相对他自己历史的大小",
+    "trader_record": "交易员战绩",
+    "risk": "风险程度",
+    "market_relevance": "币种关注度",
+    "continuity": "故事延续",
+    "penalties": "扣分项"
+  },
+  "episodeFields": {
+    "start_kind": "怎么开始的",
+    "start_precision": "开始时间精度",
+    "start_from": "最早可能开始于",
+    "start_to": "最晚开始于",
+    "status": "状态",
+    "peak_notional": "峰值仓位",
+    "added_notional": "累计加仓",
+    "n_increases": "加仓次数"
+  },
+  "obsKinds": {
+    "open": "开仓",
+    "increase": "加仓",
+    "decrease": "减仓",
+    "close": "平仓",
+    "flip": "反手",
+    "first_seen": "首次看到",
+    "reconstructed": "补录",
+    "exact": "精确",
+    "window": "时间窗口",
+    "unknown": "未知",
+    "closed": "已平仓",
+    "flipped": "已反手"
+  },
+  "modelForm": {
+    "name": {
+      "name": "名称",
+      "help": "自己起个名字，方便在角色里选，例如 deepseek-flash"
+    },
+    "protocol": {
+      "name": "接口格式",
+      "help": "大多数服务商选「OpenAI 兼容」；Claude 官方接口选 Anthropic"
+    },
+    "base_url": {
+      "name": "接口地址",
+      "help": "服务商文档里的 base URL，例如 https://api.deepseek.com"
+    },
+    "model": {
+      "name": "模型名",
+      "help": "服务商文档里的模型名，写错会报「无可用渠道」"
+    },
+    "api_key": {
+      "name": "API 密钥",
+      "help": "保存后加密存储，页面不会再显示；留空表示不修改"
+    },
+    "auth_header": {
+      "name": "认证方式",
+      "help": "一般选 bearer；Anthropic 官方接口选 x-api-key"
+    },
+    "anthropic_version": {
+      "name": "Anthropic 版本号",
+      "help": "只有 Anthropic 接口用，保持默认即可"
+    },
+    "json_mode": {
+      "name": "JSON 输出方式",
+      "help": "大多数模型选「JSON 模式」；支持严格 Schema 的模型更稳"
+    },
+    "timeout_s": {
+      "name": "超时（秒）",
+      "help": "单次调用最长等多久，推理慢的模型调大"
+    },
+    "max_retries": {
+      "name": "失败重试次数",
+      "help": "网络错误或限流时自动重试"
+    },
+    "max_concurrency": {
+      "name": "最多同时调用",
+      "help": "同一时间最多几个请求，避免被限流"
+    },
+    "input_usd_per_mtok": {
+      "name": "输入单价（美元 / 百万 token）",
+      "help": "填了才能算费用、每日预算才生效"
+    },
+    "output_usd_per_mtok": {
+      "name": "输出单价（美元 / 百万 token）",
+      "help": "填了才能算费用、每日预算才生效"
+    },
+    "extra_body": {
+      "name": "附加参数（JSON）",
+      "help": "原样加到请求里，例如关闭 DeepSeek 思考：{\"thinking\": {\"type\": \"disabled\"}}"
+    },
+    "enabled": {
+      "name": "启用",
+      "help": "关掉后这个模型不会被任何角色调用"
+    },
+    "edit": "修改这个模型",
+    "noKey": "没有密钥",
+    "testDetail": "上次测试详情",
+    "lastTestOk": "通过",
+    "lastTestFail": "未通过",
+    "lastTestNone": "未测试"
+  },
+  "usersX": {
+    "hint": "角色决定能做什么：管理员管设置，总编辑管所有账号和发布，编辑写稿审稿，审稿只审，账号运营负责记录发布，分析只能看。",
+    "user": "用户",
+    "lastLogin": "最近登录",
+    "yes": "启用",
+    "no": "停用",
+    "edit": "修改",
+    "resetHelp": "填了就会重置这个用户的密码，对方下次登录要改密码",
+    "username": "登录名",
+    "displayName": "显示名",
+    "password": "初始密码",
+    "passwordHelp": "至少 10 位；对方第一次登录后必须修改",
+    "actor": {
+      "user": "用户",
+      "ai": "AI",
+      "system": "系统"
+    }
+  },
+  "rulesX": {
+    "aiTitle": "AI 开关",
+    "aiHint": "关掉总开关后，所有 AI 写稿、评估都会暂停排队，不会丢。",
+    "stylesTitle": "各记者的默认写作风格",
+    "stylesHint": "AI 写稿时用哪种风格（中文账号用中文版，英文账号用英文版）。单独派稿或试写时可以另选。",
+    "scoresTitle": "选题分数线",
+    "scoresHint": "事件按规模、风险、战绩等打 0–100 分。",
+    "deskTitle": "编辑部",
+    "advanced": "高级设置（检测阈值、数据源、预算明细、检查规则等）",
+    "advancedHint": "这些一般不用改；改之前先确认含义。",
+    "section": {
+      "detect": "事件检测",
+      "gate": "数据源门槛",
+      "budgets": "预算明细",
+      "guard": "事实检查",
+      "columns": "栏目"
+    }
+  },
+  "sourcesX": {
+    "reachable": "能连上 AlphaScope",
+    "yes": "能",
+    "no": "连不上",
+    "radar": "雷达状态",
+    "backlog": "待同步",
+    "lastSync": "上次同步成功",
+    "lastOk": "上次正常",
+    "words": {
+      "ok": "正常",
+      "lagging": "有延迟",
+      "stale": "过期",
+      "empty": "没有数据",
+      "success": "成功",
+      "partial": "部分成功",
+      "failed": "失败",
+      "error": "出错",
+      "incremental": "增量同步",
+      "replay": "回放",
+      "backfill": "补数据"
+    }
+  },
+  "onboarding": {
+    "title": "上手清单",
+    "intro": "按顺序做完这 6 步，系统就能自动发现新闻、写稿，你只需要审核和发布。全部完成后这块会自动收起。",
+    "go": "去设置",
+    "model": {
+      "title": "添加一个 AI 模型并测试通过",
+      "how": "系统管理 → AI 模型：选预设（推荐 DeepSeek），填密钥，点「测试模型」"
+    },
+    "bind": {
+      "title": "给 AI 角色绑定模型",
+      "how": "AI 角色页「一键绑定模型」，选刚才测试通过的模型"
+    },
+    "account": {
+      "title": "启用至少一个发布账号",
+      "how": "账号运营：把状态改成「启用」（授权可以不填）"
+    },
+    "prompts": {
+      "title": "让记者用最新写法",
+      "how": "AI 角色页点「所有角色切到各自最新版本」"
+    },
+    "trial": {
+      "title": "试写一篇看看效果",
+      "how": "新闻雷达里点开一个事件，用「快速试写」选几种风格对比"
+    },
+    "publish": {
+      "title": "审核并记录第一条发布",
+      "how": "稿件库里提交审核、通过，发出去后在编辑室「记录发布」填帖子链接"
     }
   }
 }

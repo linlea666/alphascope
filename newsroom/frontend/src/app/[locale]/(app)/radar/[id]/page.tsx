@@ -3,10 +3,11 @@ import { Action } from "@/components/Action";
 import { AssignForm } from "@/components/AssignForm";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { TrialPanel } from "@/components/TrialPanel";
-import { ClassLabel, GateBadge, StateBadge } from "@/components/badges";
+import { ClassLabel, GateBadge, GateCodes, StateBadge } from "@/components/badges";
 import { FactsTable } from "@/components/FactsTable";
 import { Badge, Empty, KV, PageHeader, Panel, td, th } from "@/components/ui";
 import { Link } from "@/i18n/routing";
+import { factName, word } from "@/lib/glossary";
 import { nrGet } from "@/lib/api";
 import { fmtTime, fmtUsd, shortKey } from "@/lib/format";
 import type { Account, NewsEvent, Packet } from "@/lib/types";
@@ -30,6 +31,9 @@ type Detail = {
 
 export default async function EventPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const [te, tf, tso, tw, tsp, tef, tok] = await Promise.all([getTranslations("eicWords"), getTranslations("factNames"),
+    getTranslations("sources"), getTranslations("statusWords"), getTranslations("scoreParts"), getTranslations("episodeFields"),
+    getTranslations("obsKinds")]);
   const [t, tt, tdr, locale, d, accounts, models, styleRows] = await Promise.all([getTranslations("events"), getTranslations("trial"),
     getTranslations("drafts"), getLocale(), nrGet<Detail>(`events/${id}`), nrGet<Account[]>("accounts"),
     nrGet<{ id: number; name: string; model: string; last_test_ok: boolean | null }[]>("ai/model-options"),
@@ -60,7 +64,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
       </PageHeader>
       {e.blocking_issues.length > 0 && (
         <div className="mb-4 rounded border border-down/40 bg-down/10 px-4 py-3 text-sm">
-          <b>{t("blocking")}:</b> {e.blocking_issues.map((b) => `${b.code} (${b.detail})`).join("; ")}
+          <b>{t("blocking")}:</b> <GateCodes issues={e.blocking_issues} />
         </div>
       )}
       <div className="grid gap-5 xl:grid-cols-3">
@@ -69,16 +73,17 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           <Panel title={t("evaluations")}>
             {d.evaluations.length === 0 ? <Empty>—</Empty> : d.evaluations.map((ev) => (
               <div key={ev.id} className="mb-4 space-y-2 border-b border-border pb-4 text-sm last:border-0">
-                <div className="flex gap-2"><Badge tone="accent">{ev.decision}</Badge><Badge>{ev.priority}</Badge>
-                  {ev.output.risk_flags.map((r) => <Badge key={r} tone="warn">{r}</Badge>)}
+                <div className="flex gap-2"><Badge tone="accent">{word(te, ev.decision)}</Badge><Badge>{ev.priority}</Badge>
+                  {ev.output.risk_flags.map((r) => <Badge key={r} tone="warn">{word(te, r)}</Badge>)}
                   <span className="text-xs text-muted">{fmtTime(ev.created_at, locale)}</span></div>
                 <p>{ev.output.explanation}</p>
                 <ul className="text-xs text-muted">
-                  {ev.output.newsworthiness.map((n, i) => <li key={i}>· <b>{n.factor}</b>: {n.assessment} <span className="font-mono">[{n.fact_ids.join(", ")}]</span></li>)}
+                  {ev.output.newsworthiness.map((n, i) => <li key={i}>· <b>{n.factor}</b>: {n.assessment}
+                    <span className="opacity-70">（{n.fact_ids.map((id) => factName(tf, id)).join("、")}）</span></li>)}
                 </ul>
                 <div className="grid gap-2 md:grid-cols-2">
                   <div><div className="text-xs text-muted">{t("recommended")}</div>
-                    {ev.output.recommended_accounts.map((r) => <div key={r.account_id}>@{handle(r.account_id)}: {r.angle} <span className="text-xs text-muted">({r.format}, {r.urgency}) {r.reason}</span></div>)}</div>
+                    {ev.output.recommended_accounts.map((r) => <div key={r.account_id}>@{handle(r.account_id)}: {r.angle} <span className="text-xs text-muted">（{word(te, r.format)}，{word(te, r.urgency)}）{r.reason}</span></div>)}</div>
                   <div><div className="text-xs text-muted">{t("silent")}</div>
                     {ev.output.silent_accounts.map((r) => <div key={r.account_id}>@{handle(r.account_id)}: <span className="text-muted">{r.reason}</span></div>)}</div>
                 </div>
@@ -94,7 +99,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                     <td className={td}>@{a.handle} · {a.language}</td>
                     <td className={`${td} whitespace-normal`}>{a.angle}<div className="text-xs text-muted">{a.reason}</div>
                       {a.needs_human && <Badge tone="warn">{t("needsHuman")}</Badge>}</td>
-                    <td className={td}><Badge>{a.source}</Badge> <StateBadge state={a.status} /></td>
+                    <td className={td}><Badge>{word(tso, a.source)}</Badge> <StateBadge state={a.status} /></td>
                     <td className={td}>
                       <div className="flex flex-wrap gap-1">
                         {a.status === "proposed" && <Action path={`assignments/${a.id}/accept`} tone="primary">{t("accept")}</Action>}
@@ -125,7 +130,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                       <td className={`${td} max-w-sm truncate`}>{a.headline}</td>
                       <td className={td}>
                         <StateBadge state={a.status} /> {a.source === "trial" && <Badge tone="warn">{tdr("trial")}</Badge>}
-                        {a.guard_status && <Badge tone={a.guard_status === "pass" ? "up" : "down"}>{a.guard_status}</Badge>}
+                        {a.guard_status && <Badge tone={a.guard_status === "pass" ? "up" : "down"}>{word(tw, a.guard_status)}</Badge>}
                         <span className="text-xs text-muted"> v×{a.versions}{a.model ? ` · ${a.model}` : ""}</span>
                       </td>
                     </tr>
@@ -139,8 +144,9 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           <Panel title={`${t("scoreBreakdown")} ${bd ? `(${bd.version}) ${bd.total}` : ""}`}>
             {bd ? Object.entries(bd.components).map(([k, c]) => (
               <div key={k} className="mb-2 text-sm">
-                <div className="flex justify-between"><span>{k}</span><span className="num">{c.points} / {c.max}</span></div>
-                <div className="text-[11px] text-muted">{c.note} {Object.keys(c.inputs).length > 0 && JSON.stringify(c.inputs)}</div>
+                <div className="flex justify-between"><span title={k}>{word(tsp, k)}</span><span className="num">{c.points} / {c.max}</span></div>
+                <details className="text-[11px] text-muted"><summary className="cursor-pointer">{t("factDetail")}</summary>
+                  {c.note} {Object.keys(c.inputs).length > 0 && JSON.stringify(c.inputs)}</details>
               </div>
             )) : <Empty>—</Empty>}
           </Panel>
@@ -149,24 +155,25 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
               <div key={p.id} className="flex justify-between border-b border-border/60 py-1 text-xs">
                 <span>v{p.version} <GateBadge status={p.gate_status} /></span>
                 <span className="text-muted">{fmtTime(p.built_at, locale)}</span>
-                <span className="max-w-40 truncate font-mono text-muted" title={p.change_summary?.changed.join(", ")}>{p.change_summary?.changed.join(", ")}</span>
+                <span className="max-w-40 truncate text-muted" title={p.change_summary?.changed.join(", ")}>{p.change_summary?.changed.map((id) => id.startsWith("<") ? id : factName(tf, id)).join("、")}</span>
               </div>
             ))}
           </Panel>
           <Panel title={t("episode")}>
             {d.episode && ["start_kind", "start_precision", "start_from", "start_to", "status", "peak_notional", "added_notional", "n_increases"].map((k) => (
-              <KV key={k} k={k} v={String(k.includes("notional") ? fmtUsd(d.episode![k]) : k.startsWith("start_") && k !== "start_kind" && k !== "start_precision" ? fmtTime(d.episode![k] as string, locale) : d.episode![k] ?? "—")} />
+              <KV key={k} k={word(tef, k)} v={k.includes("notional") ? fmtUsd(d.episode![k]) : k.startsWith("start_") && k !== "start_kind" && k !== "start_precision"
+                ? fmtTime(d.episode![k] as string, locale) : word(tok, String(d.episode![k] ?? "—"))} />
             ))}
           </Panel>
           <Panel title={t("sourceEvents")}>
             <table className="w-full text-xs">
-              <thead><tr><th className={th}>kind</th><th className={th}>Δ</th><th className={th}>{t("precision")}</th><th className={th}>{t("observed")}</th></tr></thead>
+              <thead><tr><th className={th}>{t("kindCol")}</th><th className={th}>Δ</th><th className={th}>{t("precision")}</th><th className={th}>{t("observed")}</th></tr></thead>
               <tbody>
                 {d.source_events.map((s) => (
                   <tr key={s.id} className="border-b border-border/60">
-                    <td className={td}>{s.kind}</td>
+                    <td className={td}>{word(tok, s.kind)}</td>
                     <td className={`${td} num`}>{fmtUsd(s.notional_change)}</td>
-                    <td className={td}>{s.time_precision}</td>
+                    <td className={td}>{word(tok, s.time_precision)}</td>
                     <td className={td}>{fmtTime(s.observed_at, locale)}</td>
                   </tr>
                 ))}

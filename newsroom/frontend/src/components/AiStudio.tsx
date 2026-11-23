@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { bff } from "@/lib/bff";
+import { named, word } from "@/lib/glossary";
 import { GuardList } from "./DeskEditor";
 import type { GuardReport } from "@/lib/types";
 import { Badge, button, input, primary } from "./ui";
@@ -16,6 +17,9 @@ type CompareVersion = { id: number; version_no: number; model: string | null; ag
 /** AI revisions (draft / polish / fix) with an optional model, and side-by-side drafts from several models. */
 export function AiStudio({ articleId, models, editable }: { articleId: number; models: ModelOpt[]; editable: boolean }) {
   const t = useTranslations("studio");
+  const tr = useTranslations("roles");
+  const tst = useTranslations("statusWords");
+  const tcs = useTranslations("callStatus");
   const router = useRouter();
   const [model, setModel] = useState<string>("");
   const [picked, setPicked] = useState<number[]>(models.map((m) => m.id).slice(0, 3));
@@ -75,8 +79,8 @@ export function AiStudio({ articleId, models, editable }: { articleId: number; m
               {data.versions.map((v) => (
                 <div key={v.id} className="rounded border border-border p-2">
                   <div className="mb-1 flex flex-wrap items-center gap-1 text-xs">
-                    <Badge tone="accent">{v.model ?? "?"}</Badge><span className="text-muted">v{v.version_no} · {v.agent_key}</span>
-                    <Badge tone={v.guard_status === "pass" ? "up" : v.guard_status === "warn" ? "warn" : "down"}>{v.guard_status}</Badge>
+                    <Badge tone="accent">{v.model ?? "?"}</Badge><span className="text-muted">v{v.version_no} · {named(tr, v.agent_key).name}</span>
+                    <Badge tone={v.guard_status === "pass" ? "up" : v.guard_status === "warn" ? "warn" : "down"}>{word(tst, v.guard_status)}</Badge>
                     <span className="text-muted">{t("cost")} ${Number(v.cost_usd ?? 0).toFixed(4)} · {t("latency")} {v.latency_ms ?? "—"}ms · X {v.x_length ?? "—"}</span>
                   </div>
                   {v.headline && <div className="font-medium">{v.headline}</div>}
@@ -87,7 +91,7 @@ export function AiStudio({ articleId, models, editable }: { articleId: number; m
               ))}
             </div>
             {data.failures.length > 0 && (
-              <div className="text-xs text-down">{t("failures")}: {data.failures.map((f) => `${f.model} ${f.status} ${f.error ?? ""}`).join(" | ")}</div>
+              <div className="text-xs text-down">{t("failures")}: {data.failures.map((f) => `${f.model} ${word(tcs, f.status)} ${f.error ?? ""}`).join(" | ")}</div>
             )}
           </div>
         )}

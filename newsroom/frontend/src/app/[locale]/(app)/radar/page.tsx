@@ -1,5 +1,5 @@
 import { getLocale, getTranslations } from "next-intl/server";
-import { ClassLabel, GateBadge, StateBadge } from "@/components/badges";
+import { ClassLabel, GateBadge, GateCodes, StateBadge } from "@/components/badges";
 import { Badge, Empty, PageHeader, Panel, button, input, td, th } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { nrGet } from "@/lib/api";
@@ -64,7 +64,7 @@ export default async function RadarPage({ searchParams }: { searchParams: Promis
                     </td>
                     <td className={td}>
                       <GateBadge status={e.gate_status} />
-                      {e.blocking_issues.map((b) => <Badge key={b.code} tone="down" title={b.detail}>{b.code}</Badge>)}
+                      <GateCodes issues={e.blocking_issues} />
                     </td>
                     <td className={`${td} num`}>{e.score === null ? "—" : Number(e.score).toFixed(1)}</td>
                     <td className={td}><StateBadge state={e.state} /> {e.priority && <Badge tone="accent">{e.priority}</Badge>}</td>

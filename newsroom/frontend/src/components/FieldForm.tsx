@@ -9,13 +9,14 @@ import { input, primary } from "./ui";
 export type Field = {
   name: string;
   label: string;
-  type?: "text" | "number" | "checkbox" | "select" | "textarea" | "json" | "list" | "password" | "numbers";
+  type?: "text" | "number" | "checkbox" | "select" | "textarea" | "json" | "list" | "password" | "numbers" | "multi";
   options?: (string | { value: string; label: string })[];
   value?: unknown;
   required?: boolean;
   placeholder?: string;
   wide?: boolean;
   numeric?: boolean;
+  help?: string;  // shown as a "?" the reader can hover, and under the field on small screens
 };
 
 /** A small generic form: collects typed values, sends them through the proxy, shows the result or the error. */
@@ -52,7 +53,8 @@ export function FieldForm({ fields, path, method = "POST", submitLabel, showResu
           for (const fd of fields) {
             const raw = f.get(fd.name);
             const s = raw === null ? "" : String(raw);
-            if (fd.type === "checkbox") put(fd.name, raw === "on");
+            if (fd.type === "multi") put(fd.name, f.getAll(fd.name).map(String));
+            else if (fd.type === "checkbox") put(fd.name, raw === "on");
             else if (fd.type === "number") put(fd.name, s === "" ? null : Number(s));
             else if (fd.type === "select" && fd.numeric) put(fd.name, s === "" ? null : Number(s));
             else if (fd.type === "json") put(fd.name, s.trim() ? JSON.parse(s) : {});
@@ -78,7 +80,20 @@ export function FieldForm({ fields, path, method = "POST", submitLabel, showResu
       {fields.map((fd) => (
         <label key={fd.name} className={`block text-xs text-muted ${fd.wide || fd.type === "textarea" || fd.type === "json" ? "md:col-span-2" : ""}`}>
           {fd.label}
-          {fd.type === "checkbox" ? (
+          {fd.help && <span title={fd.help} className="ml-1 inline-block cursor-help rounded-full border border-border px-1.5 leading-4">?</span>}
+          {fd.type === "multi" ? (
+            <span className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-text">
+              {fd.options!.map((o) => {
+                const { value, label } = typeof o === "string" ? { value: o, label: o } : o;
+                return (
+                  <label key={value} className="flex items-center gap-1">
+                    <input type="checkbox" name={fd.name} value={value}
+                      defaultChecked={Array.isArray(fd.value) && (fd.value as string[]).includes(value)} />{label}
+                  </label>
+                );
+              })}
+            </span>
+          ) : fd.type === "checkbox" ? (
             <input type="checkbox" name={fd.name} defaultChecked={Boolean(fd.value)} className="ml-2" />
           ) : fd.type === "select" ? (
             <select name={fd.name} defaultValue={String(fd.value ?? "")} className={input}>
