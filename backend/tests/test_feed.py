@@ -150,6 +150,10 @@ def test_context_hyperliquid(client, sf):
             INSERT INTO wallet_metric (wallet_id, metric_window, metric_version, computed_at, source_series, covered,
                                        n_points, n_valid_periods, reliability, twr, mdd)
             VALUES (:w, '90d', 'r1', now(), 'allTime', true, 40, 30, 'medium', 0.25, -0.1)"""), {"w": w})
+        s.execute(text("""
+            INSERT INTO equity_point (wallet_id, series, ts, account_value, pnl, fetched_at)
+            SELECT :w, 'allTime', now() - (200 - g) * interval '1 day', 1000 + g, g, now() FROM generate_series(0, 199) g"""),
+            {"w": w})
         s.commit()
     r = client.get(f"/api/v1/feed/traders/{HL.upper().replace('0X', '0x')}/context", headers=AUTH)
     assert r.status_code == 200
@@ -168,6 +172,7 @@ def test_context_hyperliquid(client, sf):
     assert cyc["ETH"]["complete"] is False
     assert len(c["confirmed_liquidations"]) == 1 and keys("context.confirmed_liquidation") <= set(c["confirmed_liquidations"][0])
     assert c["okx"] is None
+    assert 60 <= len(c["pnl_series"]) <= 90 and c["pnl_series"][-1]["pnl"] == "199"  # thinned, the latest point kept
     assert client.get("/api/v1/feed/traders/0x12/context", headers=AUTH).status_code == 422
     assert client.get(f"/api/v1/feed/traders/0x{'cd' * 20}/context", headers=AUTH).status_code == 404
 

@@ -202,10 +202,16 @@ def trader_context(trader_key: str, coin: str | None = Query(None, max_length=48
             "trader": next(iter(rows(s, """SELECT history_status, pool_status, asset, asset_at, history_synced_at
                                            FROM okx_trader WHERE wallet_id = :w""", p)), None),
         }
+    # the venue's all-time P&L curve (portfolio pnlHistory), thinned to at most 90 points for a card
+    curve = s.execute(text("""SELECT ts, pnl, account_value FROM equity_point WHERE wallet_id = :w AND series = 'allTime'
+                              ORDER BY ts"""), p).all()
+    step = max(1, -(-len(curve) // 90))
+    pnl_series = [{"t": r[0], "pnl": format(r[1], "f"), "account_value": format(r[2], "f")}
+                  for r in curve[::step] + ([curve[-1]] if curve and (len(curve) - 1) % step else [])]
     return {"schema": SCHEMA, "as_of": now, "trader": plain(w), "watch": plain(dict(watch)) if watch else None,
             "positions": positions, "recent_events": recent, "metrics": metrics, "quality": quality,
             "fill_coverage": plain(dict(coverage)) if coverage else None, "cycles": cyc,
-            "confirmed_liquidations": liqs, "okx": okx}
+            "confirmed_liquidations": liqs, "okx": okx, "pnl_series": pnl_series}
 
 
 @router.get("/positions/at-risk")
