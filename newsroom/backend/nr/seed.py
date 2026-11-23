@@ -9,7 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from nr.ai.prompts import SEEDS, SEEDS_V2, SEEDS_V3
-from nr.ai.prompts_v4 import SEEDS_V4
+from nr.ai.prompts_v4 import SEEDS_V4, SEEDS_V5
 from nr.styles import HOUSE, HOUSE_EN_V2, HOUSE_V2, LIBRARY
 
 STYLES = [
@@ -95,7 +95,7 @@ def seed(s: Session) -> dict:
              "p": a["positioning"], "ap": json.dumps(a["audience_profile"], ensure_ascii=False),
              "pf": a.get("platform", "x"), "v": a["venues"], "lp": a.get("long_post_allowed", False)}).rowcount
     prompts = [(k, p["version"], None, p["system"], p["user"]) for k, p in
-               [*SEEDS.items(), *SEEDS_V2.items(), *SEEDS_V3.items()]] + SEEDS_V4
+               [*SEEDS.items(), *SEEDS_V2.items(), *SEEDS_V3.items()]] + SEEDS_V4 + SEEDS_V5
     for key, version, language, system, user in prompts:
         out["prompts"] += s.execute(text("""
             INSERT INTO prompt_template (key, version, language, system_text, user_template, sha256, notes)

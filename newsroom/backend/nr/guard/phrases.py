@@ -25,7 +25,10 @@ FIRST_SEEN_OK = re.compile(r"首次(?:被)?(?:观察|发现|监测)|已持有|\b
 MARGIN_WORDS = re.compile(r"本金|保证金|投入|\bstaked\b|\bput up\b|\bown money\b|\bmargin\b", re.I)
 # figures of speech ("押注BTC下跌", "梭哈") are fine on their own; attached to an amount they turn notional into stake
 STAKE_WORDS = re.compile(r"(?:押上|押注|砸下|砸了|梭哈|\ball[- ]in\b|\bbet\b|\bwagered\b)\s*(?:了|约|近|超)?\s*\$?\d", re.I)
-ESTIMATE = re.compile(r"估算|约|大约|推算|\bestimated\b|\bimplied\b|\broughly\b|\babout\b|\b~", re.I)
+ESTIMATE = re.compile(r"估算|约|大约|推算|\bestimated\b|\best\.|\bimplied\b|\broughly\b|\babout\b|~", re.I)
+# the direction of open P&L: a profit must not read as a loss, or the other way round
+LOSS_WORDS = re.compile(r"浮亏|亏损|亏了|在亏|套牢|\bunderwater\b|\bin the red\b|\bdown\b|\blos(?:s|ing)\b", re.I)
+GAIN_WORDS = re.compile(r"浮盈|盈利|赚了|在赚|\bin profit\b|\bin the green\b|\bup\b|\bprofit\b|\bgain", re.I)
 WHOLE_MARKET = re.compile(r"全市场|全网|所有交易者|所有人|整个市场|\bwhole market\b|\bentire market\b|\ball traders\b|"
                           r"\beveryone\b", re.I)
 IDENTITY = re.compile(r"(疑似|可能|或为|据传|应该是|大概率是|就是)\S{0,10}(机构|基金|交易所|做市商|内幕|项目方|团队)|内幕|知情人|"
@@ -70,6 +73,8 @@ def check(text: str, packet: dict, forbidden: list[str]) -> list[Finding]:
     margin = facts.get("position.implied_margin_usd")
     margin_v = abs(Decimal(margin["value"])) if margin else None
     is_liq = packet["event"]["class"] == "liquidation"
+    pnl_signs = [(abs(Decimal(str(f["value"]))), Decimal(str(f["value"])) > 0) for f in packet["facts"]
+                 if f["kind"] in ("unrealized_pnl", "realized_pnl") and Decimal(str(f["value"])) != 0]
     out: list[Finding] = []
 
     def flag(code, start, m, detail):
@@ -105,6 +110,18 @@ def check(text: str, packet: dict, forbidden: list[str]) -> list[Finding]:
             flag("WHOLE_MARKET_CLAIM", start, m, "the data is an observed sample, not the whole market")
         for m in IDENTITY.finditer(sent):
             flag("IDENTITY_CLAIM", start, m, "do not guess who controls the account or imply inside information")
+        for v, positive in pnl_signs:
+            if not _near(money, v):
+                continue
+            # a signed figure ("+$1.2M" / "-24万") or a P&L word next to the figure must point the same way
+            signed = re.search(r"([+-])\s*\$?\s*" + r"\d", sent)
+            words = (bool(GAIN_WORDS.search(sent)), bool(LOSS_WORDS.search(sent)))
+            wrong = (signed and (signed.group(1) == "+") != positive) or (words == (False, True) and positive) \
+                or (words == (True, False) and not positive)
+            if wrong:
+                out.append(Finding("PNL_SIGN", (start, start + len(sent)), sent.strip()[:60],
+                                   "this P&L is a " + ("profit" if positive else "loss") + ": the sentence says the opposite"))
+                break
         for m in RATIO_AS_INCREASE.finditer(sent):
             flag("RATIO_AS_INCREASE", start, m, "'高/多 X 倍' reads as X+1 times: write '是…的X倍'")
         for m in ADVICE.finditer(sent):

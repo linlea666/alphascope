@@ -160,7 +160,7 @@ def test_v4_texts_follow_the_accounts_language_and_desk_notes_the_desk_language(
     for lang, body in (("zh", "🚨 鲸鱼警报\n巨鲸 $BTC 多单3000万美元"), ("en", "WHALE ALERT!!\nThis whale is long $30 MILLION $BTC")):
         w = Writer(body)
         w.lang = lang
-        generate_draft(sf, ids[lang], NOW, transport=w, prompt_version=4)
+        generate_draft(sf, ids[lang], NOW, transport=w, prompt_version=5)
         req = w.requests[0]
         assert ("你给一个加密货币 X 账号写帖子" in req["system"]) == (lang == "zh")
         assert ("crypto Twitter" in req["system"] or "CT actually follows" in req["system"]) == (lang == "en")
@@ -168,7 +168,7 @@ def test_v4_texts_follow_the_accounts_language_and_desk_notes_the_desk_language(
     with sf() as s:
         refs = sorted(s.execute(text("SELECT prompt_ref FROM article_version")).scalars())
         guard = s.execute(text("SELECT guard_status FROM article_version WHERE prompt_ref LIKE '%.en'")).scalar()
-    assert refs == ["reporter_breaking@v4.en", "reporter_breaking@v4.zh"] and guard == "pass"  # "$30 MILLION" reads
+    assert refs == ["reporter_breaking@v5.en", "reporter_breaking@v5.zh"] and guard == "pass"  # "$30 MILLION" reads
 
 
 def test_book_breakdown_style_lists_positions_puts_the_link_last_and_draws_the_book(sf, tmp_path):
@@ -199,7 +199,7 @@ def test_book_breakdown_style_lists_positions_puts_the_link_last_and_draws_the_b
             "$NVDA: +$1.24M\n$ETH: +$452K\n$BTC: +$318K\n" + f"hypurrscan.io/address/{WHALE}")
     w = Writer(body)
     w.lang = "en"
-    generate_draft(sf, aid, NOW, transport=w, prompt_version=4, style_key="en_portfolio")
+    generate_draft(sf, aid, NOW, transport=w, prompt_version=5, style_key="en_portfolio")
     data = json.loads(w.requests[0]["user"].split("<data>", 1)[1].split("</data>", 1)[0])
     assert data["hooks"][0]["key"] == "book_in_profit"
     with sf() as s:
@@ -213,3 +213,15 @@ def test_book_breakdown_style_lists_positions_puts_the_link_last_and_draws_the_b
     with sf() as s:
         path = s.execute(text("SELECT file_path FROM media_asset WHERE id = :i"), {"i": out["assets"]["card_png"]}).scalar()
     (tmp_path.parent / "sample-book_card.png").write_bytes(open(path, "rb").read())
+
+
+def test_pnl_direction_and_estimate_markers():
+    packet = {"event": {"class": "whale_add"}, "constraints": [], "facts": [
+        {"id": "position.unrealized_pnl_usd", "kind": "unrealized_pnl", "value": "100400", "display": fmt.usd(Decimal("100400"))},
+        {"id": "position.implied_margin_usd", "kind": "estimate", "value": "411000", "display": fmt.usd(Decimal("411000"))}]}
+    assert codes(phrases.check("Already $100.4K underwater on the position.", packet, [])) == ["PNL_SIGN"]
+    assert codes(phrases.check("Up $100.4K unrealized.", packet, [])) == []
+    assert codes(phrases.check("$BTC: -$100.4K unrealized", packet, [])) == ["PNL_SIGN"]
+    assert codes(phrases.check("浮亏10万美元还在加仓。", packet, [])) == ["PNL_SIGN"]
+    assert codes(phrases.check("浮盈10万美元。", packet, [])) == []
+    assert codes(phrases.check("~$411K est. margin behind it.", packet, [])) == []

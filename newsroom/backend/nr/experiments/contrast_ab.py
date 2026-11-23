@@ -28,7 +28,7 @@ STRATA = (("open_add", ("whale_open", "whale_add", "flip", "notable_trader_move"
           ("close", ("whale_close", "liquidation"), 5 / 30))
 # what each arm uses: prompt version, optional variant / style / model (the experiment's model when absent)
 LEGACY_ARMS = {"a": {"prompt_version": 1, "variant": "baseline"}, "b": {"prompt_version": 2}}  # the first run
-DEFAULT_ARMS = {"a": {"prompt_version": 3}, "b": {"prompt_version": 4}}
+DEFAULT_ARMS = {"a": {"prompt_version": 3}, "b": {"prompt_version": 5}}
 ARM_KEYS = ("prompt_version", "variant", "style_key", "model_config_id")
 DIMENSIONS = ("information", "lede", "evidence", "publishable")
 # families of contrast facts; an event "has contrast" when at least two families say something

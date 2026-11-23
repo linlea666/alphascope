@@ -179,3 +179,29 @@ SEEDS_V4 = [
     ("fact_checker", 2, "zh", FACT_CHECK_ZH, FIX_ZH_USER),
     ("fact_checker", 2, "en", FACT_CHECK_EN, FIX_EN_USER),
 ]
+
+# v5: the same texts with rounding shown as "packet value -> what you write", so no example figure can pass for a
+# fact (a v4 draft copied "up $232M all-time" from the rules), and a reminder to keep the sign of P&L.
+V5_FIXES = [
+    ("可以大胆取整到 2–3 位有效数字（2800万美元、1.3亿、6.35万、267枚 BTC），但不能比原数更精确，",
+     "可以大胆取整到 2–3 位有效数字（事实里是 28,123,456 美元就写 2812万美元 或 2800万美元；"
+     "63,501.03 写 6.35万；267.4216 枚写 267 枚），但不能比原数更精确，"),
+    ("写「累计赚了 X」可以", "写「累计赚了」加上事实里的数字可以"),
+    ("   - 仓位价值不是他自己的钱；", "   - 盈亏的正负以事实为准：正数是赚（浮盈），负数是亏（浮亏），不能写反；\n   - 仓位价值不是他自己的钱；"),
+    ("Round it the way people talk: $27.6M, $27.6 MILLION, $91M, $1.3B, $57,180,\n   450 BTC.",
+     "Round it the way people talk: a packet value of 27,616,500 becomes $27.6M or $27.6\n   MILLION, "
+     "1,284,000,000 becomes $1.3B, 57,180.13 becomes $57,180, 450.0031 BTC becomes 450 BTC."),
+    ('so "up $232M all-time" works,', 'so "up $X all-time" (X from the packet) works,'),
+    ("   - position value isn't his own money;",
+     "   - the sign of P&L is the packet's: positive is up / in profit, negative is down / underwater - never flip it;\n"
+     "   - position value isn't his own money;"),
+]
+
+
+def _v5(text: str) -> str:
+    for old, new in V5_FIXES:
+        text = text.replace(old, new)
+    return text
+
+
+SEEDS_V5 = [(k, v + 1, lang, _v5(system), user) for k, v, lang, system, user in SEEDS_V4 if _v5(system) != system]

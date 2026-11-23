@@ -19,7 +19,7 @@ export default async function ExperimentsPage() {
     nrGet<{ key: string; name: string; language: string }[]>("styles")]);
   const styleOpts = [{ value: "", label: t("styleDefault") },
     ...[...new Map(styleRows.map((s) => [s.key, s])).values()].map((s) => ({ value: s.key, label: `${s.name} (${s.key})` }))];
-  const promptOpts = ["4", "3", "2", "1"].map((v) => ({ value: v, label: `v${v}` }));
+  const promptOpts = ["5", "4", "3", "2", "1"].map((v) => ({ value: v, label: `v${v}` }));
   const modelOpts = models.map((m) => ({ value: String(m.id), label: `${m.name} · ${m.model}${m.last_test_ok ? " ✓" : m.last_test_ok === false ? ` ⚠ ${t("modelFailed")}` : ""}` }));
   const busy = d.pending.some((p) => p.status === "queued" || p.status === "running") || d.experiments.some((x) => x.ready + x.failed < x.pairs);
   return (
@@ -88,7 +88,7 @@ export default async function ExperimentsPage() {
             { name: "n", label: t("n"), type: "number", value: 30 },
             { name: "a.prompt_version", label: t("aPrompt"), type: "select", numeric: true, value: "3", options: promptOpts },
             { name: "a.style_key", label: t("aStyle"), type: "select", value: "", options: styleOpts },
-            { name: "b.prompt_version", label: t("bPrompt"), type: "select", numeric: true, value: "4", options: promptOpts },
+            { name: "b.prompt_version", label: t("bPrompt"), type: "select", numeric: true, value: "5", options: promptOpts },
             { name: "b.style_key", label: t("bStyle"), type: "select", value: "", options: styleOpts },
             { name: "b.model_config_id", label: t("bModel"), type: "select", numeric: true, value: "",
               options: [{ value: "", label: t("sameModel") }, ...modelOpts] },

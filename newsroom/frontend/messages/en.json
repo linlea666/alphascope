@@ -491,7 +491,7 @@
     "results": "Results",
     "pending": "Being prepared",
     "howTitle": "What this tests",
-    "how1": "Arms A and B each write one draft; only what you set differs (prompt version / style / model). Default A = v3, B = v4 (a native prompt per language).",
+    "how1": "Arms A and B each write one draft; only what you set differs (prompt version / style / model). Default A = v3, B = v5 (a native prompt per language).",
     "how2": "Both drafts come from the same role, model and account style. They are trial drafts: the event is untouched and they cannot go to review.",
     "how3": "Review is blind: which draft is A or B is hidden and the order is random. Check the facts on the right; flag anything misleading.",
     "how4": "Success: B wins ≥ 65%, guard pass rate not below A, no more misleading drafts, ≤ 50% more tokens. Stop if contrast coverage < 40% or B wins < 55%.",
