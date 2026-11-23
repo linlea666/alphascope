@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.orm import sessionmaker
 
 from nr import settings_store
+from nr.ai.runner import AIUnavailable, BudgetExceeded
 from nr.config import get_settings
 from nr.facts.build import RateLimited, build_event_facts
 from nr.feed.client import FeedClient
@@ -70,6 +71,12 @@ def run_pending(sf: sessionmaker, deps: Deps, kinds: tuple[str, ...], max_jobs: 
         except RateLimited as exc:
             with sf() as s:
                 queue.defer(s, job, now + timedelta(minutes=10), str(exc))
+                s.commit()
+            break
+        except (AIUnavailable, BudgetExceeded) as exc:
+            # no model configured yet, AI switched off or budget spent: wait without using up the job's retries
+            with sf() as s:
+                queue.defer(s, job, now + timedelta(minutes=30), f"{type(exc).__name__}: {exc}")
                 s.commit()
             break
         except Exception as exc:  # noqa: BLE001 - one failing job must not stop the others

@@ -95,3 +95,17 @@ def test_untimely_uncovered_events_expire(sf):
     with sf() as s:
         assert s.execute(text("SELECT state FROM news_event")).scalar() == "archived"
         assert s.execute(text("SELECT reason FROM event_state_history ORDER BY id DESC LIMIT 1")).scalar().startswith("expired")
+
+
+def test_ai_jobs_wait_for_a_model_without_dying(sf):
+    from tests.helpers import candidate_event
+    newsroom(sf, model=False)
+    candidate_event(sf)
+    with sf() as s:
+        jid = s.execute(text("SELECT id FROM job WHERE kind = 'eic_evaluate'")).scalar()
+    assert jid is not None
+    for _ in range(6):
+        run_pending(sf, Deps(feed=FakeFeed().client, now=lambda: NOW + timedelta(hours=1)), AI_KINDS)
+    with sf() as s:
+        st = s.execute(text("SELECT status, attempts, last_error FROM job WHERE id = :j"), {"j": jid}).one()
+    assert st[0] == "queued" and st[1] == 0 and "AIUnavailable" in st[2]
