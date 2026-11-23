@@ -56,8 +56,10 @@ def _num(f: dict, fid: str) -> float | None:
         return None
 
 
-def _curve(points: list[tuple[float, float]], x0: float, y0: float, x1: float, y1: float) -> dict | None:
-    """Polyline and filled area in the box (x0, y0)-(x1, y1); y grows downwards in SVG."""
+def _curve(points: list[tuple[float, float]], x0: float, y0: float, x1: float, y1: float,
+           signed: bool = False) -> dict | None:
+    """Polyline and filled area in the box (x0, y0)-(x1, y1); y grows downwards in SVG. A P&L curve (signed) is green
+    or red by where it ends; a size path by whether it grew."""
     if len(points) < 2:
         return None
     ts, vs = [p[0] for p in points], [p[1] for p in points]
@@ -67,14 +69,15 @@ def _curve(points: list[tuple[float, float]], x0: float, y0: float, x1: float, y
     zero = y1 - (y1 - y0) * (0 - lo) / span_v
     line = " ".join(f"{x:.1f},{y:.1f}" for x, y in xy)
     return {"line": line, "area": f"{xy[0][0]:.1f},{zero:.1f} {line} {xy[-1][0]:.1f},{zero:.1f}",
-            "zero": round(zero, 1), "up": vs[-1] >= vs[0]}
+            "zero": round(zero, 1), "up": vs[-1] >= 0 if signed else vs[-1] >= vs[0]}
 
 
 def _pnl_curve(f: dict, x0, y0, x1, y1) -> dict | None:
     s = f.get("trader.pnl_series")
     if not s:
         return None
-    return _curve([(datetime.fromisoformat(p["t"]).timestamp(), float(p["pnl"])) for p in s["value"]], x0, y0, x1, y1)
+    return _curve([(datetime.fromisoformat(p["t"]).timestamp(), float(p["pnl"])) for p in s["value"]], x0, y0, x1, y1,
+                  signed=True)
 
 
 def _size_curve(f: dict, x0, y0, x1, y1) -> dict | None:

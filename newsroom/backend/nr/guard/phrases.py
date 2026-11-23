@@ -7,7 +7,7 @@ from decimal import Decimal
 from nr.guard.numbers import MULT, NUMBER, Finding
 
 SENTENCE = re.compile(r"[^。！？!?\n；;]+(?:[。！？!?；;]|\n|$)|[^\n]+")
-LIQ_EVENT = re.compile(r"爆仓(?!风险|边缘|线)|被强平|遭(?:到)?强平|强制平仓|被清算|\bliquidated\b|\bwiped out\b|\bgot rekt\b",
+LIQ_EVENT = re.compile(r"爆仓(?!风险|边缘|线|价|点)|被强平|遭(?:到)?强平|强制平仓|被清算|\bliquidated\b|\bwiped out\b|\bgot rekt\b",
                        re.I)
 LIQ_QUALIFIER = re.compile(r"疑似|可能|或已|推测|似乎|据推算|\bsuspected\b|\bpossibl[ey]\b|\blikely\b|\bapparent(ly)?\b|"
                            r"\bappears?\b|\binferred\b|\bseems?\b", re.I)

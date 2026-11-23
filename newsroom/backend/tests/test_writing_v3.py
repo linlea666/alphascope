@@ -42,6 +42,7 @@ def test_round_numbers_short_addresses_and_hooks_pass_the_guard():
     assert codes(phrases.check("他有内幕消息。", packet, [])) == ["IDENTITY_CLAIM"]
     assert codes(phrases.check("他押注BTC下跌，仓位2800万美元。", packet, [])) == []  # a figure of speech
     assert codes(phrases.check("他梭哈2800万美元做空。", packet, [])) == ["NOTIONAL_AS_MARGIN"]
+    assert codes(phrases.check("爆仓价6.35万，离现价只剩2.69%。", packet, [])) == []  # a price, not an event
 
 
 def test_just_now_only_holds_for_three_hours():
