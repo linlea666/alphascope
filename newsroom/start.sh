@@ -45,13 +45,14 @@ case "$cmd" in
                 fail "端口 $port 已被其他程序占用；请修改 $(env_file) 里的端口后重试"
             fi
         done
-        systemctl restart "${SERVICES[@]}"
-        verify_services
-        if [[ "$cmd" == install ]] && ! as_service -c 'from sqlalchemy import text; from nr.db import get_engine; import sys; sys.exit(0 if get_engine().connect().execute(text("select count(*) from app_user")).scalar() else 1)'; then
+        # 先建管理员再启动服务：即使后面的健康检查失败，也不会留下一个无法登录的系统
+        if ! as_service -c 'from sqlalchemy import text; from nr.db import get_engine; import sys; sys.exit(0 if get_engine().connect().execute(text("select count(*) from app_user")).scalar() else 1)'; then
             say '创建管理员账号'
             read -r -p '管理员用户名 [admin]: ' name
             as_service -m nr.cli create-admin --username "${name:-admin}"
         fi
+        systemctl restart "${SERVICES[@]}"
+        verify_services
         say "网页只监听本机：在你的电脑上运行  ssh -L $(web_port):localhost:$(web_port) root@服务器IP  然后打开 http://localhost:$(web_port)/zh"
         ;;
     update)

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import text
 from sqlalchemy.orm import sessionmaker
 
-from nr import audit
+from nr import audit, settings_store
 from nr.events.states import transition
 from nr.jobs.queue import recover_expired
 
@@ -28,6 +28,15 @@ def run(sf: sessionmaker, now: datetime) -> dict:
         for eid in stuck:
             transition(s, eid, "candidate", reason="evaluation did not finish; back to the pool")
         out["unstuck_events"] = len(stuck)
+        # "过期作废": events nobody covered whose last observation is older than the refresh horizon
+        horizon = now - timedelta(hours=settings_store.get(s, "detect")["refresh_hours"])
+        expired_events = s.execute(text("""
+            SELECT e.id FROM news_event e LEFT JOIN source_event se ON se.id = e.last_source_event_id
+            WHERE e.state IN ('detected', 'blocked', 'dismissed') AND coalesce(se.observed_at, e.detected_at) < :h"""),
+            {"h": horizon}).scalars().all()
+        for eid in expired_events:
+            transition(s, eid, "archived", reason="expired: no longer timely")
+        out["expired_events"] = len(expired_events)
         out["pruned"] = sum(s.execute(text(q), {"t": now - timedelta(days=d)}).rowcount for q, d in (
             ("DELETE FROM ingestion_checkpoint_history WHERE recorded_at < :t", 7),
             ("DELETE FROM source_health_snapshot h WHERE at < :t AND NOT EXISTS (SELECT 1 FROM event_evidence ev "

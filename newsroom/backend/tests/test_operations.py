@@ -82,3 +82,16 @@ def test_old_observations_build_state_but_are_not_news(sf):
     with sf() as s:
         assert s.execute(text("SELECT event_class FROM news_event")).scalars().all() == ["whale_add"]
         assert s.execute(text("SELECT start_kind FROM position_episode")).scalar() == "open"
+
+
+def test_untimely_uncovered_events_expire(sf):
+    from tests.fakes import T0, ev
+    feed = FakeFeed()
+    feed.events = [ev(1, "open", 0, 300, 100000)]
+    feed.contexts[WHALE] = context(positions=[position(szi=300)], fresh=False)
+    pipeline(sf, feed)  # blocked: the trader is stale
+    assert maintenance.run(sf, T0 + timedelta(hours=12))["expired_events"] == 0
+    assert maintenance.run(sf, T0 + timedelta(days=3))["expired_events"] == 1
+    with sf() as s:
+        assert s.execute(text("SELECT state FROM news_event")).scalar() == "archived"
+        assert s.execute(text("SELECT reason FROM event_state_history ORDER BY id DESC LIMIT 1")).scalar().startswith("expired")
