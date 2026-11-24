@@ -73,3 +73,61 @@ def test_promote_trial_keeps_the_draft(sf):
         body, status = s.execute(text("""SELECT v.body, a.status FROM article a JOIN article_version v
                                          ON v.id = a.current_version_id WHERE a.id = :a"""), {"a": art}).one()
     assert body == ZH and status == "approved"
+
+
+def review_out(verdict, publishable=4):
+    return {"verdict": verdict, "scores": {"ai_tone": 4, "native": 4, "hook": 3, "clarity": 4, "style_fit": 4, "risk": 5,
+                                           "publishable": publishable},
+            "issues": [{"quote": "开出约3000万美元", "problem": "开头平淡", "fix": "先说他是谁"}] if verdict != "approve" else [],
+            "summary": "可以发" if verdict == "approve" else "开头太平", "revision_note": "" if verdict == "approve" else "第一句先抛反差"}
+
+
+def run_jobs(sf, prov, kinds=("draft_review", "draft_generate")):
+    from nr.jobs.handlers import Deps, run_pending
+    from tests.fakes import FakeFeed
+    return run_pending(sf, Deps(feed=FakeFeed().client, provider=prov, now=lambda: NOW), kinds)
+
+
+def first_review_job(sf, art):
+    from nr.jobs.queue import enqueue
+    with sf() as s:
+        vid = s.execute(text("SELECT current_version_id FROM article WHERE id = :a"), {"a": art}).scalar()
+        enqueue(s, "draft_review", {"version_id": vid}, dedupe_key=f"review:{vid}", now=NOW)
+        s.commit()
+
+
+def test_the_reviewer_approves_into_ready_to_post(sf):
+    from tests.fakes import FakeProvider
+    nr, eid, art = drafted(sf)
+    first_review_job(sf, art)
+    run_jobs(sf, FakeProvider(review_out("approve")))
+    with sf() as s:
+        status = s.execute(text("SELECT status FROM article WHERE id = :a"), {"a": art}).scalar()
+        rev = s.execute(text("SELECT verdict, scores->>'publishable' FROM article_review")).one()
+    assert status == "approved" and rev == ("approve", "4")
+
+
+def test_revise_gets_one_editor_pass_then_a_person_decides(sf):
+    from tests.fakes import FakeProvider
+    from tests.helpers import draft_output
+    nr, eid, art = drafted(sf)
+    first_review_job(sf, art)
+    prov = FakeProvider(review_out("revise"), draft_output("zh", "这头巨鲸开出约3000万美元 BTC 多单，20倍。",
+                                                          ["position.notional_usd", "position.leverage"]),
+                        review_out("revise"))
+    run_jobs(sf, prov)
+    with sf() as s:
+        reviews = s.execute(text("SELECT count(*) FROM article_review")).scalar()
+        versions = s.execute(text("SELECT count(*) FROM article_version WHERE article_id = :a"), {"a": art}).scalar()
+        status = s.execute(text("SELECT status FROM article WHERE id = :a"), {"a": art}).scalar()
+    assert reviews == 2 and versions == 2 and status == "draft_ready"  # no third round: it waits for a person
+    assert "第一句先抛反差" in prov.requests[1]["user"]  # the editor saw the reviewer's instructions
+
+
+def test_trials_are_reviewed_but_never_auto_approved(sf):
+    from tests.fakes import FakeProvider
+    nr, eid, art = drafted(sf, source="trial")
+    first_review_job(sf, art)
+    run_jobs(sf, FakeProvider(review_out("approve")))
+    with sf() as s:
+        assert s.execute(text("SELECT status FROM article WHERE id = :a"), {"a": art}).scalar() == "draft_ready"

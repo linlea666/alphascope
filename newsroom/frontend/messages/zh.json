@@ -240,7 +240,9 @@
     "ledeFacts": "开头依据的事实",
     "promptV": "提示词 v",
     "factsVersion": "事实第 {v} 版",
-    "factsVersionHint": "写这一版时用的是第几版事实；事实更新后旧版需要重新核对"
+    "factsVersionHint": "写这一版时用的是第几版事实；事实更新后旧版需要重新核对",
+    "reply": "评论区内容（发帖后贴到评论区）",
+    "aiReview": "AI 审稿"
   },
   "library": {
     "title": "稿件库",
@@ -729,6 +731,10 @@
     "fact_checker": {
       "name": "事实核查",
       "desc": "你点「按检查意见修正」时，按事实检查发现的问题改稿。"
+    },
+    "reviewer": {
+      "name": "AI 审稿编辑",
+      "desc": "事实检查通过后读一遍：有没有 AI 味、地不地道、开头抓不抓人、能不能直接发；通过就进入待发布，需要修改就交给编辑改一次。"
     }
   },
   "guardCodes": {
@@ -943,7 +949,8 @@
     "draft_generate": "AI 写稿",
     "column_build": "生成栏目",
     "card_render": "生成配图",
-    "experiment_create": "准备实验"
+    "experiment_create": "准备实验",
+    "draft_review": "AI 审稿"
   },
   "jobStatus": {
     "queued": "排队中",
@@ -958,7 +965,8 @@
     "draft_generate": "写稿",
     "draft_polish": "润色",
     "draft_fix": "按检查意见修正",
-    "model_test": "测试模型"
+    "model_test": "测试模型",
+    "draft_review": "AI 审稿"
   },
   "callStatus": {
     "ok": "成功",
@@ -1092,7 +1100,9 @@
     "published": "已发布",
     "token_rotated": "换令牌",
     "create_admin": "创建管理员",
-    "reset_password": "重置密码"
+    "reset_password": "重置密码",
+    "expired": "已过期",
+    "promote": "试写转正"
   },
   "settingFields": {
     "ai__enabled": {
@@ -1202,6 +1212,10 @@
     "columns__disabled": {
       "name": "停用的栏目",
       "desc": "填栏目代号，逗号分隔"
+    },
+    "review__ai_ready": {
+      "name": "AI 审稿通过后自动进入待发布",
+      "desc": "关掉后，每篇都要人工点「通过」"
     }
   },
   "scoreParts": {
@@ -1446,6 +1460,32 @@
     "other": {
       "what": "其他错误",
       "fix": "展开原始报错查看；反复出现请把报错发给技术支持"
+    }
+  },
+  "review": {
+    "none": "还没有 AI 审稿（审稿编辑没绑定模型，或这一版没通过事实检查）",
+    "verdict": {
+      "approve": "AI 审稿通过",
+      "revise": "AI 审稿：建议修改",
+      "reject": "AI 审稿：退回给人"
+    },
+    "dim": {
+      "ai_tone": "无 AI 味",
+      "native": "地道",
+      "hook": "开头",
+      "clarity": "清楚",
+      "style_fit": "风格",
+      "risk": "无误导",
+      "publishable": "可直接发"
+    },
+    "dimHint": {
+      "ai_tone": "有没有套话、翻译腔、空泛总结",
+      "native": "像不像这个语言的币圈博主写的",
+      "hook": "第一行能不能让人停下",
+      "clarity": "一眼能否看懂、数字是否太密",
+      "style_fit": "是否符合所选风格",
+      "risk": "有没有夸大、暗示内幕、把样本说成全市场",
+      "publishable": "不改能不能直接发"
     }
   }
 }

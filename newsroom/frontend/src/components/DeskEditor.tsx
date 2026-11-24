@@ -7,6 +7,7 @@ import { bff } from "@/lib/bff";
 import { factName, named, parsePromptRef, partName, word } from "@/lib/glossary";
 import type { Fact, GuardReport, Version } from "@/lib/types";
 import { DiffView } from "./AiStudio";
+import { ReviewCard } from "./ReviewCard";
 import { Badge, button, input, primary } from "./ui";
 
 function Highlighted({ text, report, part }: { text: string; report: GuardReport | null; part: string }) {
@@ -145,6 +146,10 @@ export function DeskEditor({ articleId, status, current, versions, facts, curren
           {current.why_now && <div>{t("whyNow")}: {current.why_now}</div>}
           {current.open_question && <div>{t("openQuestion")}: {current.open_question}</div>}
           {(current.lede_fact_ids?.length ?? 0) > 0 && <div>{t("ledeFacts")}: {current.lede_fact_ids!.map((id) => factName(tf, id)).join("、")}</div>}
+          {current.reply_text && (
+            <div className="mt-1"><div>{t("reply")}:</div><p className="whitespace-pre-wrap rounded border border-border/60 p-2 text-text">{current.reply_text}</p></div>
+          )}
+          <div className="mt-2"><div className="mb-1">{t("aiReview")}:</div><ReviewCard review={current.review} /></div>
           {current.card_asset_id && (
             <a href={`/api/bff/assets/${current.card_asset_id}/file`} target="_blank" rel="noreferrer">
               {/* eslint-disable-next-line @next/next/no-img-element */}

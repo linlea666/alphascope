@@ -97,7 +97,10 @@ def article_detail(article_id: int, s: Session = Depends(get_session), user: Cur
                                           v.card_template, (SELECT m.id FROM media_asset m JOIN article ar ON ar.id = v.article_id
                                             WHERE m.fact_packet_id = v.fact_packet_id AND m.template_key = v.card_template
                                               AND m.language = ar.language AND m.kind = 'card_png'
-                                            ORDER BY m.id DESC LIMIT 1) AS card_asset_id
+                                            ORDER BY m.id DESC LIMIT 1) AS card_asset_id, v.reply_text, v.style_key,
+                                          (SELECT to_jsonb(r) FROM (SELECT verdict, scores, issues, summary, model, created_at
+                                             FROM article_review WHERE article_version_id = v.id ORDER BY id DESC LIMIT 1) r)
+                                            AS review
                                    FROM article_version v LEFT JOIN app_user u ON u.id = v.author_user_id
                                    WHERE v.article_id = :a ORDER BY v.version_no DESC""", {"a": article_id}),
             "publications": rows(s, "SELECT * FROM publication_record WHERE article_id = :a ORDER BY id",

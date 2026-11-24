@@ -64,6 +64,25 @@ def quick_approve(s: Session, article_id: int, user_id: int, ack_duplicate: bool
     return approve(s, article_id, user_id, ack_duplicate=ack_duplicate)
 
 
+def ai_approve(s: Session, article_id: int, review_id: int) -> str | None:
+    """The desk reviewer approved the current version: ready-to-post under the same checks a person's approval runs.
+    Returns why it stayed with a person instead (a trial, a failing gate or guard, a near-duplicate)."""
+    art = versions.load(s, article_id)
+    if art["status"] != "draft_ready":
+        return f"article is {art['status']}"
+    if s.execute(text("SELECT source FROM assignment WHERE id = :i"), {"i": art["assignment_id"]}).scalar() == "trial":
+        return "trial drafts are promoted by a person"
+    if art["gate_status"] != "pass":
+        return "the event's credibility gate is not passing"
+    report = live_guard(s, art, versions.current_version(s, article_id))
+    if report["status"] == "fail" or any(f["code"] == "NEAR_DUPLICATE_WARN" for f in report["findings"]):
+        return "the claims guard wants a person"
+    versions.set_status(s, article_id, "approved")
+    audit.record(s, "article.approve", "article", article_id, actor_kind="ai", account_id=art["account_id"],
+                 after={"review_id": review_id, "guard": report["status"]})
+    return None
+
+
 def approve(s: Session, article_id: int, user_id: int, ack_duplicate: bool = False) -> dict:
     art = versions.load(s, article_id)
     if art["status"] != "in_review":

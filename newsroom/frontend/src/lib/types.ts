@@ -72,7 +72,12 @@ export type Version = {
   lede_fact_ids?: string[];
   card_template?: string | null;
   card_asset_id?: number | null;
+  reply_text?: string | null;
+  style_key?: string | null;
+  review?: Review | null;
 };
+export type Review = { verdict: "approve" | "revise" | "reject"; scores: Record<string, number>;
+  issues: { quote: string; problem: string; fix: string }[]; summary: string; model: string | null; created_at: string };
 export type Account = {
   id: number;
   handle: string;

@@ -156,7 +156,7 @@ def run_arm(sf: sessionmaker, payload: dict, now: datetime, job_id: int | None =
         out = generate_draft(sf, payload["assignment_id"], now, job_id=job_id, transport=transport,
                              user_id=payload.get("user_id"), mode="draft", model_config_id=payload["model_config_id"],
                              compare=payload.get("compare", False), prompt_version=payload["prompt_version"],
-                             variant=payload.get("variant"), style_key=payload.get("style_key"))
+                             variant=payload.get("variant"), style_key=payload.get("style_key"), review=False)
     except Exception as exc:
         with sf() as s:
             s.execute(text(f"UPDATE experiment_pair SET {col}_error = :e WHERE id = :p"),

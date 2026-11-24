@@ -26,6 +26,10 @@ def expires_at(s: Session, event_id: int) -> datetime | None:
 
 def expire_due(sf: sessionmaker, now: datetime) -> int:
     with sf() as s:
+        # drafts written before expiry existed get their shelf life from their event, once
+        for aid, eid in s.execute(text(f"""SELECT id, news_event_id FROM article WHERE expires_at IS NULL
+                                          AND status IN ({", ".join(f"'{x}'" for x in LIVE)}) LIMIT 500""")).all():
+            s.execute(text("UPDATE article SET expires_at = :x WHERE id = :a"), {"x": expires_at(s, eid), "a": aid})
         gone = s.execute(text(f"""
             UPDATE article SET status = 'expired', updated_at = now(), claimed_by_token = NULL, claimed_at = NULL
             WHERE expires_at < :n AND status IN ({", ".join(f"'{x}'" for x in LIVE)}) AND deleted_at IS NULL

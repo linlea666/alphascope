@@ -78,6 +78,31 @@ class DraftOutV2(DraftOut):
     open_question: str | None = Field(None, max_length=200)
 
 
+class ReviewScores(Strict):
+    ai_tone: int = Field(ge=1, le=5)
+    native: int = Field(ge=1, le=5)
+    hook: int = Field(ge=1, le=5)
+    clarity: int = Field(ge=1, le=5)
+    style_fit: int = Field(ge=1, le=5)
+    risk: int = Field(ge=1, le=5)
+    publishable: int = Field(ge=1, le=5)
+
+
+class ReviewIssue(Strict):
+    quote: str = Field(max_length=400)
+    problem: str = Field(max_length=400)
+    fix: str = Field(max_length=400)
+
+
+class ReviewOut(Strict):
+    """The desk reviewer's verdict on one draft version. It judges; it never edits text or numbers."""
+    verdict: Literal["approve", "revise", "reject"]
+    scores: ReviewScores
+    issues: list[ReviewIssue] = Field(default_factory=list, max_length=6)
+    summary: str = Field(max_length=400)
+    revision_note: str = Field("", max_length=1500)
+
+
 class ModelTestOut(Strict):
     ok: bool
     echo: str

@@ -416,6 +416,7 @@ async function Rules() {
           ]} />
           <div className="mt-4">
             <FieldForm path="settings/review" method="PUT" fields={[
+              { name: "ai_ready", ...field("review", "ai_ready"), type: "checkbox", value: s.review.ai_ready },
               { name: "four_eyes", ...field("review", "four_eyes"), type: "checkbox", value: s.review.four_eyes },
             ]} />
           </div>

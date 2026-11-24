@@ -26,7 +26,8 @@ DEFAULTS: dict[str, dict] = {
     "emergency_stop": {"active": False, "reason": "", "since": None},
     "ai": {"enabled": True, "auto_eic": True},
     # four_eyes: the author of the current version may not approve it (turn on once there is more than one editor)
-    "review": {"four_eyes": False},
+    # ai_ready: a draft the AI desk reviewer approves goes straight to ready-to-post (a person can still pull it)
+    "review": {"four_eyes": False, "ai_ready": True},
     "columns": {"disabled": []},
     # how long a draft stays worth posting after the move was seen, per event class (hours)
     "expiry": {"hours": {"near_liquidation": 1, "liquidation": 1, "whale_open": 3, "whale_add": 3, "flip": 3,

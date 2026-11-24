@@ -30,6 +30,7 @@ from nr.desk.eic import packet_for_model
 from nr.desk.hooks import hooks
 from nr.facts.builder import T, recency
 from nr.guard.xlength import weighted_length
+from nr.jobs.queue import enqueue
 from nr.stories.memory import story_memory
 
 log = logging.getLogger(__name__)
@@ -84,7 +85,8 @@ def baseline_packet(packet: dict) -> dict:
 def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: int | None = None,
                    transport: Callable | None = None, user_id: int | None = None, mode: str = "draft",
                    model_config_id: int | None = None, compare: bool = False, prompt_version: int | None = None,
-                   variant: str | None = None, style_key: str | None = None) -> dict:
+                   variant: str | None = None, style_key: str | None = None, review_note: str | None = None,
+                   review_issues: list | None = None, review: bool = True) -> dict:
     if mode not in MODES:
         raise ValueError(f"unknown mode {mode}")
     with sf() as s:
@@ -176,6 +178,8 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
         data["hooks"] = hooks(packet, a["language"], memory, (style["structure"] or {}).get("prefer_hooks") if style else None)
     if mode != "draft":
         data["current_draft"] = {k: current[k] for k in ("headline", "body", "thread", "facts_used", "angle")}
+    if review_note:  # a revision the desk reviewer asked for
+        data["desk_review"] = {"instructions": review_note, "issues": review_issues or []}
     if mode == "fix":
         data["guard_findings"] = [{k: f.get(k) for k in ("part", "code", "text", "detail")}
                                   for f in current["guard_report"]["findings"]]
@@ -213,6 +217,8 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
             make_current=False if compare else None)
         s.execute(text("UPDATE assignment SET status = 'drafting' WHERE id = :i AND status = 'accepted'"),
                   {"i": assignment_id})
+        if review and v["made_current"] and v["guard_status"] != "fail":  # the desk reviewer reads it next
+            enqueue(s, "draft_review", {"version_id": v["id"]}, dedupe_key=f"review:{v['id']}", priority=50, now=now)
         s.commit()
     if card:  # the image that goes with the post; a card that fails to draw never costs the draft
         try:

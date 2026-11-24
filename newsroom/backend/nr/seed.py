@@ -9,6 +9,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from nr.ai.prompts import SEEDS, SEEDS_V2, SEEDS_V3
+from nr.ai.prompts_review import SEEDS_REVIEW
 from nr.ai.prompts_v4 import SEEDS_V4, SEEDS_V5
 from nr.styles import HOUSE, HOUSE_EN_V2, HOUSE_V2, LIBRARY
 
@@ -66,6 +67,9 @@ AGENTS = [
      "role_description": "Localizes and polishes a draft for an international audience without new claims."},
     {"agent_key": "fact_checker", "display_name": "事实核查员 / Fact checker",
      "role_description": "Rewrites a draft to clear the claims guard's findings; cannot change rules or facts."},
+    {"agent_key": "reviewer", "display_name": "AI 审稿编辑 / Desk reviewer",
+     "role_description": "Reads a fact-checked draft like a native reader: AI tone, hook, clarity, style; approves, asks "
+                         "for a revision or sends it to a person.", "max_output_tokens": 1500, "budget": "0.10"},
 ]
 
 
@@ -95,7 +99,7 @@ def seed(s: Session) -> dict:
              "p": a["positioning"], "ap": json.dumps(a["audience_profile"], ensure_ascii=False),
              "pf": a.get("platform", "x"), "v": a["venues"], "lp": a.get("long_post_allowed", False)}).rowcount
     prompts = [(k, p["version"], None, p["system"], p["user"]) for k, p in
-               [*SEEDS.items(), *SEEDS_V2.items(), *SEEDS_V3.items()]] + SEEDS_V4 + SEEDS_V5
+               [*SEEDS.items(), *SEEDS_V2.items(), *SEEDS_V3.items()]] + SEEDS_V4 + SEEDS_V5 + SEEDS_REVIEW
     for key, version, language, system, user in prompts:
         out["prompts"] += s.execute(text("""
             INSERT INTO prompt_template (key, version, language, system_text, user_template, sha256, notes)

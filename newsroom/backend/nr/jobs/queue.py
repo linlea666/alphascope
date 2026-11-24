@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-AI_KINDS = ("eic_evaluate", "draft_generate")
+AI_KINDS = ("eic_evaluate", "draft_generate", "draft_review")
 
 
 def enqueue(s: Session, kind: str, payload: dict, dedupe_key: str | None = None, priority: int = 100,

@@ -240,7 +240,9 @@
     "ledeFacts": "Lede facts",
     "promptV": "prompt v",
     "factsVersion": "facts v{v}",
-    "factsVersionHint": "The facts version this was written from; newer facts mean re-checking"
+    "factsVersionHint": "The facts version this was written from; newer facts mean re-checking",
+    "reply": "First reply (post it under the tweet)",
+    "aiReview": "AI review"
   },
   "library": {
     "title": "Library",
@@ -729,6 +731,10 @@
     "fact_checker": {
       "name": "Fact checker",
       "desc": "Runs when you click Fix: rewrites a draft to clear the checker's findings."
+    },
+    "reviewer": {
+      "name": "AI desk reviewer",
+      "desc": "Reads each fact-checked draft like a native reader: AI smell, native voice, hook, ready or not; approves to ready-to-post or sends one revision to the editor."
     }
   },
   "guardCodes": {
@@ -943,7 +949,8 @@
     "draft_generate": "AI draft",
     "column_build": "Build column",
     "card_render": "Render card",
-    "experiment_create": "Prepare experiment"
+    "experiment_create": "Prepare experiment",
+    "draft_review": "AI review"
   },
   "jobStatus": {
     "queued": "Queued",
@@ -958,7 +965,8 @@
     "draft_generate": "Draft",
     "draft_polish": "Polish",
     "draft_fix": "Fix",
-    "model_test": "Model test"
+    "model_test": "Model test",
+    "draft_review": "AI review"
   },
   "callStatus": {
     "ok": "OK",
@@ -1092,7 +1100,9 @@
     "published": "published",
     "token_rotated": "token rotated",
     "create_admin": "admin created",
-    "reset_password": "password reset"
+    "reset_password": "password reset",
+    "expired": "expired",
+    "promote": "promoted"
   },
   "settingFields": {
     "ai__enabled": {
@@ -1202,6 +1212,10 @@
     "columns__disabled": {
       "name": "Disabled columns",
       "desc": "Column keys, comma-separated"
+    },
+    "review__ai_ready": {
+      "name": "AI-approved drafts go to ready-to-post",
+      "desc": "Off: every draft needs a person's approval"
     }
   },
   "scoreParts": {
@@ -1446,6 +1460,32 @@
     "other": {
       "what": "Other error",
       "fix": "See the raw error"
+    }
+  },
+  "review": {
+    "none": "No AI review yet (the reviewer has no model, or this version failed the fact check)",
+    "verdict": {
+      "approve": "AI review: approved",
+      "revise": "AI review: revise",
+      "reject": "AI review: needs a person"
+    },
+    "dim": {
+      "ai_tone": "No AI smell",
+      "native": "Native",
+      "hook": "Hook",
+      "clarity": "Clarity",
+      "style_fit": "Style",
+      "risk": "No misleading",
+      "publishable": "Ready"
+    },
+    "dimHint": {
+      "ai_tone": "Filler, translated phrasing, vague wrap-ups",
+      "native": "Reads like a native crypto poster",
+      "hook": "Does line one stop the scroll",
+      "clarity": "Clear at a glance, not number soup",
+      "style_fit": "Matches the chosen style",
+      "risk": "Hype, inside-info hints, sample called the market",
+      "publishable": "Could go out as is"
     }
   }
 }
