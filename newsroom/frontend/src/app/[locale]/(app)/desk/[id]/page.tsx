@@ -12,6 +12,7 @@ import { Link } from "@/i18n/routing";
 import { RateVersion, type Rating } from "@/components/RateVersion";
 import { nrGet, nrGetOptional } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
+import { platformName } from "@/lib/glossary";
 import type { Account, Me, Packet, Version } from "@/lib/types";
 
 type ArticleDetail = {
@@ -30,8 +31,9 @@ const EDITABLE = ["drafting", "draft_ready", "changes_requested", "stale", "in_r
 
 export default async function DeskPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [t, tc, ts, tm, tt, tdr, tr, locale] = await Promise.all([getTranslations("desk"), getTranslations("common"), getTranslations("studio"),
-    getTranslations("manage"), getTranslations("trial"), getTranslations("drafts"), getTranslations("rating"), getLocale()]);
+  const [t, tc, ts, tm, tt, tdr, tr, tp, locale] = await Promise.all([getTranslations("desk"), getTranslations("common"),
+    getTranslations("studio"), getTranslations("manage"), getTranslations("trial"), getTranslations("drafts"),
+    getTranslations("rating"), getTranslations("publish"), getLocale()]);
   const d = await nrGetOptional<ArticleDetail>(`articles/${id}`);
   if (!d) return <Empty>{tc("noAccess")}</Empty>;
   const a = d.article;
@@ -95,12 +97,18 @@ export default async function DeskPage({ params }: { params: Promise<{ id: strin
             </Panel>
           )}
           <Panel title={ts("aiActions")}>
+            {perms.has("draft") && ["draft_ready", "changes_requested", "in_review", "approved", "stale"].includes(a.status) && !a.deleted_at && (
+              <div className="mb-4 flex flex-wrap items-center gap-3 border-b border-border pb-4">
+                <Action path={`articles/${a.id}/revise`} tone="primary">{tp("revise")}</Action>
+                <span className="text-xs text-muted">{tp("reviseHint")}</span>
+              </div>
+            )}
             <AiStudio articleId={a.id} models={models} editable={perms.has("draft") && EDITABLE.includes(a.status) && !a.deleted_at} />
           </Panel>
         </div>
         <div className="space-y-5">
           <Panel title={t("publish")}>
-            <KV k={tc("account")} v={`${a.platform === "okx_square" ? "OKX 广场" : "X"} · @${a.handle} · ${a.account_name}`} />
+            <KV k={tc("account")} v={`${platformName(a.platform)} · @${a.handle} · ${a.account_name}`} />
             <KV k={t("authorization")} v={<Badge tone={a.authorization_status === "authorized" ? "up" : ["revoked", "expired"].includes(a.authorization_status) ? "down" : "neutral"}>{a.authorization_status}</Badge>} />
             <KV k={t("expires")} v={fmtTime(a.authorization_expires_at, locale, account?.timezone)} />
             {account && <p className="mt-2 text-xs text-muted">{account.positioning}</p>}
