@@ -390,5 +390,69 @@
     "entry_px",
     "liq_px",
     "timing_significant"
+  ],
+  "movers": [
+    "schema",
+    "as_of",
+    "window",
+    "run",
+    "previous_run",
+    "rows",
+    "dropped"
+  ],
+  "movers.row": [
+    "rank",
+    "trader_key",
+    "display_name",
+    "handle",
+    "pnl",
+    "pnl_ratio",
+    "win_rate",
+    "max_drawdown",
+    "asset",
+    "prev_rank",
+    "rank_change",
+    "new_entry",
+    "multiple",
+    "off_peak",
+    "days"
+  ],
+  "okx_profile": [
+    "schema",
+    "as_of",
+    "trader_key",
+    "display_name",
+    "handle",
+    "followers",
+    "bio",
+    "joined",
+    "asset",
+    "asset_at",
+    "pool_status",
+    "boards",
+    "closes_30d"
+  ],
+  "okx_profile.board": [
+    "window",
+    "on_board",
+    "multiple",
+    "off_peak",
+    "series",
+    "presence"
+  ],
+  "okx_search": [
+    "schema",
+    "as_of",
+    "rows"
+  ],
+  "okx_search.row": [
+    "trader_key",
+    "display_name",
+    "handle",
+    "asset",
+    "pool_status",
+    "rank_30d",
+    "pnl_ratio_30d",
+    "pnl_30d"
   ]
 }

@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -224,7 +225,7 @@ def test_at_risk_and_health(client, sf):
 def test_feed_is_get_only_and_read_only(client, sf):
     from app.api.feed import feed_session, router
     routes = [r for r in router.routes if isinstance(r, APIRoute)]
-    assert len(routes) == 14 and all(r.methods == {"GET"} and r.path.startswith("/api/v1/feed/") for r in routes)
+    assert len(routes) == 17 and all(r.methods == {"GET"} and r.path.startswith("/api/v1/feed/") for r in routes)
     with sf() as s:
         gen = feed_session(s)
         session = next(gen)
@@ -321,3 +322,38 @@ def test_coin_positions_ranks_fresh_holders_and_splits_timing_traders(client, sf
     assert keys("coin_positions.largest") <= set(top[0])
     assert [x["rank"] for x in top] == [1, 2] and top[0]["trader_key"] == "0x" + "02" * 20
     assert r["largest"][0]["timing_significant"] is True  # the one long is the timing trader
+
+
+def test_okx_people_endpoints(client, sf):
+    from datetime import date
+    with sf() as s:
+        okx = _wallet(s, OKX, venue="okx")
+        s.execute(text("UPDATE wallet SET display_name = '熬鹰', handle = 'aoying' WHERE id = :w"), {"w": okx})
+        s.execute(text("""INSERT INTO okx_trader (wallet_id, history_status, pool_status, priority, n_positions, target_days,
+                                                  failure_count, asset, profile, updated_at)
+                          VALUES (:w, 'partial', 'active', 3, 0, 365, 0, 120000,
+                                  CAST(:p AS jsonb), now())"""),
+                  {"w": okx, "p": json.dumps({"followerCount": 5200, "bio": "趋势", "nickName": "熬鹰"})})
+        runs = []
+        for d in (date.today() - timedelta(days=1), date.today()):
+            runs.append(s.execute(text("""INSERT INTO okx_leaderboard_run (business_date, time_window, status, pages_done,
+                                                                   unique_count, new_traders, started_at, source)
+                                          VALUES (:d, '7d', 'complete', 1, 1, 0, now(), 'test') RETURNING id"""),
+                                  {"d": d}).scalar_one())
+        s.execute(text("INSERT INTO okx_leaderboard_row (run_id, wallet_id, rank, pnl, pnl_ratio) VALUES (:r, :w, 9, 10, 1)"),
+                  {"r": runs[0], "w": okx})
+        # up to 3x (cumulative +200%), then back to +50%: half off the peak
+        s.execute(text("""INSERT INTO okx_leaderboard_row (run_id, wallet_id, rank, pnl, pnl_ratio, rates)
+                          VALUES (:r, :w, 2, 85000, 0.5, CAST(:rates AS jsonb))"""),
+                  {"r": runs[1], "w": okx, "rates": json.dumps([[1, "0.2"], [2, "2.0"], [3, "0.5"]])})
+        s.commit()
+    mv = client.get("/api/v1/feed/okx/board/movers", params={"window": "7d"}, headers=AUTH).json()
+    assert keys("movers") <= set(mv) and keys("movers.row") <= set(mv["rows"][0])
+    row = mv["rows"][0]
+    assert (row["rank"], row["prev_rank"], row["rank_change"], row["multiple"], row["off_peak"]) == (2, 9, 7, "1.5", 0.5)
+    pr = client.get(f"/api/v1/feed/okx/traders/{OKX}/profile", headers=AUTH).json()
+    assert keys("okx_profile") <= set(pr) and pr["followers"] == 5200 and pr["display_name"] == "熬鹰"
+    assert keys("okx_profile.board") <= set(pr["boards"][0]) and pr["boards"][0]["on_board"] is True
+    se = client.get("/api/v1/feed/okx/traders", params={"query": "熬"}, headers=AUTH).json()
+    assert keys("okx_search") <= set(se) and keys("okx_search.row") <= set(se["rows"][0])
+    assert client.get("/api/v1/feed/okx/traders/okx:1/profile", headers=AUTH).status_code == 404

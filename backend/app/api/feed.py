@@ -319,6 +319,120 @@ def okx_dropouts(days: int = Query(30, ge=1, le=180), max_best_rank: int = Query
     return {"schema": SCHEMA, "as_of": now, "days": days, "rows": out}
 
 
+def _thin(series: list | None, keep: int = 90) -> list:
+    """A board's daily cumulative-return series, last `keep` points, as [[time, value], ...]."""
+    return [[a, b] for a, b in (series or [])[-keep:]]
+
+
+def _peak_drawdown(series: list | None) -> float | None:
+    """How far the equity curve sits below its own peak now (0.4 = 40% off the high), from cumulative returns."""
+    vals = [1 + float(v) for _, v in (series or []) if v is not None]
+    if not vals:
+        return None
+    peak = max(vals)
+    return round(1 - vals[-1] / peak, 4) if peak > 0 else None
+
+
+def _latest_runs(s: Session, window: str) -> tuple[dict | None, dict | None]:
+    runs = s.execute(text("""SELECT id, business_date, completed_at FROM okx_leaderboard_run
+                             WHERE time_window = :w AND status = 'complete' ORDER BY business_date DESC, id DESC LIMIT 8"""),
+                     {"w": window}).mappings().all()
+    latest = runs[0] if runs else None
+    prev = next((r for r in runs[1:] if r["business_date"] < latest["business_date"]), None) if latest else None
+    return (dict(latest) if latest else None), (dict(prev) if prev else None)
+
+
+@router.get("/okx/board/movers")
+def okx_board_movers(window: Literal["7d", "30d", "90d"] = "7d", limit: int = Query(30, ge=1, le=100),
+                     s: Session = Depends(feed_session)):
+    """The latest complete OKX board for a window as people, not a table: each trader's return, money made, how many
+    times the account multiplied, how far it is off its own peak, and the move since the previous day's board.
+    `dropped` lists who was in the previous board's top `limit` and is gone now."""
+    now = datetime.now(UTC)
+    latest, prev = _latest_runs(s, window)
+    out, dropped = [], []
+    if latest:
+        for r in rows(s, """
+                SELECT r.rank, w.address AS trader_key, w.display_name, w.handle, r.pnl, r.pnl_ratio, r.win_rate,
+                       r.max_drawdown, r.asset, r.rates, p.rank AS prev_rank
+                FROM okx_leaderboard_row r JOIN wallet w ON w.id = r.wallet_id
+                LEFT JOIN okx_leaderboard_row p ON p.wallet_id = r.wallet_id AND p.run_id = :prev
+                WHERE r.run_id = :run ORDER BY r.rank LIMIT :n""",
+                {"run": latest["id"], "prev": prev["id"] if prev else -1, "n": limit}):
+            series = r.pop("rates")
+            ratio = r["pnl_ratio"]
+            out.append({**r, "rank_change": (r["prev_rank"] - r["rank"]) if r["prev_rank"] else None,
+                        "new_entry": prev is not None and r["prev_rank"] is None,
+                        "multiple": str(round(1 + float(ratio), 2)) if ratio is not None else None,
+                        "off_peak": _peak_drawdown(series), "days": len(series or [])})
+        if prev:
+            dropped = rows(s, """
+                SELECT p.rank AS prev_rank, w.address AS trader_key, w.display_name, p.pnl, p.pnl_ratio
+                FROM okx_leaderboard_row p JOIN wallet w ON w.id = p.wallet_id
+                WHERE p.run_id = :prev AND p.rank <= :n
+                  AND NOT EXISTS (SELECT 1 FROM okx_leaderboard_row r WHERE r.run_id = :run AND r.wallet_id = p.wallet_id)
+                ORDER BY p.rank""", {"prev": prev["id"], "run": latest["id"], "n": limit})
+    return {"schema": SCHEMA, "as_of": now, "window": window, "run": plain(latest), "previous_run": plain(prev),
+            "rows": plain(out), "dropped": dropped}
+
+
+@router.get("/okx/traders/{trader_key}/profile")
+def okx_trader_profile(trader_key: str, s: Session = Depends(feed_session)):
+    """One OKX trader as a character: public nickname and profile, every board they sit on (rank, return, curve), how
+    long they have been on each, and the last 30 days of closed positions in brief."""
+    now = datetime.now(UTC)
+    w = s.execute(text("""SELECT w.id, w.address AS trader_key, w.display_name, w.handle, t.profile, t.asset, t.asset_at,
+                                 t.pool_status, t.history_status
+                          FROM wallet w LEFT JOIN okx_trader t ON t.wallet_id = w.id
+                          WHERE w.address = :k AND w.venue = 'okx'"""), {"k": trader_key}).mappings().first()
+    if w is None:
+        raise HTTPException(404, "unknown OKX trader")
+    prof = w["profile"] or {}
+    boards = []
+    for window in ("7d", "30d", "90d"):
+        latest, _ = _latest_runs(s, window)
+        row = s.execute(text("""SELECT rank, pnl, pnl_ratio, win_rate, max_drawdown, asset, rates FROM okx_leaderboard_row
+                                WHERE run_id = :r AND wallet_id = :w"""),
+                        {"r": latest["id"] if latest else -1, "w": w["id"]}).mappings().first()
+        pres = s.execute(text("""SELECT first_seen_at, last_seen_at, seen_days, streak, currently_seen, best_rank, last_rank
+                                 FROM okx_presence WHERE wallet_id = :w AND time_window = :t"""),
+                         {"w": w["id"], "t": window}).mappings().first()
+        boards.append({"window": window, "on_board": row is not None,
+                       **({k: row[k] for k in ("rank", "pnl", "pnl_ratio", "win_rate", "max_drawdown", "asset")} if row else {}),
+                       "multiple": str(round(1 + float(row["pnl_ratio"]), 2)) if row and row["pnl_ratio"] is not None else None,
+                       "off_peak": _peak_drawdown(row["rates"]) if row else None,
+                       "series": _thin(row["rates"]) if row else [], "presence": dict(pres) if pres else None})
+    closes = s.execute(text("""
+        SELECT count(*) AS closes, count(*) FILTER (WHERE realized_pnl > 0) AS wins, sum(realized_pnl) AS realized,
+               count(*) FILTER (WHERE liquidated) AS liquidations, max(realized_pnl) AS best, min(realized_pnl) AS worst,
+               max(lever) AS max_lever, mode() WITHIN GROUP (ORDER BY coin) AS top_coin,
+               avg(CASE WHEN direction = 'short' THEN 1 ELSE 0 END) AS short_share
+        FROM okx_position WHERE wallet_id = :w AND close_type <> 'partClose' AND close_time > :since"""),
+        {"w": w["id"], "since": now - timedelta(days=30)}).mappings().one()
+    return {"schema": SCHEMA, "as_of": now, "trader_key": w["trader_key"],
+            "display_name": w["display_name"] or prof.get("nickName"), "handle": w["handle"] or prof.get("uniqueName"),
+            "followers": prof.get("followerCount"), "bio": prof.get("bio"), "joined": prof.get("joinTime"),
+            "asset": w["asset"], "asset_at": w["asset_at"], "pool_status": w["pool_status"],
+            "boards": plain(boards), "closes_30d": plain(dict(closes))}
+
+
+@router.get("/okx/traders")
+def okx_trader_search(query: str = Query(..., min_length=1, max_length=64), limit: int = Query(20, ge=1, le=50),
+                      s: Session = Depends(feed_session)):
+    """Find OKX traders by nickname or profile name (for picking star traders)."""
+    now = datetime.now(UTC)
+    latest, _ = _latest_runs(s, "30d")
+    out = rows(s, """
+        SELECT w.address AS trader_key, w.display_name, w.handle, t.asset, t.pool_status, r.rank AS rank_30d,
+               r.pnl_ratio AS pnl_ratio_30d, r.pnl AS pnl_30d
+        FROM wallet w LEFT JOIN okx_trader t ON t.wallet_id = w.id
+        LEFT JOIN okx_leaderboard_row r ON r.wallet_id = w.id AND r.run_id = :run
+        WHERE w.venue = 'okx' AND (w.display_name ILIKE :q OR w.handle ILIKE :q)
+        ORDER BY r.rank NULLS LAST, t.asset DESC NULLS LAST LIMIT :n""",
+        {"q": f"%{query}%", "run": latest["id"] if latest else -1, "n": limit})
+    return {"schema": SCHEMA, "as_of": now, "rows": out}
+
+
 @router.get("/market/structure")
 def market_structure(coin: str = Query("BTC", max_length=48), venue: Venue = "all", s: Session = Depends(feed_session)):
     """Entry and liquidation structure of the observed sample for one coin (venue-reported liquidation prices only)."""
