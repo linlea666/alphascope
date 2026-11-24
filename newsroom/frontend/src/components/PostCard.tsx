@@ -218,8 +218,10 @@ export function PostCard({ c, now, roleName, className, statusName }: { c: Card;
           <button className={button} disabled={busy} title={t("reviseHint")}
             onClick={() => act(`articles/${c.id}/revise`, {}, t("revising"))}>{t("revise")}</button>
         )}
-        {["draft_ready", "changes_requested", "in_review"].includes(c.status) && c.source !== "trial" && (
-          <button className={primary} disabled={busy} onClick={() => act(`articles/${c.id}/review`, { action: "quick_approve" }, t("approved"))}>{t("approve")}</button>
+        {["draft_ready", "changes_requested", "in_review", "stale"].includes(c.status) && c.source !== "trial" && (
+          <button className={primary} disabled={busy} title={c.status === "stale" ? t("approveStaleHint") : undefined}
+            onClick={() => act(`articles/${c.id}/review`, { action: "quick_approve" }, t("approved"))}>
+            {c.status === "stale" ? t("approveStale") : t("approve")}</button>
         )}
         {c.source === "trial" && c.status !== "published" && (
           <button className={button} disabled={busy} onClick={() => act(`articles/${c.id}/promote`, {}, t("promoted"))}>{t("promote")}</button>

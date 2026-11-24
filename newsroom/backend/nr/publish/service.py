@@ -56,9 +56,31 @@ def live_guard(s: Session, art: dict, v: dict) -> dict:
                           list(v["facts_used"]))
 
 
+def refresh_to_current_facts(s: Session, article_id: int, user_id: int) -> None:
+    """A stale draft's text, checked again as a new version on the event's latest facts: if every figure still holds,
+    it goes on; if not, the guard says which one moved (and a rewrite from fresh facts is the way forward)."""
+    v = versions.current_version(s, article_id)
+    out = versions.save_version(s, article_id, versions.Draft(
+        body=v["body"], headline=v["headline"], alt_headlines=v["alt_headlines"], thread=v["thread"], angle=v["angle"],
+        added_value=v["added_value"], difference_from_others=v["difference_from_others"],
+        why_shareable=v["why_shareable"], risks=v["risks"], facts_used=v["facts_used"], why_now=v["why_now"],
+        open_question=v["open_question"], lede_fact_ids=v["lede_fact_ids"], card_template=v["card_template"],
+        style_key=v["style_key"], reply_text=v["reply_text"]),
+        # the same text, by the same writer: only the facts it is checked against are newer
+        origin=v["origin"], user_id=v["author_user_id"], agent_key=v["agent_key"], prompt_ref=v["prompt_ref"], model=v["model"])
+    if out["guard_status"] == "fail":
+        s.flush()
+        raise HTTPException(409, {"message": "the facts moved: a figure in this draft no longer matches; rewrite it "
+                                             "from the latest facts", "guard": out["guard"]})
+
+
 def quick_approve(s: Session, article_id: int, user_id: int, ack_duplicate: bool = False) -> dict:
-    """One click from a finished draft to ready-to-post: submit and approve with every check of both steps."""
+    """One click from a finished draft to ready-to-post: submit and approve with every check of both steps. A draft
+    whose facts changed is re-checked on the latest ones first."""
     status = versions.load(s, article_id)["status"]
+    if status == "stale":
+        refresh_to_current_facts(s, article_id, user_id)
+        status = versions.load(s, article_id)["status"]
     if status in ("draft_ready", "changes_requested"):
         submit(s, article_id, user_id)
     return approve(s, article_id, user_id, ack_duplicate=ack_duplicate)

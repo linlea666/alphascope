@@ -367,3 +367,26 @@ def test_each_post_has_one_plain_state_and_bulk_approve_moves_it_to_ready(sf):
         assert [x["id"] for x in c.get("/api/publish", params={"tab": "ready"}, headers=h).json()["cards"]] == [art]
     finally:
         app.dependency_overrides.clear()
+
+
+def test_a_stale_draft_is_rechecked_on_the_latest_facts_and_approved(sf):
+    from nr.articles.versions import current_version
+    nr, eid, art = drafted(sf)
+    with sf() as s:
+        before = current_version(s, art)
+        s.execute(text("UPDATE article SET status = 'stale' WHERE id = :a"), {"a": art})
+        pub.quick_approve(s, art, nr["chief"])
+        s.commit()
+        after = current_version(s, art)
+        assert s.execute(text("SELECT status FROM article WHERE id = :a"), {"a": art}).scalar() == "approved"
+    assert after["id"] != before["id"] and after["body"] == before["body"] and after["origin"] == before["origin"]
+
+
+def test_the_platforms_running_figures_do_not_make_a_draft_stale():
+    from nr.facts.builder import material_changes
+    old = {"builder_version": "facts-3", "event": {}, "gate": {}, "facts": [
+        {"id": "trader.binance_roi_30d", "kind": "return", "value": "1.31"},
+        {"id": "history.binance_pnl_24h_usd", "kind": "realized_pnl", "value": "60000"},
+        {"id": "close.realized_pnl_usd", "kind": "realized_pnl", "value": "40000"}]}
+    new = {**old, "facts": [{**old["facts"][0], "value": "1.45"}, {**old["facts"][1], "value": "90000"}, old["facts"][2]]}
+    assert material_changes(old, new) == []

@@ -84,11 +84,32 @@ A fix must not need a number or claim that isn't in the facts (vague words like 
 not use words the style avoids. If a figure doesn't match its fact (the mark price written as the liquidation price),
 make it the first issue and score risk 2 or lower."""
 
+# v3: the user found the reviewer too strict on facts ("反手证据不足", "时间范围错接" for wording the facts support).
+# Figures and claims are the guard's; the reviewer judges reading, and docks risk only for a real contradiction.
+V3_ZH = """
+
+事实这一项要宽一点：数字和说法已经由事实检查逐条核对通过。只要稿件的概括有事实支撑（比如上一笔是多单、这一笔是空单，
+写「站到了另一边」「反手」；24 小时内平了两笔都赚，写「过去几小时两连胜」），就不要因为「证据不足」「时间范围不够精确」扣分。
+risk 只在稿件说了和事实明确相反的话、或者编造了事实里没有的东西时才打到 3 以下。
+发现的小瑕疵（措辞、节奏）在 issues 里提，但如果整体可读、没有误导，publishable 给 4，verdict 给 approve。"""
+
+V3_EN = """
+
+Go easy on facts: figures and claims have already passed the fact check line by line. When a summary is backed by
+the facts (the last trade on the coin was long and this one is short: "switched sides"; two winning closes in the last
+day: "two in a row"), don't dock it for "insufficient evidence" or an imprecise time span. Score risk below 3 only when
+the draft says the opposite of a fact or adds something the facts don't contain. Mention small flaws (wording, rhythm)
+in issues, but if the post reads well and misleads no one, give publishable 4 and approve."""
+
 SEEDS_REVIEW = [
     ("reviewer", 1, "zh", REVIEWER_ZH, REVIEWER_ZH_USER),
     ("reviewer", 1, "en", REVIEWER_EN, REVIEWER_EN_USER),
     ("reviewer", 2, "zh", REVIEWER_ZH.replace("\n\n只回复一个符合要求格式的 JSON 对象。", V2_ZH + "\n\n只回复一个符合要求格式的 JSON 对象。"),
      REVIEWER_ZH_USER),
     ("reviewer", 2, "en", REVIEWER_EN.replace("\n\nReply with one JSON object", V2_EN + "\n\nReply with one JSON object"),
+     REVIEWER_EN_USER),
+    ("reviewer", 3, "zh", REVIEWER_ZH.replace("\n\n只回复一个符合要求格式的 JSON 对象。",
+                                              V2_ZH + V3_ZH + "\n\n只回复一个符合要求格式的 JSON 对象。"), REVIEWER_ZH_USER),
+    ("reviewer", 3, "en", REVIEWER_EN.replace("\n\nReply with one JSON object", V2_EN + V3_EN + "\n\nReply with one JSON object"),
      REVIEWER_EN_USER),
 ]

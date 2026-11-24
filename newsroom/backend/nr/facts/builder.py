@@ -23,7 +23,10 @@ MAJOR_COINS = ("BTC", "ETH", "SOL", "HYPE")
 # (sizes and notionals are not here: a 10% move in either is material, whatever caused it)
 VOLATILE = {"position.mark_px", "position.unrealized_pnl_usd", "position.liq_distance", "position.observed_at", "episode.path",
             "trader.account_value_usd"}
-VOLATILE_PREFIXES = ("crowd.", "book.", "change.recency", "trader.pnl_series")  # snapshots of other traders and other coins: context, not the story
+# the copy-trading platforms' running figures (30-day stats, balance, results of the last day / week) move all day
+# without changing the story a draft tells (a close and its P&L, an open and its size are not here)
+VOLATILE_PREFIXES = ("crowd.", "book.", "change.recency", "trader.pnl_series", "trader.binance_", "history.binance_",
+                     "trader.okx_lead_assets")  # snapshots of other traders and other coins: context, not the story
 CONSTRAINT_TEXT = {
     "OBSERVED_SAMPLE": "Data covers AlphaScope's observed sample of traders, not the whole exchange.",
     "NO_IDENTITY": "Who controls the account is unknown; do not guess or imply an identity.",

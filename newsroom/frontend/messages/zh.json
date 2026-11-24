@@ -1734,7 +1734,9 @@
     "open": "展开",
     "close": "收起",
     "noTitle": "（无标题）",
-    "selectAll": "全选"
+    "selectAll": "全选",
+    "approveStale": "按最新事实核对并通过",
+    "approveStaleHint": "用最新数据把原文重新核对一遍：数字都对得上就直接进可发布；有数字变了会告诉你是哪个，需要按最新事实重写"
   },
   "tokens": {
     "title": "接口令牌",

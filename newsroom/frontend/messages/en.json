@@ -1734,7 +1734,9 @@
     "open": "Open",
     "close": "Close",
     "noTitle": "(untitled)",
-    "selectAll": "Select all"
+    "selectAll": "Select all",
+    "approveStale": "Re-check and approve",
+    "approveStaleHint": "Checks the same text against the latest facts; if a figure moved you'll see which"
   },
   "tokens": {
     "title": "API tokens",
