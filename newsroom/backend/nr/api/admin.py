@@ -467,10 +467,14 @@ def ai_fixes(s: Session, t) -> list[dict]:
         ORDER BY a.agent_key""")).scalars())
     if behind:
         fixes.append({"kind": "prompts_behind", "agents": behind})
-    models = rows(s, "SELECT id, name, model, last_test_ok FROM ai_model_config WHERE enabled ORDER BY id")
+    models = rows(s, "SELECT id, name, model, last_test_ok, last_test_at FROM ai_model_config WHERE enabled ORDER BY id")
+    # failures before a passing test are history (the provider fixed something, or the model was reconfigured)
+    passed_at = {m["id"]: m["last_test_at"] for m in models if m["last_test_ok"] and m["last_test_at"]}
     blocked: dict[int, list[str]] = {}
-    for r in rows(s, """SELECT model_config_id, status, error FROM ai_call_log
+    for r in rows(s, """SELECT model_config_id, status, error, created_at FROM ai_call_log
                         WHERE status <> 'ok' AND model_config_id IS NOT NULL AND created_at > :d""", {"d": t - timedelta(hours=24)}):
+        if r["model_config_id"] in passed_at and r["created_at"] <= passed_at[r["model_config_id"]]:
+            continue
         if (code := diagnose(r["status"], r["error"])) in BLOCKING:
             blocked.setdefault(r["model_config_id"], []).append(code)
     bad = {m["id"]: ("test_failed" if m["last_test_ok"] is False else max(set(blocked[m["id"]]), key=blocked[m["id"]].count))

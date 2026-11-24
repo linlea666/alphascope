@@ -769,6 +769,10 @@
     "reporter_square": {
       "name": "Square storyteller",
       "desc": "Turns boards and traders into character stories: multiples, dark horses, falls and comebacks, sequels"
+    },
+    "prompt_coach": {
+      "name": "Prompt coach",
+      "desc": "Weekly redrafts of a role's writing instructions from the reviewer's recurring issues; you adopt them after an experiment"
     }
   },
   "guardCodes": {

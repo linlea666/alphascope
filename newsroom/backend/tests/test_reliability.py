@@ -129,3 +129,22 @@ def test_a_draft_the_fact_check_stops_gets_one_fix_then_waits_for_a_person(sf):
     with sf() as s:
         assert s.execute(text("SELECT count(*) FROM job WHERE kind = 'draft_generate'")).scalar() == 1  # no second fix
         assert s.execute(text("SELECT count(*) FROM job WHERE kind = 'draft_review'")).scalar() == 0
+
+
+def test_failures_before_a_passing_test_no_longer_flag_the_model(sf):
+    from datetime import timedelta
+
+    from nr.api.admin import ai_fixes
+    newsroom(sf)
+    with sf() as s:
+        mid = s.execute(text("SELECT id FROM ai_model_config WHERE name = 'fallback'")).scalar()
+        for _ in range(3):
+            s.execute(text("""INSERT INTO ai_call_log (agent_key, prompt_ref, model_config_id, protocol, model, purpose, attempt,
+                                                      fallback_used, status, error, created_at)
+                              VALUES ('reporter', 'reporter@v1', :m, 'openai_chat', 'model-fallback', 'draft_generate', 1,
+                                      false, 'http_error', 'HTTP 403: Cloudflare', :n)"""), {"m": mid, "n": NOW - timedelta(hours=2)})
+        s.execute(text("UPDATE ai_model_config SET last_test_ok = true, last_test_at = :n"), {"n": NOW - timedelta(hours=3)})
+        s.commit()
+        assert "replace_model" in [f["kind"] for f in ai_fixes(s, NOW)]  # blocked after its last good test
+        s.execute(text("UPDATE ai_model_config SET last_test_at = :n"), {"n": NOW - timedelta(hours=1)})
+        assert [f for f in ai_fixes(s, NOW) if f["kind"] == "replace_model"] == []  # fixed: the test passed since
