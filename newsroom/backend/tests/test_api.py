@@ -237,6 +237,7 @@ def test_onboarding_checklist_follows_the_data(client, sf):
         s.execute(text("UPDATE user_role SET role = 'admin' WHERE user_id = (SELECT id FROM app_user WHERE username = 'chief')"))
         s.commit()
     client.post("/api/ai/agents/prompt-version", json={"agent_keys": ["reporter", "reporter_breaking", "reporter_data",
-                "reporter_investigator", "reporter_derivatives", "reporter_historian"]}, headers=h)
+                "reporter_investigator", "reporter_derivatives", "reporter_historian", "reporter_star",
+                "reporter_square"]}, headers=h)
     steps = {x["key"]: x["done"] for x in client.get("/api/onboarding", headers=h).json()["steps"]}
     assert steps["model"] and steps["account"] and steps["prompts"] and not steps["trial"]
