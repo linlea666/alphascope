@@ -38,5 +38,11 @@ def expire_due(sf: sessionmaker, now: datetime) -> int:
             s.execute(text("""UPDATE publication_plan SET status = 'cancelled', note = 'expired'
                               WHERE article_id = :a AND status IN ('planned', 'claimed')"""), {"a": a["id"]})
             audit.record(s, "article.expired", "article", a["id"], actor_kind="system", account_id=a["account_id"])
+        # proposals nobody accepted in time are closed, so they stop asking for a decision
+        for aid, eid in s.execute(text("""SELECT asg.id, asg.news_event_id FROM assignment asg
+                                          WHERE asg.status = 'proposed' AND asg.source = 'eic_ai'""")).all():
+            if (exp := expires_at(s, eid)) and exp < now:
+                s.execute(text("UPDATE assignment SET status = 'cancelled' WHERE id = :i"), {"i": aid})
+                audit.record(s, "assignment.expired", "assignment", aid, actor_kind="system")
         s.commit()
     return len(gone)

@@ -220,3 +220,26 @@ def test_pair_view_brings_the_other_language_from_any_tab(sf):
         assert c.get("/api/publish", params={"tab": "ready"}, headers=h).json()["siblings"] == []
     finally:
         app.dependency_overrides.clear()
+
+
+def test_a_first_draft_past_its_shelf_life_is_not_written_and_old_proposals_close(sf):
+    from datetime import timedelta
+
+    from nr.desk.drafting import generate_draft
+    from nr.publish.expiry import expire_due
+    from tests.fakes import FakeProvider
+    nr = newsroom(sf)
+    eid = candidate_event(sf)
+    with sf() as s:
+        aid = assignment.create(s, eid, nr["zh"], source="editor", status="accepted", user_id=nr["chief"])
+        art = assignment.accept(s, aid, nr["chief"])
+        proposed = assignment.create(s, eid, nr["en"], source="eic_ai")
+        s.commit()
+    prov = FakeProvider()
+    late = NOW + timedelta(days=1)
+    assert generate_draft(sf, aid, late, transport=prov) == {"skipped": "the event is past its shelf life"}
+    assert prov.requests == []  # nothing was paid for
+    expire_due(sf, late)
+    with sf() as s:
+        assert s.execute(text("SELECT status FROM article WHERE id = :a"), {"a": art}).scalar() == "expired"
+        assert s.execute(text("SELECT status FROM assignment WHERE id = :a"), {"a": proposed}).scalar() == "cancelled"

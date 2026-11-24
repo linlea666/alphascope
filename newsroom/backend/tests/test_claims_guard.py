@@ -73,6 +73,8 @@ def test_wording_constraints():
     assert "NOTIONAL_AS_MARGIN" in codes("他投入了1234.57万美元本金")
     assert codes("按20倍杠杆估算，保证金约61.73万美元") == []
     assert "WHOLE_MARKET_CLAIM" in codes("全市场都在做多 BTC")
+    assert codes("约 1.4 万钱包的样本，不是全市场；目前未强平") == []  # the disclaimer is not the claim
+    assert codes("Our tracked sample, not the whole market.") == []
     assert "IDENTITY_CLAIM" in codes("该地址疑似某机构")
     assert "IDENTITY_CLAIM" in codes("Looks like an insider trade")
     assert "ADVICE_OR_GUARANTEE" in codes("建议跟单，稳赚")

@@ -17,6 +17,7 @@ from nr.auth.sessions import CurrentUser
 from nr.db import get_session
 from nr.jobs.queue import enqueue
 from nr.publish import service as pub
+from nr.publish.expiry import expires_at
 
 router = APIRouter(prefix="/api", tags=["publish"])
 Tab = Literal["ready", "todo", "published", "expired", "trash"]
@@ -112,6 +113,8 @@ def rewrite_from_fresh_facts(article_id: int, s: Session = Depends(get_session),
     if a["status"] in ("published", "retracted", "killed"):
         raise HTTPException(409, f"article is {a['status']}")
     t = now()
+    if (exp := expires_at(s, a["news_event_id"])) and exp < t:
+        raise HTTPException(409, "nothing new since this went out of date: rewriting works again once the position moves")
     enqueue(s, "build_facts", {"event_id": a["news_event_id"]}, dedupe_key=f"facts:{a['news_event_id']}", priority=20, now=t)
     job = enqueue(s, "draft_generate", {"assignment_id": a["assignment_id"], "user_id": user.id, "mode": "draft"},
                   dedupe_key=f"rewrite:{article_id}", priority=30, now=t + timedelta(seconds=45))

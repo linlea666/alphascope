@@ -31,6 +31,8 @@ LOSS_WORDS = re.compile(r"浮亏|亏损|亏了|在亏|套牢|\bunderwater\b|\bin
 GAIN_WORDS = re.compile(r"浮盈|盈利|赚了|在赚|\bin profit\b|\bin the green\b|\bup\b|\bprofit\b|\bgain", re.I)
 WHOLE_MARKET = re.compile(r"全市场|全网|所有交易者|所有人|整个市场|\bwhole market\b|\bentire market\b|\ball traders\b|"
                           r"\beveryone\b", re.I)
+# "不是全市场" / "not the whole market" is the disclaimer itself, not the claim
+NEGATED = re.compile(r"(?:不是|并非|而非|不代表|不等于|非|不能代表)\s*$|\b(?:not|isn'?t|never|n't)\s+(?:the\s+|a\s+)?$", re.I)
 IDENTITY = re.compile(r"(疑似|可能|或为|据传|应该是|大概率是|就是)\S{0,10}(机构|基金|交易所|做市商|内幕|项目方|团队)|内幕|知情人|"
                       r"\binsiders?\b|\binside information\b|\b(?:is|was) (?:likely|probably|reportedly) (?:a|an|the) "
                       r"(?:fund|institution|exchange|market maker)\b|\bbelongs to\b|\bowned by\b|\bcontrolled by\b", re.I)
@@ -107,6 +109,8 @@ def check(text: str, packet: dict, forbidden: list[str]) -> list[Finding]:
                 if money and not (_near(money, margin_v) and ESTIMATE.search(sent)):
                     flag("NOTIONAL_AS_MARGIN", start, m, "notional is not margin; margin may only be cited as the estimate")
         for m in WHOLE_MARKET.finditer(sent):
+            if NEGATED.search(sent[max(0, m.start() - 12):m.start()]):
+                continue
             flag("WHOLE_MARKET_CLAIM", start, m, "the data is an observed sample, not the whole market")
         for m in IDENTITY.finditer(sent):
             flag("IDENTITY_CLAIM", start, m, "do not guess who controls the account or imply inside information")

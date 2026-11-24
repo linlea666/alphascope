@@ -31,6 +31,7 @@ from nr.desk.hooks import hooks
 from nr.facts.builder import T, recency
 from nr.guard.xlength import weighted_length
 from nr.jobs.queue import enqueue
+from nr.publish.expiry import expires_at
 from nr.stories.memory import story_memory
 
 log = logging.getLogger(__name__)
@@ -103,6 +104,14 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
             raise HTTPException(409, "only accepted assignments are drafted")
         if a["gate_status"] != "pass" and a["source"] != "trial":  # a trial may run on any event; it can't be approved
             return {"skipped": "event gate is not passing"}
+        if a["source"] != "trial" and mode == "draft" and not compare \
+                and (exp := expires_at(s, a["news_event_id"])) and exp < now:
+            # a first draft for news past its shelf life would expire on arrival, so don't pay for it (comparing
+            # models or polishing an existing draft is a person's explicit choice)
+            s.execute(text("UPDATE article SET status = 'expired', expires_at = :x, updated_at = now() "
+                           "WHERE id = :a AND status = 'drafting'"), {"x": exp, "a": a["article_id"]})
+            s.commit()
+            return {"skipped": "the event is past its shelf life"}
         packet = s.execute(text("SELECT content FROM fact_packet WHERE id = :p"), {"p": a["current_fact_packet_id"]}
                            ).scalar_one()
         others = [dict(r) for r in s.execute(text("""
