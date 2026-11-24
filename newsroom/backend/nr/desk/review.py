@@ -34,9 +34,11 @@ def review_version(sf: sessionmaker, version_id: int, now: datetime, job_id: int
         style = s.execute(text("""SELECT name, guide, structure FROM editorial_style WHERE key = :k
                                   ORDER BY version DESC LIMIT 1"""), {"k": v["style_key"]}).mappings().first()
         packet = s.execute(text("SELECT content FROM fact_packet WHERE id = :p"), {"p": v["fact_packet_id"]}).scalar()
+        # every fact, not only the ones the draft lists: a writer may cite a fact it forgot to list, and the reviewer
+        # must not call a number made up when it is in the packet (the guard has already matched every number)
         used = set(v["facts_used"] or [])
-        facts = [{"id": f["id"], "says": (f["display"].get(v["language"]) or [None])[0]}
-                 for f in packet["facts"] if f["id"] in used]
+        facts = [{"id": f["id"], "says": (f["display"].get(v["language"]) or [None])[0], "cited": f["id"] in used}
+                 for f in packet["facts"] if f["kind"] not in ("series", "chart")]
         persona = s.execute(text("SELECT name, tags, stage, prev_stage FROM trader_persona WHERE trader_key = :k"),
                             {"k": packet["subject"].get("trader_key")}).mappings().first()
         persona = {**dict(persona), "tags": [t["tag"] for t in persona["tags"]]} if persona else None
@@ -53,7 +55,9 @@ def review_version(sf: sessionmaker, version_id: int, now: datetime, job_id: int
                     data={"draft": {"headline": v["headline"], "body": v["body"], "thread": v["thread"],
                                     "reply": v["reply_text"]},
                           "style": dict(style) if style else None, "platform": v["platform"],
-                          "facts_the_draft_uses": facts,
+                          "facts": facts,
+                          "facts_note": "All facts of the packet; 'cited' marks those the draft lists. Every number in "
+                                        "the draft already matched one of these: do not call a number made up.",
                           **({"platform_focus": REVIEW_SQUARE_FOCUS, "persona": persona} if v["platform"] in SQUARES else {})})
     r: ReviewOut = out.parsed
     with sf() as s:
