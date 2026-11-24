@@ -31,6 +31,8 @@ LOSS_WORDS = re.compile(r"浮亏|亏损|亏了|在亏|套牢|\bunderwater\b|\bin
 GAIN_WORDS = re.compile(r"浮盈|盈利|赚了|在赚|\bin profit\b|\bin the green\b|\bup\b|\bprofit\b|\bgain", re.I)
 WHOLE_MARKET = re.compile(r"全市场|全网|所有交易者|所有人|整个市场|\bwhole market\b|\bentire market\b|\ball traders\b|"
                           r"\beveryone\b", re.I)
+NOT_YET = re.compile(r"(?:还没|还未|尚未|没有|没|未|并未|暂未|仍未)(?:有)?\s*$|\b(?:not|never|hasn'?t been|wasn'?t|isn'?t|not yet)\s+(?:been\s+)?$",
+                     re.I)
 # "不是全市场" / "not the whole market" is the disclaimer itself, not the claim
 NEGATED = re.compile(r"(?:不是|并非|而非|不代表|不等于|非|不能代表)\s*$|\b(?:not|isn'?t|never|n't)\s+(?:the\s+|a\s+)?$", re.I)
 IDENTITY = re.compile(r"(疑似|可能|或为|据传|应该是|大概率是|就是)\S{0,10}(机构|基金|交易所|做市商|内幕|项目方|团队)|内幕|知情人|"
@@ -84,6 +86,8 @@ def check(text: str, packet: dict, forbidden: list[str]) -> list[Finding]:
 
     for start, sent in sentences(text):
         for m in LIQ_EVENT.finditer(sent):
+            if NOT_YET.search(sent[max(0, m.start() - 16):m.start()]):  # "还没被强平" / "not liquidated" says the opposite
+                continue
             if not is_liq:
                 flag("LIQ_NOT_IN_FACTS", start, m, "no liquidation in this event's facts")
             elif "LIQ_SUSPECTED_ONLY" in codes and not LIQ_QUALIFIER.search(sent):

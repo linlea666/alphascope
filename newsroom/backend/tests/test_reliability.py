@@ -103,3 +103,14 @@ def test_fixes_name_the_blocked_model_and_one_click_replaces_it(sf):
         # the fallback would equal the role's own model, so it is dropped rather than duplicated
         assert s.execute(text("SELECT count(*) FROM ai_agent_profile WHERE active AND fallback_model_config_id IS NOT NULL")).scalar() == 0
         assert [f["kind"] for f in ai_fixes(s, NOW)] == ["prompts_behind"]
+
+
+def test_a_thread_that_repeats_the_body_is_dropped(sf):
+    nr = newsroom(sf)
+    aid = article(sf, nr)
+    out = draft_output("zh", ZH, ["position.notional_usd", "position.leverage"])
+    out["thread"] = [ZH + "\n", "第二条：他的开仓均价约98000美元。"]
+    generate_draft(sf, aid, NOW, transport=FakeProvider(out))
+    with sf() as s:
+        thread = s.execute(text("SELECT thread FROM article_version ORDER BY id DESC LIMIT 1")).scalar()
+    assert thread == ["第二条：他的开仓均价约98000美元。"]

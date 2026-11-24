@@ -208,6 +208,10 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
         o.lede_fact_ids = [f for f in o.lede_fact_ids if f in fact_ids]
     card = pick_card(packet, [h["key"] for h in data["hooks"]]) if data.get("hooks") is not None else None
     thread, body = list(o.thread or []), o.body
+    # a model sometimes repeats the body (or a post) in the thread: the same text twice reads as a glitch
+    flat = lambda t: " ".join(t.split())  # noqa: E731
+    seen = {flat(body)}
+    thread = [t for t in thread if t.strip() and not (flat(t) in seen or seen.add(flat(t)))]
     if reply:  # the full address and any link come from the packet into the reply, never from a model
         key = packet["subject"]["trader_key"]
         thread = [t for t in thread if key not in t and "hypurrscan.io" not in t]
