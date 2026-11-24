@@ -7,6 +7,7 @@ import { bff } from "@/lib/bff";
 import { Badge, button, input, primary } from "./ui";
 
 type Hit = { trader_key: string; name: string; active: boolean; added: boolean; intro?: string | null; asset?: string | null;
+  avatar_url?: string | null;
   stats_30d: { roi?: number | string | null; pnl?: number | string | null; win_rate?: number | null; rank?: number | null } | null };
 
 const pct = (v: number | string | null | undefined, fraction: boolean) =>
@@ -32,7 +33,8 @@ export function StarSearch() {
     const name = window.prompt(t("namePrompt"), h.name.replace(/\s+/g, " ").trim());
     if (name === null || !name.trim()) return;
     try {
-      await bff("stars", "POST", { trader_key: h.trader_key, name: name.trim().slice(0, 64) }, { toast: t("added", { name }) });
+      await bff("stars", "POST", { trader_key: h.trader_key, name: name.trim().slice(0, 64),
+        avatar_url: h.avatar_url?.startsWith("https://") ? h.avatar_url : null }, { toast: t("added", { name }) });
       setHits((x) => x?.map((y) => (y.trader_key === h.trader_key ? { ...y, added: true } : y)) ?? null);
       router.refresh();
     } catch { /* the toaster said why */ }

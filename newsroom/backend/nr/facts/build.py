@@ -27,7 +27,7 @@ class RateLimited(Exception):
 
 def load_event(s: Session, event_id: int) -> dict:
     ev = dict(s.execute(text("""
-        SELECT ne.*, t.trader_key, t.public_label, t.display_name AS trader_name,
+        SELECT ne.*, t.trader_key, t.public_label, t.display_name AS trader_name, t.avatar_url AS trader_avatar,
                EXISTS (SELECT 1 FROM star_trader st WHERE st.trader_key = t.trader_key AND st.active) AS is_star
         FROM news_event ne JOIN trader t ON t.id = ne.trader_id WHERE ne.id = :i"""), {"i": event_id}).mappings().one())
     ev["story_published_before"] = bool(ev["story_id"] and s.execute(text("""

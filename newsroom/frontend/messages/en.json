@@ -316,7 +316,9 @@
     "nameDisplay": "How traders are named",
     "nameDisplayHelp": "How square posts name traders: the nickname, or masked in the middle. X accounts use short addresses and are unaffected.",
     "nameFull": "Nickname",
-    "nameMasked": "Masked"
+    "nameMasked": "Masked",
+    "showAvatar": "Trader avatars on square cards",
+    "showAvatarHelp": "Draw the trader's public avatar on square cards; off uses the nickname's initial."
   },
   "publications": {
     "title": "Publications",

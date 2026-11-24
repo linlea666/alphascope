@@ -32,6 +32,10 @@ def _multiple(f: Facts, fid: str, v, source: str, **x) -> None:
         f.add(fid, "ratio", D(v), fmt.multiple(D(v)), source, unit="x", **x)
 
 
+def avatar(s: Session, key: str) -> str | None:
+    return s.execute(text("SELECT avatar_url FROM trader WHERE trader_key = :k"), {"k": key}).scalar()
+
+
 def movers(c: FeedClient, window: str, limit: int = 100) -> dict:
     return c.research("movers", "/okx/board/movers", {"window": window, "limit": limit}, "rows", "movers.row")
 
@@ -41,6 +45,9 @@ def snapshot_board(s: Session, window: str, d: dict) -> None:
     if not d["run"]:
         return
     for r in d["rows"]:
+        if r.get("avatar_url"):
+            s.execute(text("UPDATE trader SET avatar_url = :u WHERE trader_key = :k AND avatar_url IS DISTINCT FROM :u"),
+                      {"u": r["avatar_url"], "k": r["trader_key"]})
         s.execute(text("""
             INSERT INTO trader_board_snapshot (trader_key, board, business_date, rank, pnl, pnl_ratio, asset, off_peak, name)
             VALUES (:k, :b, :d, :r, :pnl, :ratio, :asset, :off, :n)
@@ -58,7 +65,7 @@ def eligible(r: dict, cfg: dict) -> bool:
 
 def board_row(f: Facts, p: str, r: dict) -> None:
     text_fact(f, f"{p}.trader", short_name(r["trader_key"], r["display_name"]), "okx board nickname",
-              label="self-chosen nickname on OKX")
+              label="self-chosen nickname on OKX", trader_key=r["trader_key"], avatar_url=r.get("avatar_url"))
     count_fact(f, f"{p}.rank", r["rank"], "okx_leaderboard_row.rank")
     _multiple(f, f"{p}.multiple", r["multiple"], "1 + okx_leaderboard_row.pnl_ratio",
               label="account multiple over the window (1 + board return)")
@@ -174,7 +181,7 @@ def okx_fallen(s: Session, c: FeedClient, now: datetime, params: dict) -> list[C
         f = it.facts
         f.constraints |= set(BOARD)
         text_fact(f, "trader", short_name(pk["trader_key"], pk["name"]), "okx board nickname",
-                  label="self-chosen nickname on OKX")
+                  label="self-chosen nickname on OKX", trader_key=pk["trader_key"], avatar_url=avatar(s, pk["trader_key"]))
         _multiple(f, "peak.multiple", 1 + D(pk["pnl_ratio"]), "1 + board return at its best (board snapshots)")
         pct_fact(f, "peak.return", pk["pnl_ratio"], "trader_board_snapshot.pnl_ratio (best in 30 days)")
         count_fact(f, "peak.rank", pk["rank"], "trader_board_snapshot.rank")
@@ -218,7 +225,11 @@ def story_turn(s: Session, c: FeedClient, now: datetime, params: dict) -> list[C
                      title_en=f"{p['name']}: {p['prev_stage']} to {p['stage']}", params=params)
     f = it.facts
     f.constraints |= {"NO_IDENTITY", "LEADERBOARD_PNL", "OKX_LEAD_ASSETS" if p["venue"] == "okx" else "BINANCE_LEAD_ACCOUNT"}
-    text_fact(f, "trader", p["name"], "venue nickname", label="self-chosen nickname on the venue")
+    text_fact(f, "trader", p["name"], "venue nickname", label="self-chosen nickname on the venue", trader_key=key,
+              avatar_url=avatar(s, key))
+    if p["tags"]:
+        tags = [t["tag"] for t in p["tags"]]
+        f.add("traits.tags", "text", tags, {"zh": tags, "en": tags}, "trader_persona.tags (rules in nr/stories/squares.py)")
     text_fact(f, "stage.now", STAGE_ZH[p["stage"]], "trader_persona.stage (rules in nr/stories/persona.py)")
     text_fact(f, "stage.before", STAGE_ZH[p["prev_stage"] or "quiet"], "trader_persona.prev_stage")
     persona_facts(f, p["traits"])
@@ -273,7 +284,8 @@ def star_daily(s: Session, c: FeedClient, now: datetime, params: dict) -> list[C
             continue
         n += 1
         p = f"star.{n}"
-        text_fact(f, f"{p}.trader", st["name"], "star list name", label="self-chosen nickname on Binance")
+        text_fact(f, f"{p}.trader", st["name"], "star list name", label="self-chosen nickname on Binance",
+                  trader_key=st["trader_key"], avatar_url=avatar(s, st["trader_key"]))
         count_fact(f, f"{p}.opens_24h", opens, "relay snapshots (opens in 24 hours)")
         if closes:
             count_fact(f, f"{p}.closes_24h", len(closes), "relay closed positions (24 hours)")
@@ -289,8 +301,9 @@ def star_daily(s: Session, c: FeedClient, now: datetime, params: dict) -> list[C
 
 # ---- duels between two stars, and their result ------------------------------------------------------------------
 
-def _side_facts(f: Facts, p: str, key: str, name: str, side: str, pos: dict | None) -> None:
-    text_fact(f, f"{p}.trader", name, "star list name", label="self-chosen nickname on the venue")
+def _side_facts(s: Session, f: Facts, p: str, key: str, name: str, side: str, pos: dict | None) -> None:
+    text_fact(f, f"{p}.trader", name, "star list name", label="self-chosen nickname on the venue", trader_key=key,
+              avatar_url=avatar(s, key))
     text_fact(f, f"{p}.side", SIDE_ZH[side], "relay position side")
     if pos:
         _usd(f, f"{p}.notional", pos["notional"], "relay position notional")
@@ -321,7 +334,7 @@ def duel(s: Session, c: FeedClient, now: datetime, params: dict) -> list[ColumnI
         pos = s.execute(text("""SELECT * FROM relay_position WHERE trader_key = :k AND side = :sd AND open
                                 AND (symbol = :c || 'USDT' OR symbol = :c || 'USDC') ORDER BY last_seen_at DESC LIMIT 1"""),
                         {"k": key, "sd": side, "c": d["coin"]}).mappings().first()
-        _side_facts(f, p, key, names.get(key, key), side, pos)
+        _side_facts(s, f, p, key, names.get(key, key), side, pos)
         if result:
             cl = s.execute(text("""SELECT pnl, closed_at FROM relay_close WHERE trader_key = :k AND side = :sd
                                    AND closed_at >= :o AND (symbol = :c || 'USDT' OR symbol = :c || 'USDC')

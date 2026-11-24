@@ -25,7 +25,9 @@ from nr.ai.runner import call_json, resolve_prompt
 from nr.ai.schemas import DraftOut, DraftOutV2
 from nr.articles.versions import Draft, current_version, save_version
 from nr.cards.render import render_for_packet
+from nr.cards.square import square_card
 from nr.cards.v2 import pick_card
+from nr.desk.assignment import SQUARES
 from nr.desk import squares
 from nr.desk.eic import packet_for_model
 from nr.desk.hooks import hooks
@@ -95,7 +97,7 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
         a = s.execute(text("""
             SELECT asg.*, acc.handle, acc.display_name, acc.language, acc.positioning, acc.audience_profile, acc.platform,
                    acc.long_post_allowed, acc.link_in_thread, acc.reply_explorer_link, asg.style_key AS asg_style,
-                   acc.style_key AS acc_style, acc.name_display,
+                   acc.style_key AS acc_style, acc.name_display, acc.show_avatar,
                    ar.id AS article_id,
                    ne.current_fact_packet_id, ne.event_class, ne.coin, ne.gate_status, ne.story_id
             FROM assignment asg JOIN editorial_account acc ON acc.id = asg.account_id
@@ -217,7 +219,8 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
     o.facts_used = [f for f in o.facts_used if f in fact_ids]
     if hasattr(o, "lede_fact_ids"):
         o.lede_fact_ids = [f for f in o.lede_fact_ids if f in fact_ids]
-    card = pick_card(packet, [h["key"] for h in data["hooks"]]) if data.get("hooks") is not None else None
+    card = square_card(packet) if a["platform"] in SQUARES else \
+        pick_card(packet, [h["key"] for h in data["hooks"]]) if data.get("hooks") is not None else None
     thread, body = list(o.thread or []), o.body
     # a model sometimes repeats the body (or a post) in the thread: the same text twice reads as a glitch
     flat = lambda t: " ".join(t.split())  # noqa: E731
@@ -252,7 +255,8 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
         s.commit()
     if card:  # the image that goes with the post; a card that fails to draw never costs the draft
         try:
-            render_for_packet(sf, a["current_fact_packet_id"], card, a["language"])
+            render_for_packet(sf, a["current_fact_packet_id"], card, a["language"],
+                              brand="default" if a["show_avatar"] else "default:plain")
         except Exception:  # noqa: BLE001
             log.exception("card %s for packet %s", card, a["current_fact_packet_id"])
     return {"article_id": a["article_id"], "version_id": v["id"], "guard": v["guard_status"],

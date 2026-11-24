@@ -103,5 +103,6 @@ export type Account = {
   link_in_thread?: boolean;
   reply_explorer_link?: boolean;
   name_display?: string;
+  show_avatar?: boolean;
 };
 export type Me = { id: number; username: string; roles: string[]; must_change_password: boolean; account_permissions: Record<string, string[]> };

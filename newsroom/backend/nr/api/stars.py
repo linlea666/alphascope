@@ -81,6 +81,7 @@ class StarIn(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     note: str = Field("", max_length=500)
     min_notional_usd: float | None = Field(None, ge=0)
+    avatar_url: str | None = Field(None, max_length=500, pattern=r"^https://")
 
 
 @router.post("/stars")
@@ -93,9 +94,10 @@ def add_star(body: StarIn, s: Session = Depends(get_session), user: CurrentUser 
           min_notional_usd = EXCLUDED.min_notional_usd RETURNING id"""),
         {"k": body.trader_key, "v": venue, "n": body.name, "note": body.note, "m": body.min_notional_usd,
          "u": user.id}).scalar_one()
-    s.execute(text("""INSERT INTO trader (trader_key, venue, display_name) VALUES (:k, :v, :n)
-                      ON CONFLICT (trader_key) DO UPDATE SET display_name = coalesce(trader.display_name, EXCLUDED.display_name)"""),
-              {"k": body.trader_key, "v": venue, "n": body.name})
+    s.execute(text("""INSERT INTO trader (trader_key, venue, display_name, avatar_url) VALUES (:k, :v, :n, :a)
+                      ON CONFLICT (trader_key) DO UPDATE SET display_name = coalesce(trader.display_name, EXCLUDED.display_name),
+                        avatar_url = coalesce(EXCLUDED.avatar_url, trader.avatar_url)"""),
+              {"k": body.trader_key, "v": venue, "n": body.name, "a": body.avatar_url})
     audit.record(s, "star.add", "star_trader", sid, user_id=user.id, after=body.model_dump())
     s.commit()
     return {"id": sid}

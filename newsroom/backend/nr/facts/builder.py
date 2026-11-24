@@ -398,6 +398,7 @@ def build(event: dict, episode: dict, source_events: list[dict], ctx: dict | Non
                    "source_event_ids": [e["source_event_id"] for e in source_events],
                    "context_as_of": ctx["as_of"] if ctx else None},
         "subject": {"trader_ref": subject_ref, "trader_key": event["trader_key"], "venue": venue, "name": nick,
+                    "avatar_url": event.get("trader_avatar") if venue in ("okx", "binance") else None,
                     "star": bool(event.get("is_star")),
                     "explorer_url": explorer_url(event["trader_key"], venue),
                     "identity": "public_label" if event.get("public_label") else "unknown"},

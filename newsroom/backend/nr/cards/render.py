@@ -187,19 +187,25 @@ def _when(iso: str, lang: str) -> str:
 
 
 def render_for_packet(sf: sessionmaker, packet_id: int, template: str, language: str, brand: str = "default") -> dict:
+    from nr.cards.square import SQUARE_BUILDERS, SQUARE_REQUIRES
     from nr.cards.v2 import V2_BUILDERS, V2_REQUIRES
-    if template not in TEMPLATES and template not in CHART_TEMPLATES and template not in V2_BUILDERS:
+    if template not in TEMPLATES and template not in CHART_TEMPLATES and template not in V2_BUILDERS \
+            and template not in SQUARE_BUILDERS:
         raise ValueError(f"unknown template {template}")
     with sf() as s:
         row = s.execute(text("SELECT content, content_hash, version FROM fact_packet WHERE id = :i"),
                         {"i": packet_id}).mappings().one()
         packet = {**row["content"], "hash": row["content_hash"], "version": row["version"]}
-        name = "AlphaScope" if brand == "default" else brand
+        # "default:plain": the same card without traders' avatars (an account can turn them off)
+        name = "AlphaScope" if brand.startswith("default") else brand
         facts = {f["id"] for f in packet["facts"]}
         if template == "chart_card" and "chart" not in facts or template == "lifecycle_card" and "episode.path" not in facts \
-                or template in V2_REQUIRES and V2_REQUIRES[template] not in facts:
+                or template in V2_REQUIRES and V2_REQUIRES[template] not in facts \
+                or template in SQUARE_REQUIRES and SQUARE_REQUIRES[template] not in facts:
             raise ValueError(f"this packet has nothing for {template}")
-        inputs = (V2_BUILDERS[template](packet, language, name, cjk_font()) if template in V2_BUILDERS else
+        inputs = (SQUARE_BUILDERS[template](packet, language, name, cjk_font(), avatars=not brand.endswith(":plain"))
+                  if template in SQUARE_BUILDERS else
+                  V2_BUILDERS[template](packet, language, name, cjk_font()) if template in V2_BUILDERS else
                   chart_inputs(packet, language, name) if template == "chart_card" else
                   lifecycle_inputs(packet, language, name) if template == "lifecycle_card" else
                   card_inputs(packet, template, language, name))
@@ -216,12 +222,13 @@ def render_for_packet(sf: sessionmaker, packet_id: int, template: str, language:
             out[kind] = s.execute(text("""
                 INSERT INTO media_asset (kind, template_key, template_version, fact_packet_id, language, brand, data_hash,
                                          file_path, sha256, width, height)
-                VALUES (:k, :t, :tv, :p, :l, :b, :dh, :fp, :sha, 1200, 675)
+                VALUES (:k, :t, :tv, :p, :l, :b, :dh, :fp, :sha, :w, :h)
                 ON CONFLICT (template_key, template_version, fact_packet_id, language, brand, kind)
                 DO UPDATE SET file_path = EXCLUDED.file_path, sha256 = EXCLUDED.sha256, data_hash = EXCLUDED.data_hash
                 RETURNING id"""),
                 {"k": kind, "t": template, "tv": TEMPLATE_VERSION, "p": packet_id, "l": language, "b": brand,
-                 "dh": data_hash, "fp": str(path), "sha": sha}).scalar_one()
+                 "dh": data_hash, "fp": str(path), "sha": sha, "w": inputs.get("w", 1200),
+                 "h": inputs.get("h", 675)}).scalar_one()
         s.commit()
     return {"assets": out, "data_hash": data_hash, "rows": inputs.get("rows", [])}
 

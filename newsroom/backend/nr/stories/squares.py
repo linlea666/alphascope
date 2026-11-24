@@ -121,6 +121,8 @@ def okx_traits(s: Session, c: FeedClient, key: str, now: datetime) -> dict | Non
     except (FeedUnavailable, FeedError) as exc:
         log.info("okx profile %s unavailable: %s", key, exc)
         return None
+    if p.get("avatar_url"):
+        s.execute(text("UPDATE trader SET avatar_url = :u WHERE trader_key = :k"), {"u": p["avatar_url"], "k": key})
     on = [b for b in p["boards"] if b["on_board"]]
     best = max(on, key=lambda b: float(b["multiple"] or 0), default=None)
     cl = p["closes_30d"]

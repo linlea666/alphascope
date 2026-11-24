@@ -316,7 +316,9 @@
     "nameDisplay": "交易员称呼",
     "nameDisplayHelp": "广场帖子里怎么称呼交易员：直接用昵称，或中间打码（如「熬x」「中xxx员」）。X 账号用短地址，不受影响。",
     "nameFull": "直接用昵称",
-    "nameMasked": "中间打码"
+    "nameMasked": "中间打码",
+    "showAvatar": "广场图卡用交易员头像",
+    "showAvatarHelp": "配图上画交易员在平台上的公开头像；关掉就用昵称首字。只对 OKX / 币安广场的图卡生效。"
   },
   "publications": {
     "title": "发布记录",

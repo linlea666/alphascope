@@ -418,7 +418,8 @@ REQUIRED: dict[str, list[str]] = {
         "new_entry",
         "multiple",
         "off_peak",
-        "days"
+        "days",
+        "avatar_url"
     ],
     "okx_profile": [
         "schema",
@@ -433,7 +434,8 @@ REQUIRED: dict[str, list[str]] = {
         "asset_at",
         "pool_status",
         "boards",
-        "closes_30d"
+        "closes_30d",
+        "avatar_url"
     ],
     "okx_profile.board": [
         "window",

@@ -18,7 +18,7 @@ A, B = "binance:10", "binance:20"
 
 
 def mover(rank, key, name, ratio, pnl, asset, off=0.01, prev=None, new=False):
-    return {"rank": rank, "trader_key": key, "display_name": name, "handle": None, "pnl": str(pnl),
+    return {"rank": rank, "trader_key": key, "display_name": name, "handle": None, "avatar_url": None, "pnl": str(pnl),
             "pnl_ratio": str(ratio), "win_rate": "0.6", "max_drawdown": "0.2", "asset": str(asset), "prev_rank": prev,
             "rank_change": (prev - rank) if prev else None, "new_entry": new, "multiple": str(round(1 + ratio, 2)),
             "off_peak": off, "days": 8}
@@ -252,3 +252,31 @@ def test_a_column_without_a_trader_opens_in_the_desk(sf):
         app.dependency_overrides.clear()
     assert r.status_code == 200, r.text
     assert r.json()["event"]["trader_key"] is None and r.json()["event"]["column_key"] == "okx_multipliers"
+
+
+def test_square_cards_draw_from_the_packet(sf):
+    from nr.cards import square
+    from nr.cards.avatars import drawable
+    from nr.cards.render import render_for_packet
+    newsroom(sf)
+    feed = feed_with_health()
+    feed.research["/okx/board/movers"] = movers_doc([mover(i, f"okx:500000000{i}", f"夕阳👿{i}", 5 - i * 0.5, 50000, 9000)
+                                                    for i in range(1, 6)])
+    pipeline(sf, feed, NOW)
+    with feed.client() as c:
+        eid = build_column(sf, c, "okx_multipliers", NOW, {"windows": ["7d"]})["issues"][0]["event_id"]
+    with sf() as s:
+        pid, packet = s.execute(text("SELECT id, content FROM fact_packet WHERE news_event_id = :e"), {"e": eid}).one()
+    assert square.square_card(packet) == "square_podium"
+    out = render_for_packet(sf, pid, "square_podium", "zh", brand="default:plain")
+    with sf() as s:
+        w, h = s.execute(text("SELECT width, height FROM media_asset WHERE id = :i"), {"i": out["assets"]["card_png"]}).one()
+    assert (w, h) == (1080, 1350)
+    inputs = square.podium_inputs(packet, "zh", "AlphaScope", "sans", avatars=False)
+    assert inputs["people"][0]["name"] == "夕阳1" and inputs["people"][0]["small"] is True  # emoji dropped, $9K is small
+    assert drawable("allincrypto 熬鹰资本 🇨🇳") == "allincrypto 熬鹰资本"
+    assert square.fit("+10.5万美元", 250, 50) < 50
+    # the others pick their card by what the packet is
+    assert square.square_card({"event": {"class": "column:duel"}, "facts": [{"id": "a.trader"}]}) == "square_duel"
+    assert square.square_card({"event": {"class": "whale_close"}, "facts": [{"id": "change.notional_usd"}]}) == "square_star"
+    assert square.square_card({"event": {"class": "column:liq_ladder"}, "facts": []}) is None

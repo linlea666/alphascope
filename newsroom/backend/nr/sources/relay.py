@@ -250,6 +250,9 @@ def sync(sf: sessionmaker, client: RelayClient, source_id: int, now: datetime) -
                      "lv": D(c.get("lever")), "mg": D(c.get("margin")), "pnl": D(c.get("pnl")), "full": bool(c.get("full"))})
                 out["closes"] += res.rowcount
             state.setdefault("closes_at", {})[tid] = now.isoformat()
+            if profiles[tid].get("avatar_url"):
+                s.execute(text("UPDATE trader SET avatar_url = :u WHERE trader_key = :k"),
+                          {"u": profiles[tid]["avatar_url"], "k": key})
             if (st := profiles[tid].get("upstream_stats")) is not None:
                 s.execute(text("UPDATE star_trader SET stats_30d = CAST(:st AS jsonb), stats_at = :n WHERE trader_key = :k"),
                           {"st": json.dumps(st), "n": now, "k": key})

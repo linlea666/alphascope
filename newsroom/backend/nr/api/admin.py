@@ -121,6 +121,7 @@ class AccountIn(BaseModel):
     link_in_thread: bool = True  # the full address goes in the post's first reply
     reply_explorer_link: bool = False  # ...with an explorer link (off: no free ads for the explorer)
     name_display: Literal["nickname", "masked"] = "nickname"  # how square posts name a trader (docs/16)
+    show_avatar: bool = True  # square cards draw traders' public avatars
     rpa_enabled: bool = False
     authorization_status: Literal["pending", "authorized", "expired", "revoked"] = "pending"
     authorization_expires_at: str | None = None

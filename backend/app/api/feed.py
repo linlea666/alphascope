@@ -353,8 +353,8 @@ def okx_board_movers(window: Literal["7d", "30d", "90d"] = "7d", limit: int = Qu
     out, dropped = [], []
     if latest:
         for r in rows(s, """
-                SELECT r.rank, w.address AS trader_key, w.display_name, w.handle, r.pnl, r.pnl_ratio, r.win_rate,
-                       r.max_drawdown, r.asset, r.rates, p.rank AS prev_rank
+                SELECT r.rank, w.address AS trader_key, w.display_name, w.handle, w.avatar_url, r.pnl, r.pnl_ratio,
+                       r.win_rate, r.max_drawdown, r.asset, r.rates, p.rank AS prev_rank
                 FROM okx_leaderboard_row r JOIN wallet w ON w.id = r.wallet_id
                 LEFT JOIN okx_leaderboard_row p ON p.wallet_id = r.wallet_id AND p.run_id = :prev
                 WHERE r.run_id = :run ORDER BY r.rank LIMIT :n""",
@@ -381,7 +381,8 @@ def okx_trader_profile(trader_key: str, s: Session = Depends(feed_session)):
     """One OKX trader as a character: public nickname and profile, every board they sit on (rank, return, curve), how
     long they have been on each, and the last 30 days of closed positions in brief."""
     now = datetime.now(UTC)
-    w = s.execute(text("""SELECT w.id, w.address AS trader_key, w.display_name, w.handle, t.profile, t.asset, t.asset_at,
+    w = s.execute(text("""SELECT w.id, w.address AS trader_key, w.display_name, w.handle, w.avatar_url, t.profile, t.asset,
+                                 t.asset_at,
                                  t.pool_status, t.history_status
                           FROM wallet w LEFT JOIN okx_trader t ON t.wallet_id = w.id
                           WHERE w.address = :k AND w.venue = 'okx'"""), {"k": trader_key}).mappings().first()
@@ -411,6 +412,7 @@ def okx_trader_profile(trader_key: str, s: Session = Depends(feed_session)):
         {"w": w["id"], "since": now - timedelta(days=30)}).mappings().one()
     return {"schema": SCHEMA, "as_of": now, "trader_key": w["trader_key"],
             "display_name": w["display_name"] or prof.get("nickName"), "handle": w["handle"] or prof.get("uniqueName"),
+            "avatar_url": w["avatar_url"],
             "followers": prof.get("followerCount"), "bio": prof.get("bio"), "joined": prof.get("joinTime"),
             "asset": w["asset"], "asset_at": w["asset_at"], "pool_status": w["pool_status"],
             "boards": plain(boards), "closes_30d": plain(dict(closes))}

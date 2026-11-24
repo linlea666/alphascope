@@ -25,6 +25,7 @@ export default async function AccountsPage() {
     { name: "venues", label: t("venues"), type: "list", value: a?.venues ?? ["hyperliquid"], placeholder: "hyperliquid, okx, binance" },
     { name: "name_display", label: t("nameDisplay"), type: "select", value: a?.name_display ?? "nickname", help: t("nameDisplayHelp"),
       options: [{ value: "nickname", label: t("nameFull") }, { value: "masked", label: t("nameMasked") }] },
+    { name: "show_avatar", label: t("showAvatar"), type: "checkbox", value: a?.show_avatar ?? true, help: t("showAvatarHelp") },
     { name: "status", label: tc("status"), type: "select", options: ["active", "paused", "retired"].map((v) => ({ value: v, label: tw(v) })),
       value: a?.status ?? "paused", help: t("statusHelp") },
     { name: "brand", label: t("brand"), value: a?.brand ?? "AlphaScope" },
