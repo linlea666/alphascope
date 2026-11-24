@@ -283,12 +283,15 @@
     "brand": "品牌",
     "platform": "发布平台",
     "venues": "报道的交易所（逗号分隔：hyperliquid, okx；X 账号建议只填 hyperliquid）",
-    "linkInThread": "串推最后一条自动附完整地址和链接",
+    "linkInThread": "评论区附完整钱包地址",
     "styleHelp": "没有指定记者风格时用这个；记者默认风格在 系统管理 → 规则 里设置",
     "statusHelp": "启用：参与选题和写稿；暂停：不参与，但可以试写；停用：不再使用",
     "authShort": "授权",
     "classesHelp": "都不勾 = 所有事件类型都接",
-    "authUntil": "授权到期"
+    "authUntil": "授权到期",
+    "linkInThreadHelp": "正文只写短地址；完整地址自动生成一条评论（例如「钱包地址：0x…」），发帖后贴到评论区",
+    "replyLink": "评论里再附区块浏览器链接",
+    "replyLinkHelp": "默认关闭，免得白给浏览器网站打广告；需要时再打开"
   },
   "publications": {
     "title": "发布记录",

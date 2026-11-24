@@ -12,7 +12,7 @@ TEST_DB_URL = os.environ.get("NEWSROOM_TEST_DATABASE_URL", "postgresql+psycopg:/
 os.environ.setdefault("NEWSROOM_DATABASE_URL", TEST_DB_URL)
 TABLES = ("ai_call_log", "job", "ai_agent_profile", "prompt_template", "ai_model_config", "performance_snapshot",
           "correction_record", "publication_record", "publication_plan", "media_asset", "article_fact_reference",
-          "experiment_vote", "experiment_pair", "experiment", "draft_rating", "article_version", "article", "assignment", "eic_evaluation", "account_permission", "editorial_account",
+          "experiment_vote", "experiment_pair", "experiment", "article_review", "api_token", "draft_rating", "article_version", "article", "assignment", "eic_evaluation", "account_permission", "editorial_account",
           "editorial_style", "story_event", "fact_packet", "event_evidence", "event_state_history", "news_event",
           "news_story", "source_event", "position_episode", "trader_context_snapshot", "trader",
           "source_health_snapshot", "sync_run", "ingestion_checkpoint_history", "ingestion_checkpoint",

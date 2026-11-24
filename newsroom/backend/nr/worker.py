@@ -9,6 +9,7 @@ from decimal import Decimal
 from apscheduler.schedulers.blocking import BlockingScheduler
 
 from nr import maintenance
+from nr.publish.expiry import expire_due
 from nr.columns import schedule
 from nr.config import get_settings
 from nr.db import session_factory
@@ -86,6 +87,11 @@ def main() -> None:
         if queued:
             log.info("columns queued: %s", queued)
 
+    def expiry_job() -> None:
+        n = expire_due(sf, now())
+        if n:
+            log.info("expired drafts: %s", n)
+
     def maintenance_job() -> None:
         log.info("maintenance: %s", maintenance.run(sf, now()))
 
@@ -97,6 +103,7 @@ def main() -> None:
     sched.add_job(at_risk_job, "interval", minutes=10, next_run_time=now())
     sched.add_job(refresh_job, "interval", minutes=15)
     sched.add_job(maintenance_job, "interval", hours=1, next_run_time=now())
+    sched.add_job(expiry_job, "interval", minutes=5, next_run_time=now())
     sched.add_job(column_job, "cron", minute=7)
     threads = [threading.Thread(target=queue_loop, args=(DETERMINISTIC, "facts"), daemon=True)]
     threads += [threading.Thread(target=queue_loop, args=(AI_KINDS, f"ai-{i}"), daemon=True)

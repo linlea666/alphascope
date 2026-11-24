@@ -56,6 +56,14 @@ def live_guard(s: Session, art: dict, v: dict) -> dict:
                           list(v["facts_used"]))
 
 
+def quick_approve(s: Session, article_id: int, user_id: int, ack_duplicate: bool = False) -> dict:
+    """One click from a finished draft to ready-to-post: submit and approve with every check of both steps."""
+    status = versions.load(s, article_id)["status"]
+    if status in ("draft_ready", "changes_requested"):
+        submit(s, article_id, user_id)
+    return approve(s, article_id, user_id, ack_duplicate=ack_duplicate)
+
+
 def approve(s: Session, article_id: int, user_id: int, ack_duplicate: bool = False) -> dict:
     art = versions.load(s, article_id)
     if art["status"] != "in_review":
@@ -117,15 +125,20 @@ def publish_blockers(s: Session, account_id: int, now: datetime) -> list[str]:
     return out
 
 
-def mark_published(s: Session, article_id: int, user_id: int, x_url: str, published_at: datetime, now: datetime,
-                   final_text: str | None = None) -> int:
+def mark_published(s: Session, article_id: int, user_id: int, x_url: str | None, published_at: datetime, now: datetime,
+                   final_text: str | None = None, channel: str = "manual", reply_url: str | None = None,
+                   api_token_id: int | None = None, allow_expired: bool = False) -> int:
+    """Record a post that went out (by hand, RPA, an extension). The post's link is optional for a manual record."""
     art = versions.load(s, article_id)
-    if art["status"] != "approved":
+    if art["status"] == "expired" and not allow_expired:
+        raise HTTPException(409, "this draft expired: confirm that you still posted it")
+    if art["status"] not in ("approved", "expired"):
         raise HTTPException(409, f"article is {art['status']}, only approved articles can be published")
     blockers = publish_blockers(s, art["account_id"], now)
     if blockers:
         raise HTTPException(423, "; ".join(blockers))
-    post_id = post_id_for(s, art["platform"], art["handle"], x_url.strip())
+    x_url = (x_url or "").strip()
+    post_id = post_id_for(s, art["platform"], art["handle"], x_url) if x_url else None
     if published_at > now + timedelta(minutes=5):
         raise HTTPException(422, "published_at is in the future")
     v = versions.current_version(s, article_id)
@@ -140,13 +153,18 @@ def mark_published(s: Session, article_id: int, user_id: int, x_url: str, publis
     if hard:
         raise HTTPException(409, {"message": "the posted text fails the claims guard", "guard": report})
     h = hashlib.sha256(posted.encode()).hexdigest()
+    assets = list(s.execute(text("""SELECT id FROM media_asset WHERE fact_packet_id = :p AND template_key = :t
+                                    AND language = :l AND kind = 'card_png' ORDER BY id DESC LIMIT 1"""),
+                            {"p": v["fact_packet_id"], "t": v["card_template"], "l": art["language"]}).scalars())
     pid = s.execute(text("""
         INSERT INTO publication_record (article_id, article_version_id, account_id, x_post_id, x_url, published_at,
-          recorded_by, final_text, final_text_hash, matches_version, guard_report)
-        VALUES (:a, :v, :acc, :pid, :url, :at, :u, :t, :h, :mv, CAST(:g AS jsonb)) RETURNING id"""),
-        {"a": article_id, "v": v["id"], "acc": art["account_id"], "pid": post_id, "url": x_url.strip(),
+          recorded_by, final_text, final_text_hash, matches_version, guard_report, asset_ids, channel, reply_url,
+          api_token_id)
+        VALUES (:a, :v, :acc, :pid, :url, :at, :u, :t, :h, :mv, CAST(:g AS jsonb), :assets, :ch, :ru, :tok) RETURNING id"""),
+        {"a": article_id, "v": v["id"], "acc": art["account_id"], "pid": post_id, "url": x_url or None,
          "at": published_at, "u": user_id, "t": posted, "h": h, "mv": final_text is None or posted == v["body"],
-         "g": json.dumps(report, ensure_ascii=False, default=str)}).scalar_one()
+         "g": json.dumps(report, ensure_ascii=False, default=str), "assets": assets, "ch": channel,
+         "ru": (reply_url or "").strip() or None, "tok": api_token_id}).scalar_one()
     versions.set_status(s, article_id, "published")
     s.execute(text("UPDATE assignment SET status = 'done' WHERE id = :i"), {"i": art["assignment_id"]})
     s.execute(text("""UPDATE publication_plan SET status = 'done', publication_id = :p
@@ -158,8 +176,8 @@ def mark_published(s: Session, article_id: int, user_id: int, x_url: str, publis
     s.execute(text("""UPDATE story_event SET pinned_fact_packet_id = coalesce(pinned_fact_packet_id, :p)
                       WHERE news_event_id = :e"""), {"p": v["fact_packet_id"], "e": art["news_event_id"]})
     audit.record(s, "publication.record", "publication", pid, user_id=user_id, account_id=art["account_id"],
-                 after={"article_id": article_id, "version_id": v["id"], "x_url": x_url, "matches_version":
-                        final_text is None or posted == v["body"]})
+                 after={"article_id": article_id, "version_id": v["id"], "x_url": x_url, "channel": channel,
+                        "matches_version": final_text is None or posted == v["body"]})
     return pid
 
 

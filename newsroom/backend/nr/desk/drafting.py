@@ -8,7 +8,8 @@ add versions without replacing the current one.
 The output schema follows the prompt: a prompt that asks for lede_fact_ids (reporter v2) gets the v2 schema and the
 story memory; one that reads hooks (v3) also gets the ranked angles, a character budget, the reporter's house style
 and a fresh recency. The "baseline" variant writes the way facts-1 packets did, without contrast facts, for A/B
-experiments. The full address and an explorer link are added by code as the thread's last post, never by a model.
+experiments. The full wallet address goes in the post's first reply, worded by code (never by a model), with an explorer
+link only when the account asks for one; the post itself carries the short address.
 """
 
 import logging
@@ -58,12 +59,20 @@ def fresh_recency(packet: dict, now) -> dict:
     return {**packet, "facts": out}
 
 
-def link_post(packet: dict, language: str) -> str | None:
+# the reply that carries the full address, phrased a few ways so a feed of posts doesn't repeat itself
+REPLY = {"zh": ["钱包地址：{a}", "想自己盯着这个地址的，看这里 👇\n{a}", "地址放这儿了：{a}", "链上地址：{a}"],
+         "en": ["Wallet: {a}", "Want to track it yourself? 👇\n{a}", "Address: {a}", "Here's the wallet: {a}"]}
+POINTER = {"zh": ["地址在评论区 👇", "钱包地址见评论 👇"], "en": ["Wallet in the replies 👇", "Address below 👇"]}
+
+
+def reply_post(packet: dict, language: str, seed: int, with_link: bool) -> str | None:
     subj = packet.get("subject") or {}
-    if not subj.get("explorer_url"):
+    key = subj.get("trader_key") or ""
+    if not key.startswith("0x"):
         return None
-    label = "地址：" if language == "zh" else "Address: "
-    return f"{label}{subj['trader_key']}\n{subj['explorer_url']}"
+    lines = REPLY.get(language, REPLY["en"])
+    out = lines[seed % len(lines)].format(a=key)
+    return out + (f"\n{subj['explorer_url']}" if with_link and subj.get("explorer_url") else "")
 
 
 def baseline_packet(packet: dict) -> dict:
@@ -81,7 +90,8 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
     with sf() as s:
         a = s.execute(text("""
             SELECT asg.*, acc.handle, acc.display_name, acc.language, acc.positioning, acc.audience_profile, acc.platform,
-                   acc.long_post_allowed, acc.link_in_thread, asg.style_key AS asg_style, acc.style_key AS acc_style,
+                   acc.long_post_allowed, acc.link_in_thread, acc.reply_explorer_link, asg.style_key AS asg_style,
+                   acc.style_key AS acc_style,
                    ar.id AS article_id,
                    ne.current_fact_packet_id, ne.event_class, ne.coin, ne.gate_status, ne.story_id
             FROM assignment asg JOIN editorial_account acc ON acc.id = asg.account_id
@@ -129,12 +139,13 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
     schema = DraftOutV2 if v2 else DraftOut
     fact_ids = {f["id"] for f in packet["facts"]}
     budget = char_budget(platform_rule, a["language"], a["long_post_allowed"])
-    link = link_post(packet, a["language"]) if a["link_in_thread"] and variant != "baseline" else None
-    url = (packet.get("subject") or {}).get("explorer_url")
-    in_body = bool(url and style and (style["structure"] or {}).get("link_in_body") and variant != "baseline")
-    if in_body:  # the link closes the post itself: X counts it as 23, keep room for it
-        budget -= 14 if a["language"] == "zh" else 26
-        link = None
+    reply = reply_post(packet, a["language"], a["article_id"], a["reply_explorer_link"]) \
+        if a["link_in_thread"] and variant != "baseline" else None
+    # a style that points at the reply ("地址在评论区 👇") closes the post with that line: keep room for it
+    pointer = POINTER.get(a["language"], POINTER["en"])[a["article_id"] % 2] \
+        if reply and style and (style["structure"] or {}).get("link_in_body") else None
+    if pointer:
+        budget -= len(pointer) + 2
 
     def semantic(o: DraftOut) -> list[str]:
         # ids that aren't facts are dropped after the call (the guard checks every number anyway); a draft citing
@@ -183,22 +194,21 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
     if hasattr(o, "lede_fact_ids"):
         o.lede_fact_ids = [f for f in o.lede_fact_ids if f in fact_ids]
     card = pick_card(packet, [h["key"] for h in data["hooks"]]) if data.get("hooks") is not None else None
-    thread = list(o.thread or [])
-    if link or in_body:  # the address and link come from the packet, never from a model; exactly one copy
+    thread, body = list(o.thread or []), o.body
+    if reply:  # the full address and any link come from the packet into the reply, never from a model
         key = packet["subject"]["trader_key"]
-        thread = [t for t in thread if key not in t and "hypurrscan.io" not in t] + ([link] if link else [])
-    body = o.body
-    if in_body:
-        key = packet["subject"]["trader_key"]
-        lines = [ln for ln in body.rstrip().splitlines() if key not in ln and "hypurrscan.io" not in ln]
-        body = "\n".join(lines).rstrip() + "\n\n" + url
+        thread = [t for t in thread if key not in t and "hypurrscan.io" not in t]
+        body = "\n".join(ln for ln in body.rstrip().splitlines() if key not in ln and "hypurrscan.io" not in ln).rstrip()
+        if pointer:
+            body += "\n\n" + pointer
     with sf() as s:
         v = save_version(s, a["article_id"], Draft(
             body=body, headline=o.headline_candidates[0], alt_headlines=o.headline_candidates[1:], thread=thread or None,
             angle=o.angle, added_value=o.added_value, difference_from_others=o.difference_from_others,
             why_shareable=o.why_shareable, risks=o.risks, facts_used=o.facts_used,
             why_now=getattr(o, "why_now", ""), open_question=getattr(o, "open_question", None),
-            lede_fact_ids=getattr(o, "lede_fact_ids", None), card_template=card),
+            lede_fact_ids=getattr(o, "lede_fact_ids", None), card_template=card,
+            style_key=style["key"] if style else None, reply_text=reply),
             origin="ai", ai_call_id=out.call_id, agent_key=out.agent_key, prompt_ref=out.prompt_ref, model=out.model,
             make_current=False if compare else None)
         s.execute(text("UPDATE assignment SET status = 'drafting' WHERE id = :i AND status = 'accepted'"),

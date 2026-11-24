@@ -283,12 +283,15 @@
     "brand": "Brand",
     "platform": "Platform",
     "venues": "Venues covered (comma-separated: hyperliquid, okx; X accounts: hyperliquid)",
-    "linkInThread": "Add the full address and link as the thread's last post",
+    "linkInThread": "Full wallet address as the first reply",
     "styleHelp": "Used when no reporter style applies; reporters' defaults are under Settings → Rules",
     "statusHelp": "Active: gets coverage; paused: trials only; retired: unused",
     "authShort": "Authorization",
     "classesHelp": "None ticked = every event type",
-    "authUntil": "authorized until"
+    "authUntil": "authorized until",
+    "linkInThreadHelp": "The post shows the short address; a reply like 'Wallet: 0x…' is written for you",
+    "replyLink": "Add an explorer link to that reply",
+    "replyLinkHelp": "Off by default: no free ads for the explorer"
   },
   "publications": {
     "title": "Publications",

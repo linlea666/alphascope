@@ -26,7 +26,7 @@ from nr.feed import health
 router = APIRouter(prefix="/api", tags=["admin"])
 ADMIN = require_roles("admin")
 CHIEF = require_roles("admin", "editor_in_chief")
-EDITABLE_SETTINGS = ("detect", "gate", "budgets", "ai", "guard", "review", "columns", "styles", "desk")
+EDITABLE_SETTINGS = ("detect", "gate", "budgets", "ai", "guard", "review", "columns", "styles", "desk", "expiry")
 
 
 @router.get("/dashboard")
@@ -91,7 +91,8 @@ class AccountIn(BaseModel):
     daily_post_budget: int = Field(5, ge=0, le=100)
     min_gap_minutes: int = Field(60, ge=0)
     long_post_allowed: bool = False
-    link_in_thread: bool = True
+    link_in_thread: bool = True  # the full address goes in the post's first reply
+    reply_explorer_link: bool = False  # ...with an explorer link (off: no free ads for the explorer)
     rpa_enabled: bool = False
     authorization_status: Literal["pending", "authorized", "expired", "revoked"] = "pending"
     authorization_expires_at: str | None = None

@@ -104,8 +104,10 @@ def test_v3_writes_in_the_reporters_house_style_and_code_adds_the_link(sf):
     assert data["hooks"][0]["key"] == "top_of_sample" and "at most 120 characters" in req["user"]
     assert fact(data["fact_packet"], "change.recency")["display"]["zh"] == ["过去几小时"]
     with sf() as s:
-        v = s.execute(text("SELECT thread, guard_report FROM article_version WHERE article_id = :a"), {"a": art}).one()
-    assert v[0] == [f"地址：{WHALE}\nhttps://hypurrscan.io/address/{WHALE}"]  # the model's own link is replaced
+        v = s.execute(text("SELECT thread, guard_report, reply_text, style_key FROM article_version WHERE article_id = :a"),
+                      {"a": art}).one()
+    assert v[0] is None and WHALE in v[2] and "hypurrscan" not in v[2]  # the address goes in the reply, no link
+    assert v[3] == "zh_whale_alert"
     assert not [f for f in v[1]["findings"] if f["severity"] == "fail"], v[1]["findings"]
     assert char_budget({"limit": 280, "weighted": True}, "en", False) == 250
 
@@ -205,8 +207,8 @@ def test_book_breakdown_style_lists_positions_puts_the_link_last_and_draws_the_b
     with sf() as s:
         v = s.execute(text("SELECT body, thread, guard_status, guard_report, card_template FROM article_version "
                            "WHERE article_id = :a"), {"a": art}).one()
-    assert v[0].endswith(f"\n\nhttps://hypurrscan.io/address/{WHALE}") and v[0].count("hypurrscan") == 1
-    assert not v[1] or all("hypurrscan" not in t for t in v[1])  # the link is in the body, not the thread too
+    assert v[0].endswith(("\n\nAddress below 👇", "\n\nWallet in the replies 👇")) and "hypurrscan" not in v[0]
+    assert not v[1]  # the model's own link line is gone from the thread
     assert v[2] == "pass", v[3]["findings"]
     assert v[4] == "book_card"
     out = render_for_packet(sf, pid, "book_card", "en")
@@ -233,3 +235,50 @@ def test_time_spans_from_recency_are_not_figures():
     assert codes(numbers.check("2,250 ETH gone in the past 24 hours.", FACTS, allow)) == ["UNMATCHED_NUMBER"]  # 2,250 isn't a fact
     assert codes(numbers.check("Closed in the past 24 hours, 267 BTC left.", FACTS, allow)) == []
     assert codes(numbers.check("过去24小时加到267枚BTC。", FACTS, allow)) == []
+
+
+def test_the_reply_carries_the_address_and_a_link_only_when_the_account_wants_one(sf):
+    nr = newsroom(sf)
+    feed = FakeFeed()
+    feed.events = [ev(1, "open", 0, 300, 100000, entry=98000)]
+    feed.contexts[WHALE] = context(positions=[position(szi=300)])
+    feed.research["/market/coin-positions"] = crowd()
+    pipeline(sf, feed, NOW)
+    with sf() as s:
+        s.execute(text("UPDATE editorial_account SET reply_explorer_link = true WHERE id = :a"), {"a": nr["en"]})
+        eid = s.execute(text("SELECT id FROM news_event")).scalar()
+        aid = assignment.create(s, eid, nr["en"], source="trial", status="accepted", user_id=nr["chief"])
+        art = assignment.accept(s, aid, nr["chief"])
+        s.commit()
+    w = Writer("WHALE ALERT!!\nThis whale is long $30 MILLION $BTC")
+    w.lang = "en"
+    generate_draft(sf, aid, NOW, transport=w, prompt_version=5)
+    with sf() as s:
+        reply, status, exp = s.execute(text("""SELECT v.reply_text, a.status, a.expires_at FROM article_version v
+                                              JOIN article a ON a.id = v.article_id WHERE a.id = :a"""), {"a": art}).one()
+    assert WHALE in reply and reply.endswith(f"https://hypurrscan.io/address/{WHALE}")
+    assert status == "draft_ready" and exp is not None
+
+
+def test_drafts_expire_with_their_news(sf):
+    from nr.publish.expiry import expire_due
+    nr = newsroom(sf)
+    feed = FakeFeed()
+    feed.events = [ev(1, "open", 0, 300, 100000, entry=98000)]
+    feed.contexts[WHALE] = context(positions=[position(szi=300)])
+    pipeline(sf, feed, NOW)
+    with sf() as s:
+        eid, seen = s.execute(text("""SELECT ne.id, se.observed_at FROM news_event ne
+                                      JOIN source_event se ON se.id = ne.last_source_event_id""")).one()
+        aid = assignment.create(s, eid, nr["zh"], source="editor", status="accepted", user_id=nr["chief"])
+        art = assignment.accept(s, aid, nr["chief"])
+        from nr.articles.versions import Draft, save_version
+        save_version(s, art, Draft(body="巨鲸 $BTC 多单3000万美元", facts_used=["position.notional_usd"]), origin="human",
+                     user_id=nr["chief"])
+        s.commit()
+        exp = s.execute(text("SELECT expires_at FROM article WHERE id = :a"), {"a": art}).scalar()
+    assert exp == seen + timedelta(hours=3)  # whale_open: three hours after the move was seen
+    assert expire_due(sf, exp - timedelta(minutes=1)) == 0
+    assert expire_due(sf, exp + timedelta(minutes=1)) == 1
+    with sf() as s:
+        assert s.execute(text("SELECT status FROM article WHERE id = :a"), {"a": art}).scalar() == "expired"

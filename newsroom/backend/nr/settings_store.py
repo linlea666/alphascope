@@ -28,6 +28,10 @@ DEFAULTS: dict[str, dict] = {
     # four_eyes: the author of the current version may not approve it (turn on once there is more than one editor)
     "review": {"four_eyes": False},
     "columns": {"disabled": []},
+    # how long a draft stays worth posting after the move was seen, per event class (hours)
+    "expiry": {"hours": {"near_liquidation": 1, "liquidation": 1, "whale_open": 3, "whale_add": 3, "flip": 3,
+                         "underwater_add": 3, "notable_trader_move": 3, "whale_close": 6},
+               "default_hours": 3, "column_hours": 24},
     # the language of everything written for the desk rather than for readers (EIC notes, a draft's angle and why-now)
     "desk": {"language": "zh"},
     # house style per reporter role ({language} becomes zh / en); an assignment's own style still wins

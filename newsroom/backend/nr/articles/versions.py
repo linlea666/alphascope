@@ -14,8 +14,9 @@ from nr import settings_store
 from nr.guard import duplicates
 from nr.guard.run import GUARD_VERSION
 from nr.guard.run import run as run_guard
+from nr.publish.expiry import expires_at
 
-EDITABLE = ("drafting", "draft_ready", "changes_requested", "stale", "in_review")
+EDITABLE = ("drafting", "draft_ready", "changes_requested", "stale", "in_review", "expired")
 
 
 @dataclass
@@ -34,16 +35,21 @@ class Draft:
     open_question: str | None = None
     lede_fact_ids: list | None = None
     card_template: str | None = None
+    style_key: str | None = None
+    reply_text: str | None = None  # the post's first reply: the full wallet address, written as a sentence
 
 
-def text_hash(headline: str, body: str, thread: list | None) -> str:
-    return hashlib.sha256("\n".join([headline or "", body or "", *(thread or [])]).encode()).hexdigest()
+def text_hash(headline: str, body: str, thread: list | None, reply: str | None = None) -> str:
+    return hashlib.sha256("\n".join([headline or "", body or "", *(thread or []), *([reply] if reply else [])]).encode()
+                          ).hexdigest()
 
 
-def parts_of(headline: str, body: str, thread: list | None) -> dict[str, str]:
+def parts_of(headline: str, body: str, thread: list | None, reply: str | None = None) -> dict[str, str]:
     p = {"headline": headline or "", "body": body or ""}
     for i, t in enumerate(thread or [], start=1):
         p[f"thread.{i}"] = t
+    if reply:
+        p["reply"] = reply
     return p
 
 
@@ -98,17 +104,17 @@ def save_version(s: Session, article_id: int, d: Draft, *, origin: str, user_id:
     if make_current is None:  # people's edits are never overwritten by a model
         make_current = origin == "human" or current is None or current["origin"] == "ai"
     facts_used = list(d.facts_used or [])
-    report = guard(s, art, packet_id, parts_of(d.headline, d.body, d.thread), facts_used)
+    report = guard(s, art, packet_id, parts_of(d.headline, d.body, d.thread, d.reply_text), facts_used)
     no = s.execute(text("SELECT coalesce(max(version_no), 0) + 1 FROM article_version WHERE article_id = :a"),
                    {"a": article_id}).scalar()
     v = s.execute(text("""
         INSERT INTO article_version (article_id, version_no, parent_version_id, origin, author_user_id, ai_call_id,
           agent_key, prompt_ref, model, fact_packet_id, fact_packet_version, headline, alt_headlines, body, thread,
           angle, added_value, difference_from_others, why_shareable, risks, facts_used, text_hash, guard_status,
-          guard_report, guard_version, why_now, open_question, lede_fact_ids, card_template)
+          guard_report, guard_version, why_now, open_question, lede_fact_ids, card_template, style_key, reply_text)
         VALUES (:a, :no, :parent, :o, :u, :ai, :agent, :pr, :model, :p, :pv, :h, CAST(:alt AS jsonb), :b,
           CAST(:th AS jsonb), :angle, :av, :diff, :why, CAST(:risks AS jsonb), :fu, :hash, :gs, CAST(:gr AS jsonb), :gv,
-          :wn, :oq, :lede, :card)
+          :wn, :oq, :lede, :card, :style, :reply)
         RETURNING id, version_no, guard_status"""),
         {"a": article_id, "no": no, "parent": current["id"] if current else None, "o": origin, "u": user_id,
          "ai": ai_call_id, "agent": agent_key, "pr": prompt_ref, "model": model, "p": packet_id, "pv": packet_version,
@@ -116,15 +122,17 @@ def save_version(s: Session, article_id: int, d: Draft, *, origin: str, user_id:
          "th": json.dumps(d.thread, ensure_ascii=False) if d.thread else None, "angle": d.angle,
          "av": d.added_value, "diff": d.difference_from_others, "why": d.why_shareable,
          "risks": json.dumps(d.risks or [], ensure_ascii=False), "fu": facts_used,
-         "hash": text_hash(d.headline, d.body, d.thread), "gs": report["status"],
+         "hash": text_hash(d.headline, d.body, d.thread, d.reply_text), "gs": report["status"],
          "gr": json.dumps(report, ensure_ascii=False, default=str), "gv": GUARD_VERSION, "wn": d.why_now or "",
-         "oq": d.open_question or None, "lede": list(d.lede_fact_ids or []), "card": d.card_template}).mappings().one()
+         "oq": d.open_question or None, "lede": list(d.lede_fact_ids or []), "card": d.card_template, "style": d.style_key,
+         "reply": d.reply_text}).mappings().one()
     for fid in dict.fromkeys(facts_used):
         s.execute(text("""INSERT INTO article_fact_reference (article_version_id, fact_packet_id, fact_id)
                           VALUES (:v, :p, :f) ON CONFLICT DO NOTHING"""), {"v": v["id"], "p": packet_id, "f": fid})
-    if make_current:
+    if make_current:  # the shelf life follows the facts this version was written from
         s.execute(text("""UPDATE article SET current_version_id = :v, status = 'draft_ready', stale_reason = NULL,
-                                 updated_at = now() WHERE id = :a"""), {"v": v["id"], "a": article_id})
+                                 expires_at = :exp, updated_at = now() WHERE id = :a"""),
+                  {"v": v["id"], "a": article_id, "exp": expires_at(s, art["news_event_id"])})
     return {**dict(v), "made_current": make_current, "guard": report}
 
 

@@ -18,6 +18,7 @@ from nr.auth.deps import active_user, check_account, visible_accounts
 from nr.auth.sessions import CurrentUser
 from nr.cards.render import TEMPLATES, render_for_packet
 from nr.db import get_session
+from nr.events.states import InvalidTransition, transition
 from nr.publish import service as pub
 
 router = APIRouter(prefix="/api", tags=["articles"])
@@ -167,7 +168,7 @@ def accept_version(article_id: int, body: VersionRef, s: Session = Depends(get_s
 
 
 class ReviewAction(BaseModel):
-    action: Literal["submit", "approve", "request_changes", "kill"]
+    action: Literal["submit", "approve", "quick_approve", "request_changes", "kill"]
     note: str = Field("", max_length=2000)
     ack_duplicate: bool = False
 
@@ -183,6 +184,9 @@ def review(article_id: int, body: ReviewAction, s: Session = Depends(get_session
     elif body.action == "approve":
         check_account(s, user, acc, "review")
         out = pub.approve(s, article_id, user.id, body.ack_duplicate)
+    elif body.action == "quick_approve":  # straight from a finished draft to ready-to-post
+        check_account(s, user, acc, "review")
+        out = pub.quick_approve(s, article_id, user.id, body.ack_duplicate)
     elif body.action == "request_changes":
         check_account(s, user, acc, "review")
         pub.request_changes(s, article_id, user.id, body.note)
@@ -204,18 +208,45 @@ def copied(article_id: int, s: Session = Depends(get_session), user: CurrentUser
 
 
 class PublishIn(BaseModel):
-    x_url: str = Field(max_length=300)
-    published_at: datetime
+    x_url: str | None = Field(None, max_length=300)  # optional for a manual record: "I posted it"
+    published_at: datetime | None = None  # now when empty
     final_text: str | None = Field(None, max_length=8000)
+    reply_url: str | None = Field(None, max_length=300)
+    allow_expired: bool = False
 
 
 @router.post("/articles/{article_id}/publish")
 def record_publication(article_id: int, body: PublishIn, s: Session = Depends(get_session),
                        user: CurrentUser = Depends(active_user)):
     check_account(s, user, _account_of(s, article_id), "publish")
-    pid = pub.mark_published(s, article_id, user.id, body.x_url, body.published_at, now(), body.final_text)
+    pid = pub.mark_published(s, article_id, user.id, body.x_url, body.published_at or now(), now(), body.final_text,
+                             reply_url=body.reply_url, allow_expired=body.allow_expired)
     s.commit()
     return {"publication_id": pid}
+
+
+@router.post("/articles/{article_id}/promote")
+def promote_trial(article_id: int, s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
+    """A trial draft worth posting becomes the account's real article for the event, versions and all."""
+    acc = _account_of(s, article_id)
+    check_account(s, user, acc, "draft")
+    a = one(s, """SELECT asg.id, asg.source, asg.news_event_id, asg.account_id FROM article ar
+                  JOIN assignment asg ON asg.id = ar.assignment_id WHERE ar.id = :a""", {"a": article_id})
+    if a is None or a["source"] != "trial":
+        raise HTTPException(409, "only a trial draft can be promoted")
+    if s.execute(text("""SELECT 1 FROM assignment WHERE news_event_id = :e AND account_id = :acc AND source <> 'trial'
+                         AND status NOT IN ('rejected', 'cancelled')"""),
+                 {"e": a["news_event_id"], "acc": a["account_id"]}).scalar():
+        raise HTTPException(409, "this account already has an article for the event: copy the text into it instead")
+    s.execute(text("""UPDATE assignment SET source = 'editor', reason = reason || ' (promoted from trial)'
+                      WHERE id = :i"""), {"i": a["id"]})
+    try:
+        transition(s, a["news_event_id"], "assigned", actor_kind="user", user_id=user.id, reason="trial promoted")
+    except InvalidTransition:
+        pass
+    audit.record(s, "article.promote", "article", article_id, user_id=user.id, account_id=acc)
+    s.commit()
+    return {"ok": True}
 
 
 @router.get("/publications")
