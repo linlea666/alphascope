@@ -87,6 +87,8 @@ def test_wording_constraints():
     assert codes("约 1.4 万钱包的样本，不是全市场；目前未强平") == []  # the disclaimer is not the claim
     assert codes("Our tracked sample, not the whole market.") == []
     assert codes("还没被强平，这只是我们追踪的一例") == [] and codes("He hasn't been liquidated yet") == []
+    assert "PNL_CALLED_REALIZED" not in codes("P&L 来自交易所、含浮盈不是已实现") and \
+        "PNL_CALLED_REALIZED" not in codes("leaderboard P&L, not realized")
     assert "IDENTITY_CLAIM" in codes("该地址疑似某机构")
     assert "IDENTITY_CLAIM" in codes("Looks like an insider trade")
     assert "ADVICE_OR_GUARANTEE" in codes("建议跟单，稳赚")

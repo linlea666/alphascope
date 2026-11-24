@@ -37,6 +37,9 @@ def review_version(sf: sessionmaker, version_id: int, now: datetime, job_id: int
         used = set(v["facts_used"] or [])
         facts = [{"id": f["id"], "says": (f["display"].get(v["language"]) or [None])[0]}
                  for f in packet["facts"] if f["id"] in used]
+        persona = s.execute(text("SELECT name, tags, stage, prev_stage FROM trader_persona WHERE trader_key = :k"),
+                            {"k": packet["subject"].get("trader_key")}).mappings().first()
+        persona = {**dict(persona), "tags": [t["tag"] for t in persona["tags"]]} if persona else None
         rounds = s.execute(text("SELECT count(*) FROM article_review r JOIN article_version x ON x.id = r.article_version_id "
                                 "WHERE x.article_id = :a"), {"a": v["article_id"]}).scalar()
     out = call_json(sf, agent_key="reviewer", purpose="draft_review", schema=ReviewOut, semantic=None, now=now,
@@ -48,7 +51,7 @@ def review_version(sf: sessionmaker, version_id: int, now: datetime, job_id: int
                                     "reply": v["reply_text"]},
                           "style": dict(style) if style else None, "platform": v["platform"],
                           "facts_the_draft_uses": facts,
-                          **({"platform_focus": REVIEW_SQUARE_FOCUS} if v["platform"] in SQUARES else {})})
+                          **({"platform_focus": REVIEW_SQUARE_FOCUS, "persona": persona} if v["platform"] in SQUARES else {})})
     r: ReviewOut = out.parsed
     with sf() as s:
         rid = s.execute(text("""

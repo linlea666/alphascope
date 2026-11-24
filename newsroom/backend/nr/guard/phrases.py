@@ -94,6 +94,8 @@ def check(text: str, packet: dict, forbidden: list[str]) -> list[Finding]:
                 flag("LIQ_UNCONFIRMED", start, m, "liquidation is only suspected: say so in the same sentence")
         money = _money_values(sent)
         for m in REALIZED.finditer(sent):
+            if NEGATED.search(sent[max(0, m.start() - 12):m.start()]):  # "含浮盈，不是已实现" says the opposite
+                continue
             if not has_realized or (_near(money, upl_v) and not UNREALIZED.search(sent)):
                 flag("PNL_CALLED_REALIZED", start, m, "only unrealized or estimated P&L is in the facts")
         if upl_v is not None and _near(money, upl_v) and not UNREALIZED.search(sent) \

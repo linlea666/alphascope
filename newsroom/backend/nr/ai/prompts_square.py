@@ -28,6 +28,7 @@ SQUARE_ZH = """你给加密货币广场（OKX 广场、币安广场）上的一�
 写法：
 6. data.persona 是这个交易员的人物设定（人设标签、招牌币种、最高光和最惨的一笔、现在处在故事的哪个阶段）。
    用它定调：梭哈型就写得刺激，稳健型就写反差；阶段转折（从巅峰到危机、从陨落到逆袭）是最强的角度。
+   人设标签和阶段只能用 data.persona 里有的；没有 data.persona 就不要给人贴「梭哈型」「巅峰」这类标签，用事实本身制造反差。
 7. data.series 有值时，这是连载的第几集：开头一句自然地接上集（story_memory 里有上次写了什么），不要重复上集。
 8. 第一行：人名 + 反差 / 悬念 / 一个硬数字，三选一，让人停下来。然后 3–6 行短句，一行一件事，一条帖子最多 4 个数字。
    币种写 $BTC 这样。表情可以用，但不超过 3 个。
@@ -66,18 +67,25 @@ BEAT_SQUARE = """你是广场故事记者：把榜单和交易员的数据写成
 
 REVIEW_SQUARE_FOCUS = """这条发在中文广场（OKX 广场 / 币安广场），读者追的是交易员这个「人」。
 加分：有人物、有故事转折、有悬念、结尾能引出评论（站队、预测、投票）；称呼用昵称。
-扣分：像行情播报、没有人物、结尾平淡没人想回、AI 腔、夸大误导。广场不需要「样本说明」这类免责句，但事实约束照样要守。"""
+扣分：像行情播报、没有人物、结尾平淡没人想回、AI 腔、夸大误导。
+人设标签和故事阶段（梭哈型、巅峰、陨落……）只能来自 data.persona（这里的 persona 字段）；没有就不要建议编辑加，也要指出稿件里凭空贴的标签。广场不需要「样本说明」这类免责句，但事实约束照样要守。"""
 
 # v1 asked for "翻了 X 倍" with the packet's multiple; the guard rightly reads that as X+1 and the first real draft
 # rounded 7.8 down to 7. v2 writes multiples as "8.4 倍" / "账户变成 8.4 倍".
 V1_MULTIPLE = "「翻了 X 倍」只能用事实里的倍数。"
-SQUARE_ZH_V1 = SQUARE_ZH.replace("账户做到了几倍", "翻了几倍").split("\n   倍数照事实写")[0] + V1_MULTIPLE + \
-    SQUARE_ZH[SQUARE_ZH.index("\n2. 不写具体钟点"):]
+# v3: the first square review invented "梭哈型，正踩在巅峰上" for a trader without a persona; labels and stages now
+# only come from data.persona
+PERSONA_RULE = "\n   人设标签和阶段只能用 data.persona 里有的；没有 data.persona 就不要给人贴「梭哈型」「巅峰」这类标签，用事实本身制造反差。"
+SQUARE_ZH_V2 = SQUARE_ZH.replace(PERSONA_RULE, "")
+SQUARE_ZH_V1 = SQUARE_ZH_V2.replace("账户做到了几倍", "翻了几倍").split("\n   倍数照事实写")[0] + V1_MULTIPLE + \
+    SQUARE_ZH_V2[SQUARE_ZH_V2.index("\n2. 不写具体钟点"):]
 
 # (key, version, language, system, user template)
 SEEDS_SQUARE = [
     ("reporter_star", 1, "zh", SQUARE_ZH_V1 + "\n\n" + BEAT_STAR, SQUARE_ZH_USER),
     ("reporter_square", 1, "zh", SQUARE_ZH_V1 + "\n\n" + BEAT_SQUARE, SQUARE_ZH_USER),
-    ("reporter_star", 2, "zh", SQUARE_ZH + "\n\n" + BEAT_STAR, SQUARE_ZH_USER),
-    ("reporter_square", 2, "zh", SQUARE_ZH + "\n\n" + BEAT_SQUARE, SQUARE_ZH_USER),
+    ("reporter_star", 2, "zh", SQUARE_ZH_V2 + "\n\n" + BEAT_STAR, SQUARE_ZH_USER),
+    ("reporter_square", 2, "zh", SQUARE_ZH_V2 + "\n\n" + BEAT_SQUARE, SQUARE_ZH_USER),
+    ("reporter_star", 3, "zh", SQUARE_ZH + "\n\n" + BEAT_STAR, SQUARE_ZH_USER),
+    ("reporter_square", 3, "zh", SQUARE_ZH + "\n\n" + BEAT_SQUARE, SQUARE_ZH_USER),
 ]
