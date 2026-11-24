@@ -21,6 +21,8 @@ from nr.jobs.queue import enqueue
 
 log = logging.getLogger(__name__)
 COLUMN_SCORE = 50  # a scheduled column is worth an editor's look; the gate still decides if it can run
+# columns-2: traders' names carry their avatar (square cards); a new version is taken once so packets carry it
+COLUMNS_BUILDER = "columns-2"
 
 
 def dedupe_key(it: ColumnIssue) -> str:
@@ -29,7 +31,7 @@ def dedupe_key(it: ColumnIssue) -> str:
 
 def packet(it: ColumnIssue, blocking: list[dict]) -> dict:
     return {
-        "schema": builder.SCHEMA, "builder_version": "columns-1",
+        "schema": builder.SCHEMA, "builder_version": COLUMNS_BUILDER,
         "source": {"system": "alphascope", "feed_schema": "feed.v1", "column": it.column, "period": it.period_key},
         "subject": {"trader_ref": it.title_en, "trader_key": it.trader_key, "venue": issue_venue(it),
                     "identity": "unknown" if it.trader_key else "n/a", "title": {"zh": it.title_zh, "en": it.title_en}},
@@ -92,9 +94,9 @@ def store(s: Session, it: ColumnIssue, now: datetime) -> dict:
         pid = s.execute(text("""
             INSERT INTO fact_packet (news_event_id, version, builder_version, built_at, content, content_hash,
                                      supersedes_id, change_summary, gate_status, blocking_issues)
-            VALUES (:e, :v, 'columns-1', :n, CAST(:c AS jsonb), :h, :sup, CAST(:cs AS jsonb), :g, CAST(:b AS jsonb))
+            VALUES (:e, :v, :bv, :n, CAST(:c AS jsonb), :h, :sup, CAST(:cs AS jsonb), :g, CAST(:b AS jsonb))
             RETURNING id"""),
-            {"e": eid, "v": version, "n": now, "c": builder.canonical(content), "h": builder.sha(content),
+            {"e": eid, "v": version, "bv": COLUMNS_BUILDER, "n": now, "c": builder.canonical(content), "h": builder.sha(content),
              "sup": prev["id"] if prev else None, "cs": json.dumps({"changed": changed[:50]}),
              "g": content["gate"]["status"], "b": json.dumps(blocking)}).scalar_one()
         s.execute(text("""UPDATE news_event SET current_fact_packet_id = :p, current_fact_version = :v WHERE id = :e"""),
