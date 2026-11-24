@@ -222,7 +222,7 @@ export function PostCard({ c, now, roleName, className, statusName }: { c: Card;
         {["draft_ready", "changes_requested", "in_review", "stale"].includes(c.status) && c.source !== "trial" && (
           <button className={primary} disabled={busy} title={c.status === "stale" ? t("approveStaleHint") : undefined}
             onClick={() => act(`articles/${c.id}/review`, { action: "quick_approve" }, t("approved"))}>
-            {c.status === "stale" ? t("approveStale") : t("approve")}</button>
+            {t("approve")}</button>
         )}
         {c.source === "trial" && c.status !== "published" && (
           <button className={button} disabled={busy} onClick={() => act(`articles/${c.id}/promote`, {}, t("promoted"))}>{t("promote")}</button>
