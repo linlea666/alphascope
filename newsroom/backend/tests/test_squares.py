@@ -275,6 +275,8 @@ def test_square_cards_draw_from_the_packet(sf):
     inputs = square.podium_inputs(packet, "zh", "AlphaScope", "sans", avatars=False)
     assert inputs["people"][0]["name"] == "夕阳1" and inputs["people"][0]["small"] is True  # emoji dropped, $9K is small
     assert drawable("allincrypto 熬鹰资本 🇨🇳") == "allincrypto 熬鹰资本"
+    from nr.cards.avatars import kind_of
+    assert kind_of(b"\x89PNG\r\n\x1a\n...") == "png" and kind_of(b"\xff\xd8\xff\xe0") == "jpeg" and kind_of(b"RIFF....WEBP") is None
     assert square.fit("+10.5万美元", 250, 50) < 50
     # the others pick their card by what the packet is
     assert square.square_card({"event": {"class": "column:duel"}, "facts": [{"id": "a.trader"}]}) == "square_duel"

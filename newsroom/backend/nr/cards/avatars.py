@@ -6,6 +6,7 @@ import hashlib
 import ipaddress
 import logging
 import socket
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -15,7 +16,12 @@ from nr.config import get_settings
 
 log = logging.getLogger(__name__)
 MAX_BYTES = 1_000_000
-TYPES = {"image/png": "png", "image/jpeg": "jpeg", "image/jpg": "jpeg"}
+RETRY_AFTER = 86_400  # a failed URL is tried again a day later
+
+
+def kind_of(blob: bytes) -> str | None:
+    """PNG or JPEG by their first bytes: some CDNs serve avatars as application/octet-stream."""
+    return "png" if blob.startswith(b"\x89PNG\r\n\x1a\n") else "jpeg" if blob.startswith(b"\xff\xd8\xff") else None
 
 
 def _public(host: str) -> bool:
@@ -34,14 +40,15 @@ def data_uri(url: str | None, fetch: bool = True) -> str | None:
     for ext in ("png", "jpeg"):
         if (d / f"{key}.{ext}").exists():
             return f"data:image/{ext};base64," + base64.b64encode((d / f"{key}.{ext}").read_bytes()).decode()
-    if not fetch or (d / f"{key}.none").exists():
+    failed = d / f"{key}.none"
+    if not fetch or (failed.exists() and time.time() - failed.stat().st_mtime < RETRY_AFTER):
         return None
     host = urlparse(url).hostname or ""
     try:
         if not _public(host):
             raise ValueError(f"{host} is not a public host")
         r = httpx.get(url, timeout=6, follow_redirects=False, headers={"User-Agent": "AlphaScope-Newsroom/1"})
-        kind = TYPES.get(r.headers.get("content-type", "").split(";")[0].strip().lower())
+        kind = kind_of(r.content)
         if r.status_code != 200 or kind is None or len(r.content) > MAX_BYTES:
             raise ValueError(f"{r.status_code} {r.headers.get('content-type')} {len(r.content)} bytes")
     except (httpx.HTTPError, ValueError) as exc:
