@@ -13,6 +13,7 @@ from nr.ai.prompts import BEATS
 from nr.ai.runner import call_json
 from nr.ai.schemas import EicEvaluation
 from nr.desk import assignment
+from nr.desk.assignment import SQUARES
 from nr.events.states import InvalidTransition, transition
 from nr.guard.duplicates import similarity
 from nr.jobs.queue import enqueue
@@ -35,7 +36,7 @@ def accounts_brief(s: Session, event_id: int) -> list[dict]:
 
 def event_brief(s: Session, event_id: int) -> tuple[dict, dict]:
     ev = dict(s.execute(text("""SELECT ne.id, ne.event_class, ne.coin, ne.venue, ne.direction, ne.score, ne.score_breakdown,
-                                       ne.state, ne.gate_status, ne.story_id, ne.current_fact_packet_id
+                                       ne.state, ne.gate_status, ne.story_id, ne.current_fact_packet_id, ne.column_key
                                 FROM news_event ne WHERE ne.id = :e"""), {"e": event_id}).mappings().one())
     packet = s.execute(text("SELECT content FROM fact_packet WHERE id = :p"), {"p": ev["current_fact_packet_id"]}).scalar_one()
     return ev, packet
@@ -132,8 +133,12 @@ def evaluate_event(sf: sessionmaker, event_id: int, now: datetime, job_id: int |
         pilot = settings_store.get(s, "desk")
         # autopilot: a proposal at or above the chosen priority, for an active account, with no reason for a person to
         # look first, is accepted and drafted at once; the draft still goes through the guard and the AI reviewer
-        piloted = (pilot.get("auto_accept") and o.decision == "cover" and o.priority <= pilot.get("auto_min_priority", "p1")
-                   and not flags & {"duplicate_risk", "identity_risk", "liquidation_unconfirmed", "stale_risk"})
+        safe = pilot.get("auto_accept") and o.decision == "cover" and \
+            not flags & {"duplicate_risk", "identity_risk", "liquidation_unconfirmed", "stale_risk"}
+        piloted = safe and o.priority <= pilot.get("auto_min_priority", "p1")
+        # the squares' columns are their daily programme (docs/16): taken whatever priority the EIC gives them
+        square_column = safe and ev.get("column_key") is not None
+        squares = {a["id"] for a in accounts if a["platform"] in SQUARES}
         if o.decision == "cover":
             for r in recs:
                 aid = assignment.create(s, event_id, r.account_id, source="eic_ai", angle=r.angle, reason=r.reason,
@@ -141,7 +146,7 @@ def evaluate_event(sf: sessionmaker, event_id: int, now: datetime, job_id: int |
                                         agent_key=r.reporter)
                 if aid:
                     created.append(aid)
-                    if piloted and r.account_id not in similar:  # accounts here are all active
+                    if r.account_id not in similar and (piloted or (square_column and r.account_id in squares)):
                         auto.append(aid)
         s.execute(text("UPDATE news_event SET priority = :p WHERE id = :e"), {"p": o.priority, "e": event_id})
         add_open_questions(s, ev["story_id"], o.open_questions, source="eic", event_id=event_id, at=now)

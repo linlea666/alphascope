@@ -65,9 +65,11 @@ def board_row(f: Facts, p: str, r: dict) -> None:
     pct_fact(f, f"{p}.return", r["pnl_ratio"], "okx_leaderboard_row.pnl_ratio", label="board return the venue reports")
     _usd(f, f"{p}.pnl", r["pnl"], "okx_leaderboard_row.pnl", kind="pnl", label="board P&L the venue reports")
     _usd(f, f"{p}.lead_assets", r["asset"], "okx_leaderboard_row.asset", label="lead-trading assets")
-    if r.get("rank_change"):
-        count_fact(f, f"{p}.rank_change", abs(r["rank_change"]), "previous board rank - rank",
-                   label="places up" if r["rank_change"] > 0 else "places down")
+    if r.get("rank_change"):  # the direction is in the id, so it cannot be read the wrong way round
+        up = r["rank_change"] > 0
+        count_fact(f, f"{p}.{'places_up' if up else 'places_down'}", abs(r["rank_change"]),
+                   "previous board rank - rank", label="places gained since the previous board" if up
+                   else "places lost since the previous board")
     if r.get("new_entry"):
         text_fact(f, f"{p}.new_entry", "新上榜", "not on the previous board")
     if r.get("off_peak") is not None and r["off_peak"] >= 0.1:

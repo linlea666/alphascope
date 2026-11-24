@@ -49,6 +49,8 @@ def test_multiples_list_leaves_out_tiny_accounts_and_snapshots_the_board(sf):
             "SELECT content->'facts' FROM fact_packet WHERE news_event_id = :e"), {"e": out[0]["event_id"]}).scalar()}
         assert facts["row.1.trader"]["value"] == "中二的天才交易员" and facts["row.1.multiple"]["display"]["zh"] == ["8.4倍"]
         assert facts["small_accounts_skipped"]["value"] == 1 and facts["row.3.new_entry"]["value"] == "新上榜"
+        # 1st on the previous board, 2nd now: the id itself says which way
+        assert facts["row.1.places_down"]["value"] == 1 and "row.1.places_up" not in facts
         assert s.execute(text("SELECT count(*) FROM trader_board_snapshot")).scalar() == 5
         assert s.execute(text("SELECT venue FROM news_event WHERE id = :e"), {"e": out[0]["event_id"]}).scalar() == "okx"
 
@@ -190,3 +192,28 @@ def test_a_persona_turn_and_an_answered_question(sf):
         f = {x["id"]: x for x in it.facts.items}
         assert f["answer"]["value"] == "赚了" and f["result.realized_pnl"]["value"] == "2500"
         assert Decimal(str(f["result.held"]["value"])) == 4
+
+
+def test_with_autopilot_on_a_square_column_is_taken_whatever_its_priority(sf):
+    from nr import settings_store
+    from nr.desk.eic import evaluate_event
+    from tests.fakes import FakeProvider
+    from tests.helpers import eic_output
+    newsroom(sf)
+    feed = feed_with_health()
+    feed.research["/okx/board/movers"] = movers_doc([mover(i, f"okx:300000000{i}", f"T{i}", 5 - i * 0.5, 50000, 20000)
+                                                    for i in range(1, 6)])
+    pipeline(sf, feed, NOW)
+    with feed.client() as c:
+        eid = build_column(sf, c, "okx_multipliers", NOW, {"windows": ["7d"]})["issues"][0]["event_id"]
+    with sf() as s:
+        settings_store.put(s, "desk", {"auto_accept": True, "auto_min_priority": "p1"})
+        sq = s.execute(text("SELECT id FROM editorial_account WHERE platform = 'okx_square'")).scalar()
+        s.execute(text("UPDATE news_event SET state = 'candidate' WHERE id = :e"), {"e": eid})
+        s.commit()
+    out = eic_output(eid, [(sq, "翻倍榜")])
+    out["priority"] = "p3"  # a routine column to the EIC
+    out["key_fact_ids"] = ["row.1.multiple"]
+    out["newsworthiness"][0]["fact_ids"] = ["row.1.multiple"]
+    r = evaluate_event(sf, eid, NOW, transport=FakeProvider(out))
+    assert len(r["auto_accepted"]) == 1
