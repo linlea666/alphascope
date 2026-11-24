@@ -1859,5 +1859,49 @@
     "duel": "明星对决",
     "duel_result": "对决结果",
     "prediction_followup": "上期问题的答案"
+  },
+  "learning": {
+    "examplesTitle": "范文候选",
+    "examplesHint": "AI 审稿打了高分、或者读者反应明显好于平时的帖子。数字和名字已换成占位符，点「采用」后成为这个风格的写稿示例（每个风格保留最近 6 篇）。",
+    "noCandidates": "暂时没有候选。审稿高分或回填了互动数据的帖子会出现在这里。",
+    "reason": {
+      "review": "审稿高分",
+      "engagement": "互动好"
+    },
+    "reviewScore": "能否直接发 {n} 分",
+    "engagementScore": "互动 {n}（账号平时 {m}）",
+    "original": "原文",
+    "asExample": "作为示例",
+    "adopt": "采用",
+    "dismiss": "忽略",
+    "proposalsTitle": "提示词优化建议",
+    "proposalsHint": "提示词教练每周一汇总 AI 审稿反复指出的问题，改写对应角色提示词的「写法」部分（事实规则不动），并自动用最近 5 个事件跑新旧对比实验。结果好再点「采用」，不会自动切换。",
+    "runNow": "现在生成建议",
+    "runConfirm": "根据最近 7 天的审稿意见生成提示词草稿并跑对比实验？会产生少量 AI 费用。",
+    "noProposals": "还没有建议。每个角色要有至少 5 篇稿件经过 AI 审稿才会生成。",
+    "status": {
+      "draft": "待验证",
+      "testing": "实验中",
+      "adopted": "已采用",
+      "rejected": "未采用"
+    },
+    "fromReviews": "依据 {n} 篇审稿",
+    "experiment": "对比实验：{ready}/{pairs} 组已写完",
+    "openExperiment": "去盲评",
+    "dim": {
+      "publishable": "能否直接发",
+      "hook": "开头",
+      "native": "地道",
+      "ai_tone": "无 AI 味",
+      "clarity": "清楚"
+    },
+    "guardPass": "事实检查通过率",
+    "current": "现行 v{v}",
+    "draft": "草稿 v{v}",
+    "votes": "人工盲评 {n} 票，草稿胜率 {w}",
+    "noExperiment": "这个角色写的是栏目稿，暂不支持自动实验；可以对比文字后直接决定。",
+    "adoptVersion": "采用 v{v}",
+    "adoptConfirm": "把使用这个提示词的角色切到 v{v}？",
+    "reject": "不采用"
   }
 }

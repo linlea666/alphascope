@@ -106,3 +106,15 @@ class ReviewOut(Strict):
 class ModelTestOut(Strict):
     ok: bool
     echo: str
+
+
+class CoachChange(Strict):
+    problem: str = Field(max_length=300)
+    change: str = Field(max_length=400)
+
+
+class CoachOut(Strict):
+    """The prompt coach's draft: the writing part of one prompt, rewritten against the week's review issues."""
+    rationale: str = Field(max_length=1200)
+    changes: list[CoachChange] = Field(min_length=1, max_length=8)
+    writing: str = Field(min_length=200, max_length=8000)

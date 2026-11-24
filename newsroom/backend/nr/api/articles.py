@@ -18,6 +18,7 @@ from nr.auth.deps import active_user, check_account, visible_accounts
 from nr.auth.sessions import CurrentUser
 from nr.cards.render import TEMPLATES, render_for_packet
 from nr.db import get_session
+from nr.desk import examples
 from nr.events.states import InvalidTransition, transition
 from nr.publish import service as pub
 
@@ -306,6 +307,7 @@ def add_performance(pid: int, body: Performance, s: Session = Depends(get_sessio
     d = body.model_dump()
     s.execute(text(f"""INSERT INTO performance_snapshot (publication_id, source, entered_by, {", ".join(d)})
                        VALUES (:pid, 'manual', :u, {", ".join(":" + k for k in d)})"""), {**d, "pid": pid, "u": user.id})
+    examples.from_metrics(s, pid)  # a post readers clearly liked becomes a candidate example for its style
     s.commit()
     return {"ok": True}
 

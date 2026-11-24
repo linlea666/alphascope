@@ -18,6 +18,7 @@ from nr.api.common import now, one, rows
 from nr.auth.deps import require_roles
 from nr.auth.sessions import CurrentUser
 from nr.db import get_session
+from nr.desk import examples
 from nr.publish import service as pub
 
 router = APIRouter(prefix="/api", tags=["outbound"])
@@ -176,6 +177,7 @@ def metrics(publication_id: int, body: MetricsIn, authorization: str | None = He
     s.execute(text(f"""INSERT INTO performance_snapshot (publication_id, captured_at, {", ".join(d)}, source)
                        VALUES (:p, :c, {", ".join(":" + k for k in d)}, 'api')"""),
               {"p": publication_id, "c": body.captured_at or now(), **d})
+    examples.from_metrics(s, publication_id)
     s.commit()
     return {"ok": True}
 

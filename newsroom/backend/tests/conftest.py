@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 BACKEND = Path(__file__).parent.parent
 TEST_DB_URL = os.environ.get("NEWSROOM_TEST_DATABASE_URL", "postgresql+psycopg://localhost/newsroom_test")
 os.environ.setdefault("NEWSROOM_DATABASE_URL", TEST_DB_URL)
-TABLES = ("story_prediction", "star_duel", "trader_persona", "relay_close", "relay_position", "trader_board_snapshot",
+TABLES = ("prompt_proposal", "style_example_candidate", "story_prediction", "star_duel", "trader_persona", "relay_close", "relay_position", "trader_board_snapshot",
           "star_trader", "ai_call_log", "job", "ai_agent_profile", "prompt_template", "ai_model_config", "performance_snapshot",
           "correction_record", "publication_record", "publication_plan", "media_asset", "article_fact_reference",
           "experiment_vote", "experiment_pair", "experiment", "article_review", "api_token", "draft_rating", "article_version", "article", "assignment", "eic_evaluation", "account_permission", "editorial_account",

@@ -68,7 +68,8 @@ def arms_of(s: Session, name: str) -> dict:
 
 
 def create(sf: sessionmaker, client: FeedClient, name: str, account_id: int, model_id: int, n: int, now: datetime,
-           user_id: int, seed: int | None = None, arms: dict | None = None) -> dict:
+           user_id: int, seed: int | None = None, arms: dict | None = None, agent_key: str | None = None) -> dict:
+    """`agent_key`: the role that writes both arms (default: the reporter the event's class calls for)."""
     """Pick the sample (refreshing each event's facts first), open one trial article per event and queue both arms."""
     rng = random.Random(seed)
     arms = {k: {f: v for f, v in (arms or DEFAULT_ARMS)[k].items() if f in ARM_KEYS and v not in (None, "")}
@@ -129,7 +130,7 @@ def create(sf: sessionmaker, client: FeedClient, name: str, account_id: int, mod
     with sf() as s:
         for stratum, eid in picked:
             aid = assignment.create(s, eid, account_id, source="trial", status="accepted", user_id=user_id,
-                                    reason=f"experiment:{name}", model_config_id=model_id)
+                                    reason=f"experiment:{name}", model_config_id=model_id, agent_key=agent_key)
             art = assignment.accept(s, aid, user_id)
             pid = s.execute(text("""INSERT INTO experiment_pair (experiment, news_event_id, stratum, article_id, a_first)
                                     VALUES (:x, :e, :st, :a, :f) RETURNING id"""),
@@ -166,6 +167,12 @@ def run_arm(sf: sessionmaker, payload: dict, now: datetime, job_id: int | None =
     with sf() as s:
         s.execute(text(f"UPDATE experiment_pair SET {col}_version_id = :v, {col}_error = NULL WHERE id = :p"),
                   {"v": out["version_id"], "p": payload["experiment_pair"]})
+        pair = s.execute(text("SELECT a_version_id, b_version_id FROM experiment_pair WHERE id = :p"),
+                         {"p": payload["experiment_pair"]}).mappings().one()
+        if pair["a_version_id"] and pair["b_version_id"]:  # both written: the AI reviewer scores each, blind to the arm
+            for vid in (pair["a_version_id"], pair["b_version_id"]):
+                enqueue(s, "draft_review", {"version_id": vid, "score_only": True}, dedupe_key=f"score:{vid}",
+                        priority=60, now=now)
         s.commit()
     return out
 

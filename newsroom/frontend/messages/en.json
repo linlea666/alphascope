@@ -1859,5 +1859,49 @@
     "duel": "Star duel",
     "duel_result": "Duel result",
     "prediction_followup": "The answer"
+  },
+  "learning": {
+    "examplesTitle": "Example candidates",
+    "examplesHint": "Posts the AI reviewer rated ready, or readers clearly liked. Figures and names are placeholders; adopting adds it to the style's examples (the latest 6 are kept).",
+    "noCandidates": "No candidates yet.",
+    "reason": {
+      "review": "Reviewer",
+      "engagement": "Readers"
+    },
+    "reviewScore": "publishable {n}",
+    "engagementScore": "engagement {n} (account median {m})",
+    "original": "Original",
+    "asExample": "As an example",
+    "adopt": "Adopt",
+    "dismiss": "Dismiss",
+    "proposalsTitle": "Prompt coach drafts",
+    "proposalsHint": "Every Monday the prompt coach redrafts the writing part of a role's prompt from the reviewer's recurring issues (facts rules untouched) and runs a 5-event experiment against the current version. Nothing switches until you adopt it.",
+    "runNow": "Draft now",
+    "runConfirm": "Draft prompts from the last 7 days of reviews and run experiments? Uses some AI budget.",
+    "noProposals": "No drafts yet: a role needs at least 5 reviewed drafts.",
+    "status": {
+      "draft": "Draft",
+      "testing": "Testing",
+      "adopted": "Adopted",
+      "rejected": "Rejected"
+    },
+    "fromReviews": "from {n} reviews",
+    "experiment": "Experiment: {ready}/{pairs} pairs written",
+    "openExperiment": "Blind review",
+    "dim": {
+      "publishable": "Publishable",
+      "hook": "Hook",
+      "native": "Native",
+      "ai_tone": "No AI smell",
+      "clarity": "Clarity"
+    },
+    "guardPass": "Fact check pass",
+    "current": "Current v{v}",
+    "draft": "Draft v{v}",
+    "votes": "{n} blind votes, draft wins {w}",
+    "noExperiment": "This role writes columns: no automatic experiment yet; compare the text and decide.",
+    "adoptVersion": "Adopt v{v}",
+    "adoptConfirm": "Switch the roles on this prompt to v{v}?",
+    "reject": "Reject"
   }
 }

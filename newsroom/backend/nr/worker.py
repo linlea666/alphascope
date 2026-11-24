@@ -20,7 +20,7 @@ from nr.feed.client import FeedError, FeedUnavailable
 from nr.feed.health import poll_health
 from nr.feed.sync import ensure_source, sync_events
 from nr.jobs.handlers import DETERMINISTIC, default_deps, run_pending
-from nr.jobs.queue import AI_KINDS
+from nr.jobs.queue import AI_KINDS, enqueue
 from nr.sources import relay
 from nr.stories import squares
 
@@ -116,6 +116,11 @@ def main() -> None:
         if n:
             log.info("expired drafts: %s", n)
 
+    def coach_job() -> None:  # the prompt coach's weekly drafts run as an AI job (budget, retries, call log)
+        with sf() as s:
+            enqueue(s, "prompt_coach", {}, dedupe_key=f"prompt_coach:{now():%G-W%V}", priority=80, now=now())
+            s.commit()
+
     def maintenance_job() -> None:
         log.info("maintenance: %s", maintenance.run(sf, now()))
 
@@ -131,6 +136,7 @@ def main() -> None:
     sched.add_job(maintenance_job, "interval", hours=1, next_run_time=now())
     sched.add_job(expiry_job, "interval", minutes=5, next_run_time=now())
     sched.add_job(column_job, "cron", minute=7)
+    sched.add_job(coach_job, "cron", day_of_week="mon", hour=3, minute=17)
     threads = [threading.Thread(target=queue_loop, args=(DETERMINISTIC, "facts"), daemon=True)]
     threads += [threading.Thread(target=queue_loop, args=(AI_KINDS, f"ai-{i}"), daemon=True)
                 for i in range(max(1, st.ai_max_concurrency))]

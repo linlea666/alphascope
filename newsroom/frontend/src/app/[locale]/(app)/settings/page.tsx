@@ -1,6 +1,7 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { Action } from "@/components/Action";
 import { AiReadiness } from "@/components/AiReadiness";
+import { ExampleCandidates, PromptProposals } from "@/components/Learning";
 import { FieldForm } from "@/components/FieldForm";
 import { ModelPresetForm } from "@/components/ModelPresetForm";
 import { Badge, Empty, KV, PageHeader, Panel, td, th } from "@/components/ui";
@@ -228,6 +229,7 @@ async function Prompts({ locale }: { locale: string }) {
   const langName = (l: string | null) => tp(`lang.${l ?? "shared"}`);
   return (
     <div className="space-y-5">
+      <PromptProposals />
       <p className="text-sm text-muted">{tp("intro")}</p>
       {keys.map((key) => {
         const rows = prompts.filter((p) => p.key === key);
@@ -511,6 +513,7 @@ async function Styles() {
   styles.forEach((st) => { if (!latest.has(st.key)) latest.set(st.key, st); });
   return (
     <div className="space-y-5">
+      <ExampleCandidates />
       <Panel title={tx("newStyle")}>
         <FieldForm path="styles" fields={[
           { name: "key", label: tx("styleKey"), required: true, help: tx("styleKeyHelp"), placeholder: "zh_my_style" },

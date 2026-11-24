@@ -12,6 +12,7 @@ from nr import settings_store
 from nr.ai.runner import call_json
 from nr.ai.prompts_square import REVIEW_SQUARE_FOCUS
 from nr.ai.schemas import ReviewOut
+from nr.desk import examples
 from nr.desk.assignment import SQUARES
 from nr.jobs.queue import enqueue
 from nr.publish import service as pub
@@ -20,7 +21,8 @@ MAX_ROUNDS = 2  # one automatic revision, then a person decides
 
 
 def review_version(sf: sessionmaker, version_id: int, now: datetime, job_id: int | None = None,
-                   transport: Callable | None = None) -> dict:
+                   transport: Callable | None = None, score_only: bool = False) -> dict:
+    """`score_only`: an experiment arm or any non-current version is scored and recorded, nothing else happens."""
     with sf() as s:
         v = s.execute(text("""
             SELECT v.id, v.article_id, v.headline, v.body, v.thread, v.reply_text, v.facts_used, v.style_key,
@@ -29,7 +31,7 @@ def review_version(sf: sessionmaker, version_id: int, now: datetime, job_id: int
             FROM article_version v JOIN article a ON a.id = v.article_id
             JOIN editorial_account acc ON acc.id = a.account_id JOIN assignment asg ON asg.id = a.assignment_id
             WHERE v.id = :v"""), {"v": version_id}).mappings().first()
-        if v is None or v["current_version_id"] != v["id"]:
+        if v is None or (v["current_version_id"] != v["id"] and not score_only):
             return {"skipped": "not the current version"}
         style = s.execute(text("""SELECT name, guide, structure FROM editorial_style WHERE key = :k
                                   ORDER BY version DESC LIMIT 1"""), {"k": v["style_key"]}).mappings().first()
@@ -69,6 +71,11 @@ def review_version(sf: sessionmaker, version_id: int, now: datetime, job_id: int
              "rn": r.revision_note or "",
              "c": out.call_id, "m": out.model}).scalar_one()
         result: dict = {"review_id": rid, "verdict": r.verdict}
+        if score_only:
+            s.commit()
+            return {**result, "score_only": True}
+        if examples.from_review(s, version_id, r.verdict, r.scores.model_dump()):
+            result["example_candidate"] = True
         if r.verdict == "approve" and settings_store.get(s, "review")["ai_ready"]:
             result["held"] = pub.ai_approve(s, v["article_id"], rid)
         elif r.verdict == "revise" and rounds + 1 < MAX_ROUNDS:  # the desk editor gets one go with the notes

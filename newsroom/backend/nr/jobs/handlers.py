@@ -64,7 +64,12 @@ def handle(sf: sessionmaker, deps: Deps, job: dict, now: datetime) -> dict:
                               sequel=p.get("sequel", False))
     if kind == "draft_review":
         from nr.desk.review import review_version
-        return review_version(sf, p["version_id"], now, job_id=job["id"], transport=deps.provider)
+        return review_version(sf, p["version_id"], now, job_id=job["id"], transport=deps.provider,
+                              score_only=p.get("score_only", False))
+    if kind == "prompt_coach":
+        from nr.desk.coach import run as coach_run
+        with deps.feed() as c:
+            return coach_run(sf, c, now, transport=deps.provider, only=p.get("only"))
     if kind == "column_build":
         from nr.columns.run import build_column
         with deps.feed() as c:
@@ -73,7 +78,7 @@ def handle(sf: sessionmaker, deps: Deps, job: dict, now: datetime) -> dict:
         from nr.experiments.contrast_ab import create
         with deps.feed() as c:
             return create(sf, c, p["name"], p["account_id"], p["model_config_id"], p["n"], now, p["user_id"],
-                          arms=p.get("arms"))
+                          arms=p.get("arms"), agent_key=p.get("agent_key"))
     if kind == "card_render":
         from nr.cards.render import render_for_packet
         return render_for_packet(sf, p["fact_packet_id"], p["template"], p["language"], p.get("brand", "default"))
