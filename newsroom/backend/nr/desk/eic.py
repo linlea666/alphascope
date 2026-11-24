@@ -16,6 +16,7 @@ from nr.desk import assignment
 from nr.events.states import InvalidTransition, transition
 from nr.guard.duplicates import similarity
 from nr.jobs.queue import enqueue
+from nr.publish.expiry import expires_at
 from nr.stories.memory import add_open_questions
 
 
@@ -63,6 +64,8 @@ def evaluate_event(sf: sessionmaker, event_id: int, now: datetime, job_id: int |
         ev, packet = event_brief(s, event_id)
         if ev["state"] not in ("candidate", "evaluated") or ev["gate_status"] != "pass":
             return {"skipped": f"event is {ev['state']} / gate {ev['gate_status']}"}
+        if (exp := expires_at(s, event_id)) and exp < now:  # anything written now would expire on arrival
+            return {"skipped": "the event is past its shelf life"}
         accounts = [a for a in accounts_brief(s, event_id) if assignment.account_fits(s, a["id"], event_id)[0]]
         if not accounts:  # e.g. OKX material while no OKX Square account is active: nothing to ask a model
             return {"skipped": "no active account covers this event"}

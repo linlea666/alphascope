@@ -361,3 +361,11 @@ def test_autopilot_leaves_minor_or_risky_proposals_to_a_person(sf):
     assert out["auto_accepted"] == [] and len(out["assignments"]) == 1
     with sf() as s:
         assert s.execute(text("SELECT status FROM assignment")).scalar() == "proposed"
+
+
+def test_the_eic_does_not_evaluate_news_past_its_shelf_life(sf):
+    newsroom(sf)
+    eid = candidate_event(sf)
+    prov = FakeProvider()
+    assert evaluate_event(sf, eid, NOW + timedelta(days=1), transport=prov) == {"skipped": "the event is past its shelf life"}
+    assert prov.requests == []
