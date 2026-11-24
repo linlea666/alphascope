@@ -21,6 +21,9 @@ export function fmtUsd(v: number | string | null | undefined): string {
   return `${n < 0 ? "-" : ""}$${s}`;
 }
 
-export function shortKey(key: string): string {
-  return key.startsWith("okx:") ? `OKX·${key.slice(-6)}` : `${key.slice(0, 6)}…${key.slice(-4)}`;
+export function shortKey(key: string | null | undefined): string {
+  if (!key) return "—";
+  if (key.startsWith("okx:")) return `OKX·${key.slice(-6)}`;
+  if (key.startsWith("binance:")) return `币安·${key.slice(8)}`;
+  return `${key.slice(0, 6)}…${key.slice(-4)}`;
 }

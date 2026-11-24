@@ -50,7 +50,8 @@ def list_events(s: Session = Depends(get_session), user: CurrentUser = Depends(a
 
 @router.get("/events/{event_id}")
 def event_detail(event_id: int, s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
-    ev = one(s, f"SELECT {EVENT_COLS}, e.episode_id FROM news_event e JOIN trader t ON t.id = e.trader_id "
+    # a column issue may have no trader (a board, a market structure): the event is still there
+    ev = one(s, f"SELECT {EVENT_COLS}, e.episode_id, e.column_key FROM news_event e LEFT JOIN trader t ON t.id = e.trader_id "
                 "WHERE e.id = :e", {"e": event_id})
     if ev is None:
         raise HTTPException(404, "event not found")

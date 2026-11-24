@@ -225,3 +225,30 @@ def test_with_autopilot_on_a_square_column_is_taken_whatever_its_priority(sf):
         sel = s.execute(text("""SELECT f->>'value' FROM fact_packet p, jsonb_array_elements(p.content->'facts') f
                                 WHERE p.news_event_id = :e AND f->>'id' = 'selection'"""), {"e": eid}).scalar()
         assert sel == "按带单资产和收益额筛过的前 5 位（榜单第 1–5 名）"
+
+
+def test_a_column_without_a_trader_opens_in_the_desk(sf):
+    from fastapi.testclient import TestClient
+
+    from nr.db import get_session
+    from nr.main import app
+    from tests.test_api import login
+    newsroom(sf)
+    feed = feed_with_health()
+    feed.research["/okx/board/movers"] = movers_doc([mover(i, f"okx:400000000{i}", f"T{i}", 5 - i * 0.5, 50000, 20000)
+                                                    for i in range(1, 6)])
+    pipeline(sf, feed, NOW)
+    with feed.client() as c:
+        eid = build_column(sf, c, "okx_multipliers", NOW, {"windows": ["7d"]})["issues"][0]["event_id"]
+
+    def override():
+        with sf() as s:
+            yield s
+    app.dependency_overrides[get_session] = override
+    try:
+        c = TestClient(app)
+        r = c.get(f"/api/events/{eid}", headers=login(c, "chief"))
+    finally:
+        app.dependency_overrides.clear()
+    assert r.status_code == 200, r.text
+    assert r.json()["event"]["trader_key"] is None and r.json()["event"]["column_key"] == "okx_multipliers"
