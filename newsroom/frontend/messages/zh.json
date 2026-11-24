@@ -18,7 +18,8 @@
     "columns": "栏目",
     "public": "公开页",
     "drafts": "AI 稿件",
-    "experiments": "内容实验"
+    "experiments": "内容实验",
+    "publish": "发布中心"
   },
   "common": {
     "save": "保存",
@@ -1487,5 +1488,76 @@
       "risk": "有没有夸大、暗示内幕、把样本说成全市场",
       "publishable": "不改能不能直接发"
     }
+  },
+  "publish": {
+    "title": "发布中心",
+    "subtitle": "所有能发的稿件都在这里：预览、复制、去 X 发布，发完点「我已发布」记录下来。",
+    "autoRefresh": "自动刷新中",
+    "tab": {
+      "ready": "待发布",
+      "todo": "待处理",
+      "published": "已发布",
+      "expired": "已过期",
+      "trash": "回收站"
+    },
+    "tabHint": {
+      "ready": "AI 审稿通过或人工通过的稿件，按剩余时间排序，越早过期越靠前。",
+      "todo": "写好了但还没通过：AI 审稿要求修改或退回、事实已更新需重核、试写稿。可以「通过」或「重写」。",
+      "published": "已经发出去的稿件和发布记录。",
+      "expired": "超过时效没发的稿件。仓位有新进展时可以「按最新事实重写」。",
+      "trash": "删掉的稿件。"
+    },
+    "empty": {
+      "ready": "暂时没有待发布的稿件。AI 写完、审稿通过后会出现在这里。",
+      "todo": "没有待处理的稿件。",
+      "published": "还没有发布记录。",
+      "expired": "没有过期稿件。",
+      "trash": "回收站是空的。"
+    },
+    "today": "过去 24 小时已发 {n} 条",
+    "allLanguages": "全部语言",
+    "allAccounts": "全部账号",
+    "allStyles": "全部风格",
+    "allClasses": "全部事件",
+    "filter": "筛选",
+    "trial": "试写",
+    "left": "还剩 {t}",
+    "expiredNow": "已到期",
+    "expired": "已过期",
+    "openEditor": "在编辑室打开",
+    "postN": "第 {n} 条",
+    "copyThis": "复制这一条",
+    "replyLabel": "评论区（发帖后贴到第一条评论）",
+    "length": "长度 {n}/{max}",
+    "publishedVia": "通过{channel}发布",
+    "viewPost": "查看帖子",
+    "channel": {
+      "manual": "手动",
+      "rpa": "RPA",
+      "extension": "浏览器插件",
+      "api": "接口"
+    },
+    "copyBody": "复制正文",
+    "copyReply": "复制评论",
+    "downloadCard": "下载配图",
+    "openX": "去 X 发布",
+    "intentHint": "打开 X 的发帖页并填好正文；配图要先下载，再手动添加",
+    "posted": "我已发布",
+    "postedPrompt": "贴上帖子链接（可以不填，直接确定）",
+    "postedDone": "已记录发布",
+    "expiredConfirm": "这篇已经过期，确定已经发出去了吗？",
+    "approve": "通过，加入待发布",
+    "approved": "已通过，进入待发布",
+    "promote": "试写转正",
+    "promoted": "已转为正式稿件",
+    "rewrite": "按最新事实重写",
+    "rewriting": "已开始重写，稍后刷新查看",
+    "kill": "作废",
+    "killPrompt": "作废原因（可不填）",
+    "killed": "已作废",
+    "copied": "已复制{what}",
+    "copyFailed": "复制失败，请手动选中复制",
+    "body": "正文",
+    "reply": "评论"
   }
 }

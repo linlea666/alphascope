@@ -131,3 +131,32 @@ def test_trials_are_reviewed_but_never_auto_approved(sf):
     run_jobs(sf, FakeProvider(review_out("approve")))
     with sf() as s:
         assert s.execute(text("SELECT status FROM article WHERE id = :a"), {"a": art}).scalar() == "draft_ready"
+
+
+def test_the_publish_center_lists_ready_posts_with_their_review_and_reply(sf):
+    from fastapi.testclient import TestClient
+
+    from nr.db import get_session
+    from nr.main import app
+    from tests.test_api import login
+    nr, eid, art = drafted(sf)
+    with sf() as s:
+        pub.quick_approve(s, art, nr["chief"])
+        s.commit()
+
+    def override():
+        with sf() as s:
+            yield s
+    app.dependency_overrides[get_session] = override
+    try:
+        c = TestClient(app)
+        h = login(c, "chief")
+        d = c.get("/api/publish", params={"tab": "ready", "language": "zh"}, headers=h).json()
+        assert [x["id"] for x in d["cards"]] == [art] and d["counts"]["ready"] == 1
+        assert d["cards"][0]["body"] == ZH and d["cards"][0]["expires_at"] is not None
+        assert c.get("/api/publish", params={"tab": "ready", "language": "en"}, headers=h).json()["cards"] == []
+        assert c.post(f"/api/articles/{art}/publish", json={}, headers=h).status_code == 200  # "I posted it"
+        d = c.get("/api/publish", params={"tab": "published"}, headers=h).json()
+        assert d["cards"][0]["publication"]["channel"] == "manual"
+    finally:
+        app.dependency_overrides.clear()

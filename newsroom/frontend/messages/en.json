@@ -18,7 +18,8 @@
     "columns": "Columns",
     "public": "Public",
     "drafts": "AI drafts",
-    "experiments": "Experiments"
+    "experiments": "Experiments",
+    "publish": "Publish"
   },
   "common": {
     "save": "Save",
@@ -1487,5 +1488,76 @@
       "risk": "Hype, inside-info hints, sample called the market",
       "publishable": "Could go out as is"
     }
+  },
+  "publish": {
+    "title": "Publish",
+    "subtitle": "Every post worth sending: preview, copy, open X, then record it with 'I posted it'.",
+    "autoRefresh": "refreshing",
+    "tab": {
+      "ready": "Ready",
+      "todo": "To do",
+      "published": "Published",
+      "expired": "Expired",
+      "trash": "Trash"
+    },
+    "tabHint": {
+      "ready": "Approved by the AI reviewer or a person, soonest to expire first.",
+      "todo": "Written but not approved yet: the reviewer asked for changes or a person, facts changed, or trials.",
+      "published": "Posts that went out, with their records.",
+      "expired": "Posts that ran out of time. Rewrite from fresh facts if the position moved on.",
+      "trash": "Deleted posts."
+    },
+    "empty": {
+      "ready": "Nothing ready yet. Drafts land here once the AI reviewer approves them.",
+      "todo": "Nothing to do.",
+      "published": "No posts yet.",
+      "expired": "Nothing expired.",
+      "trash": "Trash is empty."
+    },
+    "today": "{n} posted in the last 24h",
+    "allLanguages": "All languages",
+    "allAccounts": "All accounts",
+    "allStyles": "All styles",
+    "allClasses": "All events",
+    "filter": "Filter",
+    "trial": "trial",
+    "left": "{t} left",
+    "expiredNow": "time's up",
+    "expired": "expired",
+    "openEditor": "Open in editor",
+    "postN": "post {n}",
+    "copyThis": "Copy this one",
+    "replyLabel": "First reply (post it under the tweet)",
+    "length": "length {n}/{max}",
+    "publishedVia": "Posted via {channel}",
+    "viewPost": "View post",
+    "channel": {
+      "manual": "hand",
+      "rpa": "RPA",
+      "extension": "browser extension",
+      "api": "API"
+    },
+    "copyBody": "Copy post",
+    "copyReply": "Copy reply",
+    "downloadCard": "Download card",
+    "openX": "Open in X",
+    "intentHint": "Opens X's composer with the text; add the card by hand",
+    "posted": "I posted it",
+    "postedPrompt": "Paste the post link (optional)",
+    "postedDone": "Recorded",
+    "expiredConfirm": "This post expired. Did it go out anyway?",
+    "approve": "Approve",
+    "approved": "Approved: ready to post",
+    "promote": "Make it real",
+    "promoted": "Now a real article",
+    "rewrite": "Rewrite from fresh facts",
+    "rewriting": "Rewriting; refresh in a moment",
+    "kill": "Kill",
+    "killPrompt": "Why (optional)",
+    "killed": "Killed",
+    "copied": "Copied the {what}",
+    "copyFailed": "Copy failed: select and copy by hand",
+    "body": "post",
+    "reply": "reply"
   }
 }
