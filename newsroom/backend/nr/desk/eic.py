@@ -74,8 +74,9 @@ def evaluate_event(sf: sessionmaker, event_id: int, now: datetime, job_id: int |
     fact_ids = {f["id"] for f in packet["facts"]}
 
     def semantic(o: EicEvaluation) -> list[str]:
-        errs = [f"unknown fact id {f}" for f in o.key_fact_ids if f not in fact_ids]
-        errs += [f"unknown fact id {f}" for x in o.newsworthiness for f in x.fact_ids if f not in fact_ids]
+        # ids that aren't facts (event.class, a constraint code) are dropped below, not worth a rewrite;
+        # only an evaluation resting on no fact at all goes back
+        errs = [] if any(f in fact_ids for f in o.key_fact_ids) else ["key_fact_ids must name at least one fact id"]
         seen = [r.account_id for r in o.recommended_accounts] + [r.account_id for r in o.silent_accounts]
         if sorted(seen) != sorted(ids):
             errs.append(f"every account must appear exactly once across recommended and silent: expected {ids}, got {seen}")
@@ -101,6 +102,9 @@ def evaluate_event(sf: sessionmaker, event_id: int, now: datetime, job_id: int |
                 pass
         raise
     o: EicEvaluation = out.parsed
+    o.key_fact_ids = [f for f in o.key_fact_ids if f in fact_ids]
+    for x in o.newsworthiness:
+        x.fact_ids = [f for f in x.fact_ids if f in fact_ids]
     lang = {a["id"]: a["language"] for a in accounts}
     flags = set(o.risk_flags)
     recs = o.recommended_accounts

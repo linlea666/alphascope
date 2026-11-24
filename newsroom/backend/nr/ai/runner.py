@@ -10,7 +10,7 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from string import Template
 
@@ -59,6 +59,21 @@ def model_config(s: Session, model_id: int | None) -> dict | None:
     cfg = dict(row)
     cfg["api_key"] = decrypt(cfg["api_key_secret"]) if cfg["api_key_secret"] else ""
     return cfg
+
+
+PAUSE_AFTER = 3  # consecutive gateway errors before a model sits out
+PAUSE_FOR = timedelta(hours=1)
+
+
+def model_paused(s: Session, model_id: int, now: datetime) -> str | None:
+    """Why a model should sit this call out: its last test failed (as a fallback only) or its last calls all hit
+    gateway errors within the hour. Saves a doomed request on every job, e.g. a gateway that blocks this server."""
+    last = s.execute(text("""SELECT status, created_at, error FROM ai_call_log WHERE model_config_id = :m
+                             ORDER BY id DESC LIMIT :n"""), {"m": model_id, "n": PAUSE_AFTER}).mappings().all()
+    if len(last) == PAUSE_AFTER and all(r["status"] in ("http_error", "timeout") for r in last) \
+            and now - last[0]["created_at"] < PAUSE_FOR:
+        return f"paused after {PAUSE_AFTER} gateway errors: {(last[0]['error'] or '')[:120]}"
+    return None
 
 
 def default_transport(cfg: dict, req: ChatRequest) -> ChatResult:
@@ -138,6 +153,12 @@ def call_json(sf: sessionmaker, *, agent_key: str, purpose: str, schema: type[Ba
                 primary, fallback = model_config(s, base[0]), model_config(s, base[1])
         if model_override is not None:  # comparison runs: exactly this model, no fallback
             primary, fallback = model_config(s, model_override), None
+        if fallback is not None and (fallback["last_test_ok"] is False or model_paused(s, fallback["id"], now)):
+            fallback = None  # a fallback known not to work only adds a failure to every job
+        if primary is not None and model_override is None and (why := model_paused(s, primary["id"], now)):
+            if fallback is None:
+                raise AIUnavailable(f"model {primary['name']} {why}")
+            primary, fallback = fallback, None
         if primary is None:
             raise AIUnavailable(f"agent {agent_key} has no enabled model")
         prompt = resolve_prompt(s, agent["prompt_key"], prompt_version or agent["prompt_version"], language)

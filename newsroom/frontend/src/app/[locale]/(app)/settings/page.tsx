@@ -14,10 +14,11 @@ type Tab = (typeof TABS)[number];
 
 type Model = { id: number; name: string; protocol: string; base_url: string; model: string; auth_header: string; anthropic_version: string; json_mode: string;
   timeout_s: number; max_retries: number; max_concurrency: number; input_usd_per_mtok: number; output_usd_per_mtok: number; enabled: boolean; extra_body: Record<string, unknown>;
-  last_test_at: string | null; last_test_ok: boolean | null; last_test_detail: Record<string, unknown> | null; has_key: boolean };
+  last_test_at: string | null; last_test_ok: boolean | null; last_test_detail: Record<string, unknown> | null; has_key: boolean;
+  diagnosis: string | null };
 type Agent = { id: number; agent_key: string; version: number; display_name: string; role_description: string; model_config_id: number | null;
   fallback_model_config_id: number | null; prompt_key: string; prompt_version: number; max_output_tokens: number; budget_usd_per_task: number;
-  active: boolean; model_name: string | null; fallback_name: string | null };
+  active: boolean; model_name: string | null; fallback_name: string | null; fallback_test_ok: boolean | null; model_test_ok: boolean | null };
 type Prompt = { id: number; key: string; version: number; language: "zh" | "en" | null; system_text: string; user_template: string;
   notes: string | null; created_at: string; calls: number; active_for: string[] | null; deletable: boolean };
 const REPORTERS = ["reporter", "reporter_breaking", "reporter_investigator", "reporter_data", "reporter_derivatives", "reporter_historian"];
@@ -93,7 +94,8 @@ async function Sources({ locale }: { locale: string }) {
 }
 
 async function Models() {
-  const [t, tm, tpr] = await Promise.all([getTranslations("settings"), getTranslations("modelForm"), getTranslations("protocols")]);
+  const [t, tm, tpr, td] = await Promise.all([getTranslations("settings"), getTranslations("modelForm"), getTranslations("protocols"),
+    getTranslations("diagnosis")]);
   const models = await nrGetOptional<Model[]>("ai/models");
   if (!models) return <NoAccess />;
   const f = (name: string) => ({ name, label: tm(`${name}.name`), help: tm(`${name}.help`) });
@@ -123,6 +125,11 @@ async function Models() {
         <Panel key={m.id} title={<span>{m.name} · {m.model} <Badge tone={m.last_test_ok ? "up" : m.last_test_ok === false ? "down" : "neutral"}>{t("lastTest")}: {tested(m.last_test_ok)}</Badge> {!m.has_key && <Badge tone="warn">{tm("noKey")}</Badge>}</span>}
           hint={`${tpr.has(m.protocol) ? tpr(m.protocol) : m.protocol} · ${m.base_url} · ${tpr.has(m.json_mode) ? tpr(m.json_mode) : m.json_mode}`}>
           <FieldForm fields={[]} path={`ai/models/${m.id}/test`} submitLabel={t("testModel")} showResult />
+          {m.diagnosis && td.has(`${m.diagnosis}.what`) && (
+            <div className="mt-2 rounded border border-down/40 bg-down/10 px-3 py-2 text-sm">
+              <b>{td(`${m.diagnosis}.what`)}</b> — {td(`${m.diagnosis}.fix`)}
+            </div>
+          )}
           {m.last_test_detail && (
             <details className="mt-2"><summary className="cursor-pointer text-xs text-muted">{tm("testDetail")}</summary>
               <pre className="mt-1 max-h-40 overflow-auto rounded bg-panel-2 p-2 text-xs">{JSON.stringify(m.last_test_detail, null, 2)}</pre></details>
@@ -188,8 +195,9 @@ async function Agents() {
         return (
           <Panel key={a.id} title={<>{role.name} <span className="text-xs font-normal text-muted">{a.agent_key} · {tp("roleVersion", { v: a.version })}</span></>}
             hint={role.desc ?? a.role_description}>
-            <KV k={t("primaryModel")} v={a.model_name ?? "—"} />
-            <KV k={t("fallbackModel")} v={a.fallback_name ?? "—"} />
+            <KV k={t("primaryModel")} v={<>{a.model_name ?? "—"} {a.model_test_ok === false && <Badge tone="down">{tp("testFailed")}</Badge>}</>} />
+            <KV k={t("fallbackModel")} v={<>{a.fallback_name ?? "—"} {a.fallback_test_ok === false
+              && <Badge tone="down" title={tp("fallbackSkippedHint")}>{tp("fallbackSkipped")}</Badge>}</>} />
             <KV k={t("promptVersion")} v={<>{describe(a.prompt_key, a.prompt_version)}{" "}
               <Link className="text-xs text-accent" href={`/settings?tab=prompts#${a.prompt_key}`}>{tp("manage")}</Link></>} />
             <details className="mt-3"><summary className="cursor-pointer text-sm text-accent">{tp("editRole")}</summary>

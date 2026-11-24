@@ -13,13 +13,15 @@ type V = { id: number; article_id: number; version_no: number; model: string | n
   article_status: string; deleted: boolean; source: string | null; handle: string; platform: string; event_id: number;
   event_class: string; coin: string; cost_usd: number | null; latency_ms: number | null; thread: string[] | null;
   card_asset_id: number | null };
-type D = { versions: V[]; failures: { created_at: string; purpose: string; model: string | null; status: string; error: string | null; article_id: number | null }[];
+type Failure = { created_at: string; purpose: string; model: string | null; status: string; error: string | null; article_id: number | null;
+  recovered: boolean; diagnosis: string };
+type D = { versions: V[]; failures: Failure[]; call_stats: { ok: number; failed: number; jobs_with_retry: number } | null;
   waiting: { kind: string; n: number; last_error: string | null }[]; models: { model: string }[] };
 
 export default async function DraftsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
-  const [t, locale, tr, tst, tj, tp, tcs] = await Promise.all([getTranslations("drafts"), getLocale(), getTranslations("roles"),
-    getTranslations("statusWords"), getTranslations("jobKinds"), getTranslations("callPurposes"), getTranslations("callStatus")]);
+  const [t, locale, tr, tst, tj] = await Promise.all([getTranslations("drafts"), getLocale(), getTranslations("roles"),
+    getTranslations("statusWords"), getTranslations("jobKinds")]);
   const d = await nrGet<D>("drafts/ai", { days: sp.days ?? 7, model: sp.model, guard: sp.guard });
   const waiting = d.waiting.reduce((n, w) => n + Number(w.n), 0);
   return (
@@ -89,17 +91,34 @@ export default async function DraftsPage({ searchParams }: { searchParams: Promi
               <div key={w.kind} className="text-sm">{word(tj, w.kind)}: <b>{w.n}</b>{w.last_error && <div className="text-xs text-warn">{w.last_error}</div>}</div>
             ))}
           </Panel>
-          <Panel title={t("failures")}>
-            {d.failures.length === 0 ? <Empty>—</Empty> : d.failures.map((f, i) => (
-              <div key={i} className="mb-2 border-b border-border/60 pb-2 text-xs">
-                <span className="text-muted">{fmtTime(f.created_at, locale)}</span> {word(tp, f.purpose)} · {f.model} · <Badge tone="down">{word(tcs, f.status)}</Badge>
-                {f.article_id && <> <Link className="text-accent" href={`/desk/${f.article_id}`}>#{f.article_id}</Link></>}
-                <div className="text-down">{f.error}</div>
-              </div>
-            ))}
+          <Panel title={t("failures")} hint={d.call_stats ? t("callStats", { ok: d.call_stats.ok, failed: d.call_stats.failed }) : undefined}>
+            {d.failures.filter((f) => !f.recovered).length === 0 ? <Empty>{t("noRealFailures")}</Empty>
+              : d.failures.filter((f) => !f.recovered).map((f, i) => <FailureRow key={i} f={f} />)}
+            {d.failures.some((f) => f.recovered) && (
+              <details className="mt-3 text-xs text-muted">
+                <summary className="cursor-pointer">{t("recovered", { n: d.failures.filter((f) => f.recovered).length })}</summary>
+                <div className="mt-2 opacity-80">{d.failures.filter((f) => f.recovered).map((f, i) => <FailureRow key={i} f={f} />)}</div>
+              </details>
+            )}
           </Panel>
         </div>
       </div>
     </>
+  );
+}
+
+async function FailureRow({ f }: { f: Failure }) {
+  const [locale, tp, tcs, td] = await Promise.all([getLocale(), getTranslations("callPurposes"), getTranslations("callStatus"),
+    getTranslations("diagnosis")]);
+  return (
+    <div className={`mb-2 border-b border-border/60 pb-2 text-xs ${f.recovered ? "" : "text-text"}`}>
+      <span className="text-muted">{fmtTime(f.created_at, locale)}</span> {word(tp, f.purpose)} · {f.model} ·{" "}
+      <Badge tone={f.recovered ? "neutral" : "down"}>{word(tcs, f.status)}</Badge>
+      {f.article_id && <> <Link className="text-accent" href={`/desk/${f.article_id}`}>#{f.article_id}</Link></>}
+      {td.has(`${f.diagnosis}.what`) && (
+        <div className={f.recovered ? "" : "text-down"}><b>{td(`${f.diagnosis}.what`)}</b> — {td(`${f.diagnosis}.fix`)}</div>
+      )}
+      <details><summary className="cursor-pointer text-muted">{td("raw")}</summary><div className="break-all">{f.error}</div></details>
+    </div>
   );
 }

@@ -14,6 +14,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from nr import audit, settings_store
+from nr.ai.diagnose import diagnose
 from nr.api.common import now, one, rows
 from nr.auth.deps import active_user, check_account, require_roles, visible_accounts
 from nr.auth.rbac import EVENT_DESK_ROLES
@@ -125,8 +126,9 @@ def compare_results(article_id: int, s: Session = Depends(get_session), user: Cu
                    v.created_at, c.cost_usd, c.latency_ms, c.input_tokens, c.output_tokens
             FROM article_version v LEFT JOIN ai_call_log c ON c.id = v.ai_call_id
             WHERE v.article_id = :a AND v.origin = 'ai' ORDER BY v.id DESC""", {"a": article_id}),
-        "failures": rows(s, """SELECT model, status, error, created_at, cost_usd FROM ai_call_log
-                               WHERE article_id = :a AND status <> 'ok' ORDER BY id DESC LIMIT 20""", {"a": article_id}),
+        "failures": [{**r, "diagnosis": diagnose(r["status"], r["error"])} for r in rows(s, """
+            SELECT model, status, error, created_at, cost_usd FROM ai_call_log
+            WHERE article_id = :a AND status <> 'ok' ORDER BY id DESC LIMIT 20""", {"a": article_id})],
         "pending": s.execute(text("""SELECT count(*) FROM job WHERE kind = 'draft_generate' AND status IN
                                      ('queued', 'running') AND (payload->>'assignment_id')::bigint = :g"""),
                              {"g": a["assignment_id"]}).scalar(),
@@ -545,10 +547,17 @@ def ai_drafts(s: Session = Depends(get_session), user: CurrentUser = Depends(act
             WHERE v.origin = 'ai' AND v.created_at > :since {"AND ar.account_id = ANY(:vis)" if vis is not None else ""}
                   {"AND v.model = :model" if model else ""} {"AND v.guard_status = :guard" if guard else ""}
             ORDER BY v.id DESC LIMIT 300""", p),
-        "failures": rows(s, """
-            SELECT c.created_at, c.purpose, c.model, c.status, c.error, c.article_id, c.news_event_id
-            FROM ai_call_log c WHERE c.status <> 'ok' AND c.created_at > :since ORDER BY c.id DESC LIMIT 50""",
-            {"since": since}),
+        # a failure the same job got past (a rewrite, the fallback) is "recovered": shown apart, so the real
+        # failures stand out
+        "failures": [{**r, "diagnosis": diagnose(r["status"], r["error"])} for r in rows(s, """
+            SELECT c.created_at, c.purpose, c.model, c.status, c.error, c.article_id, c.news_event_id, c.job_id,
+                   EXISTS (SELECT 1 FROM ai_call_log o WHERE o.job_id = c.job_id AND o.status = 'ok' AND o.id > c.id)
+                     AS recovered
+            FROM ai_call_log c WHERE c.status <> 'ok' AND c.created_at > :since ORDER BY c.id DESC LIMIT 80""",
+            {"since": since})],
+        "call_stats": one(s, """SELECT count(*) FILTER (WHERE status = 'ok') AS ok, count(*) FILTER (WHERE status <> 'ok') AS failed,
+                                       count(DISTINCT job_id) FILTER (WHERE status <> 'ok') AS jobs_with_retry
+                                FROM ai_call_log WHERE created_at > :since""", {"since": since}),
         "waiting": rows(s, """SELECT kind, count(*) AS n, max(last_error) AS last_error FROM job
                               WHERE kind IN ('eic_evaluate', 'draft_generate') AND status IN ('queued', 'running')
                               GROUP BY kind"""),

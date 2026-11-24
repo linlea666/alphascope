@@ -20,20 +20,20 @@ ReporterRole = Literal["reporter", "reporter_breaking", "reporter_investigator",
 class AccountRec(Strict):
     account_id: int
     reporter: ReporterRole | None = None
-    angle: str = Field(max_length=300)
-    reason: str = Field(max_length=500)
+    angle: str = Field(max_length=600)
+    reason: str = Field(max_length=800)
     format: Literal["single_post", "thread", "card_post"]
     urgency: Literal["now", "within_2h", "today"]
 
 
 class AccountSilence(Strict):
     account_id: int
-    reason: str = Field(max_length=400)
+    reason: str = Field(max_length=800)
 
 
 class Factor(Strict):
     factor: str = Field(max_length=60)
-    assessment: str = Field(max_length=400)
+    assessment: str = Field(max_length=800)
     fact_ids: list[str]
 
 
@@ -46,7 +46,7 @@ class FollowUp(Strict):
 class EicEvaluation(Strict):
     decision: Literal["cover", "hold", "no_coverage"]
     priority: Literal["p0", "p1", "p2", "p3"]
-    explanation: str = Field(max_length=1200)
+    explanation: str = Field(max_length=2000)
     key_fact_ids: list[str] = Field(min_length=1)
     newsworthiness: list[Factor] = Field(max_length=8)
     recommended_accounts: list[AccountRec]
@@ -62,10 +62,10 @@ class DraftOut(Strict):
     headline_candidates: list[str] = Field(min_length=1, max_length=5)
     body: str = Field(min_length=1, max_length=4000)
     thread: list[str] | None = None
-    angle: str = Field(max_length=300)
-    added_value: str = Field(max_length=500)
-    difference_from_others: str = Field(max_length=500)
-    why_shareable: str = Field(max_length=500)
+    angle: str = Field(max_length=600)
+    added_value: str = Field(max_length=800)
+    difference_from_others: str = Field(max_length=800)
+    why_shareable: str = Field(max_length=800)
     risks: list[str]
     facts_used: list[str] = Field(min_length=1)
     card_suggestion: Literal["position_card", "close_card", "liq_card"] | None = None

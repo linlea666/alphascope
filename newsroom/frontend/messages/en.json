@@ -452,7 +452,7 @@
     "title": "AI drafts",
     "subtitle": "Every recent AI version: model, guard verdict, cost and latency. Failures are listed with their reason, such as no model configured or a gateway block.",
     "waiting": "AI jobs waiting",
-    "failures": "Recent failures",
+    "failures": "Final failures",
     "days": "Days",
     "allModels": "All models",
     "allGuard": "Any guard result",
@@ -463,7 +463,10 @@
     "colDraft": "Draft",
     "colWriter": "Written by",
     "colGuard": "Fact check",
-    "promptV": "prompt v"
+    "promptV": "prompt v",
+    "callStats": "Last 7 days: {ok} OK, {failed} failed (mostly recovered)",
+    "noRealFailures": "No final failures",
+    "recovered": "{n} recovered (rewritten or retried, then succeeded)"
   },
   "trial": {
     "title": "Quick trial",
@@ -678,7 +681,10 @@
     "editRole": "Change this role (model, prompt version, limits)",
     "maxTokens": "Max output tokens per call (higher costs more, too low truncates)",
     "budgetTask": "Budget per task (USD)",
-    "role": "Role"
+    "role": "Role",
+    "testFailed": "last test failed",
+    "fallbackSkipped": "failed its test: skipped",
+    "fallbackSkippedHint": "A fallback that failed its test is skipped. Pick a working model or leave it empty"
   },
   "roles": {
     "eic": {
@@ -1382,6 +1388,61 @@
     "publish": {
       "title": "Review and record the first post",
       "how": "Library: submit, approve, post it, then Record publication in the editor"
+    }
+  },
+  "diagnosis": {
+    "raw": "Raw error",
+    "firewall": {
+      "what": "The provider's firewall blocks this server",
+      "fix": "Their Cloudflare won't let the server IP 194.163.135.37 in. Ask them to allow it or use another provider; don't keep it as a fallback"
+    },
+    "bad_key": {
+      "what": "Invalid API key",
+      "fix": "Re-enter the key under AI models and test again"
+    },
+    "no_channel": {
+      "what": "Wrong model name or model not enabled",
+      "fix": "Use the model name from the provider's docs"
+    },
+    "quota": {
+      "what": "Out of balance or quota",
+      "fix": "Top up with the provider"
+    },
+    "rate_limit": {
+      "what": "Rate limited",
+      "fix": "Retried automatically; lower concurrency if frequent"
+    },
+    "server": {
+      "what": "Provider error",
+      "fix": "Usually recovers; switch to the fallback if it persists"
+    },
+    "timeout": {
+      "what": "Timed out",
+      "fix": "Raise the timeout or use a faster model"
+    },
+    "truncated": {
+      "what": "Output cut off",
+      "fix": "Retried with more room; raise max output tokens; turn DeepSeek thinking off"
+    },
+    "format": {
+      "what": "Wrong output format",
+      "fix": "Rewritten automatically; change the JSON mode or the model if frequent"
+    },
+    "too_long": {
+      "what": "Over the platform's length",
+      "fix": "Rewritten automatically; the newest prompts state the budget and avoid this"
+    },
+    "rule": {
+      "what": "Broke a writing rule",
+      "fix": "Rewritten automatically"
+    },
+    "budget": {
+      "what": "Today's AI budget is used up",
+      "fix": "Raise the daily budget or wait until tomorrow"
+    },
+    "other": {
+      "what": "Other error",
+      "fix": "See the raw error"
     }
   }
 }

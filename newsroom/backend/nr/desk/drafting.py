@@ -137,8 +137,9 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
         link = None
 
     def semantic(o: DraftOut) -> list[str]:
-        errs = [f"unknown fact id {f}" for f in o.facts_used if f not in fact_ids]
-        errs += [f"unknown fact id {f} in lede_fact_ids" for f in getattr(o, "lede_fact_ids", []) if f not in fact_ids]
+        # ids that aren't facts are dropped after the call (the guard checks every number anyway); a draft citing
+        # no fact at all goes back
+        errs = [] if any(f in fact_ids for f in o.facts_used) else ["facts_used must name at least one fact id"]
         if o.language != a["language"]:
             errs.append(f"language must be {a['language']}")
         # same rule as the guard's TOO_LONG for every post, so the model gets one chance to shorten it itself
@@ -178,6 +179,9 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
                    "style_name": style["name"] if style else "default", "char_budget": budget},
         data=data)
     o: DraftOut = out.parsed
+    o.facts_used = [f for f in o.facts_used if f in fact_ids]
+    if hasattr(o, "lede_fact_ids"):
+        o.lede_fact_ids = [f for f in o.lede_fact_ids if f in fact_ids]
     card = pick_card(packet, [h["key"] for h in data["hooks"]]) if data.get("hooks") is not None else None
     thread = list(o.thread or [])
     if link or in_body:  # the address and link come from the packet, never from a model; exactly one copy

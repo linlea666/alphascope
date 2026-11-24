@@ -12,6 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from nr import audit, settings_store
+from nr.ai.diagnose import diagnose
 from nr.ai.model_test import test_model
 from nr.api.common import now, one, rows
 from nr.auth.deps import active_user, require_roles, visible_accounts
@@ -243,7 +244,13 @@ def model_options(s: Session = Depends(get_session), user: CurrentUser = Depends
 
 @router.get("/ai/models")
 def list_models(s: Session = Depends(get_session), user: CurrentUser = Depends(CHIEF)):
-    return rows(s, f"SELECT {MODEL_COLS} FROM ai_model_config ORDER BY id")
+    """Each model with what its last failed test means, worded by the web app (`diagnosis`)."""
+    out = rows(s, f"SELECT {MODEL_COLS} FROM ai_model_config ORDER BY id")
+    for m in out:
+        d = m["last_test_detail"] or {}
+        m["diagnosis"] = None if m["last_test_ok"] is not False else \
+            d.get("diagnosis") or diagnose(d.get("status"), str(d.get("detail") or ""))
+    return out
 
 
 @router.post("/ai/models")
@@ -287,7 +294,8 @@ def run_model_test(model_id: int, s: Session = Depends(get_session), user: Curre
 
 @router.get("/ai/agents")
 def list_agents(s: Session = Depends(get_session), user: CurrentUser = Depends(CHIEF)):
-    return rows(s, """SELECT a.*, m.name AS model_name, f.name AS fallback_name FROM ai_agent_profile a
+    return rows(s, """SELECT a.*, m.name AS model_name, f.name AS fallback_name, f.last_test_ok AS fallback_test_ok,
+                             m.last_test_ok AS model_test_ok FROM ai_agent_profile a
                       LEFT JOIN ai_model_config m ON m.id = a.model_config_id
                       LEFT JOIN ai_model_config f ON f.id = a.fallback_model_config_id
                       ORDER BY a.agent_key, a.version DESC""")

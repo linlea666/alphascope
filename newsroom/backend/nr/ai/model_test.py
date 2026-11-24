@@ -9,6 +9,7 @@ from datetime import datetime
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from nr.ai.diagnose import diagnose
 from nr.ai.envelope import extract_json
 from nr.ai.prompts import MODEL_TEST_SYSTEM
 from nr.ai.providers.base import ChatRequest, ProviderError
@@ -34,13 +35,15 @@ def test_model(s: Session, model_id: int, now: datetime, transport: Callable | N
         try:
             parsed = ModelTestOut.model_validate(extract_json(r.text))
         except ValueError as exc:
-            out.update(stage="parse", detail=f"reply is not the requested JSON: {str(exc)[:200]}", reply=r.text[:300])
+            out.update(stage="parse", detail=f"reply is not the requested JSON: {str(exc)[:200]}", reply=r.text[:300],
+                       diagnosis="format")
         else:
             out.update(ok=parsed.ok and parsed.echo == nonce, stage="done",
                        detail="ok" if parsed.echo == nonce else "reply did not echo the nonce")
     except ProviderError as exc:
         out.update(stage="call", status=exc.status, detail=str(exc)[:300].replace(cfg["api_key"], "***")
                    if cfg["api_key"] else str(exc)[:300])
+        out["diagnosis"] = diagnose(exc.status, str(exc))
     s.execute(text("""UPDATE ai_model_config SET last_test_at = :n, last_test_ok = :ok, last_test_detail = CAST(:d AS jsonb)
                       WHERE id = :i"""), {"n": now, "ok": out["ok"], "d": json.dumps(out), "i": model_id})
     return out
