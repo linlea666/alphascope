@@ -31,7 +31,7 @@ TABS = {
 CARD_SQL = """
     SELECT a.id, a.status, a.language, a.expires_at, a.updated_at, a.deleted_at IS NOT NULL AS deleted,
            acc.id AS account_id, acc.handle, acc.display_name, acc.platform, asg.source,
-           ne.id AS event_id, ne.event_class, ne.coin, ne.direction,
+           ne.id AS event_id, ne.event_class, ne.coin, ne.direction, ne.column_key,
            v.id AS version_id, v.headline, v.body, v.thread, v.reply_text, v.style_key, v.model, v.agent_key, v.facts_used,
            v.guard_status, (v.guard_report->>'x_length')::int AS x_length, (v.guard_report->>'length_limit')::int AS length_limit,
            st.name AS style_name,
@@ -93,6 +93,31 @@ def publish_center(tab: Tab = "ready", language: Literal["zh", "en"] | None = No
         if pair and cards else []
     return {"tab": tab, "cards": cards, "siblings": siblings, "counts": counts, "now": p["now"], "today": today,
             "styles": styles}
+
+
+@router.post("/articles/{article_id}/revise")
+def revise_by_review(article_id: int, s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
+    """One more pass by the desk editor with the latest AI review's notes (the automatic pass is once per draft)."""
+    a = one(s, """SELECT a.account_id, a.assignment_id, a.status, a.current_version_id FROM article a WHERE a.id = :a""",
+            {"a": article_id})
+    if a is None:
+        raise HTTPException(404, "article not found")
+    check_account(s, user, a["account_id"], "draft")
+    if a["status"] not in ("draft_ready", "changes_requested", "in_review", "approved", "stale"):
+        raise HTTPException(409, f"article is {a['status']}")
+    r = one(s, """SELECT r.summary, r.revision_note, r.issues FROM article_review r
+                  WHERE r.article_version_id = :v ORDER BY r.id DESC LIMIT 1""", {"v": a["current_version_id"]})
+    if r is None:
+        raise HTTPException(409, "the current version has no AI review yet")
+    job = enqueue(s, "draft_generate", {"assignment_id": a["assignment_id"], "user_id": user.id, "mode": "polish",
+                                        "review_note": (r["revision_note"] or r["summary"])[:1500],
+                                        "review_issues": r["issues"]},
+                  dedupe_key=f"revise:{a['current_version_id']}:manual", priority=30, now=now())
+    if a["status"] == "approved":  # a revised text needs approving again
+        s.execute(text("UPDATE article SET status = 'draft_ready', updated_at = now() WHERE id = :a"), {"a": article_id})
+    audit.record(s, "article.revise_by_review", "article", article_id, user_id=user.id, account_id=a["account_id"])
+    s.commit()
+    return {"job": job}
 
 
 class CheckTextIn(BaseModel):

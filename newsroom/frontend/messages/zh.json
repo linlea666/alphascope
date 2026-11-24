@@ -1682,7 +1682,13 @@
       "replies": "评论"
     },
     "metricsSaved": "已保存表现数据",
-    "save": "保存"
+    "save": "保存",
+    "openOkx": "去 OKX 广场",
+    "openBinance": "去币安广场",
+    "squareHint": "会先把正文复制好，再打开广场；在广场发帖框里粘贴，配图要先下载",
+    "revise": "按审稿意见改一版",
+    "reviseHint": "把 AI 审稿的问题和修改建议交给编辑改一个新版本，改完自动再检查、再审稿",
+    "revising": "已交给编辑按审稿意见修改，稍后刷新查看"
   },
   "tokens": {
     "title": "接口令牌",

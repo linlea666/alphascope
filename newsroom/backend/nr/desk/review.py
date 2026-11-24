@@ -62,10 +62,11 @@ def review_version(sf: sessionmaker, version_id: int, now: datetime, job_id: int
     r: ReviewOut = out.parsed
     with sf() as s:
         rid = s.execute(text("""
-            INSERT INTO article_review (article_version_id, verdict, scores, issues, summary, ai_call_id, model)
-            VALUES (:v, :d, CAST(:sc AS jsonb), CAST(:i AS jsonb), :sm, :c, :m) RETURNING id"""),
+            INSERT INTO article_review (article_version_id, verdict, scores, issues, summary, revision_note, ai_call_id, model)
+            VALUES (:v, :d, CAST(:sc AS jsonb), CAST(:i AS jsonb), :sm, :rn, :c, :m) RETURNING id"""),
             {"v": version_id, "d": r.verdict, "sc": json.dumps(r.scores.model_dump()),
              "i": json.dumps([x.model_dump() for x in r.issues], ensure_ascii=False), "sm": r.summary,
+             "rn": r.revision_note or "",
              "c": out.call_id, "m": out.model}).scalar_one()
         result: dict = {"review_id": rid, "verdict": r.verdict}
         if r.verdict == "approve" and settings_store.get(s, "review")["ai_ready"]:

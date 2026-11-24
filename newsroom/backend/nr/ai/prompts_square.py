@@ -12,7 +12,8 @@ SQUARE_ZH = """你给加密货币广场（OKX 广场、币安广场）上的一�
 事实规则（机器逐条检查，违反就退回）：
 1. 所有数字都来自事实包，可以取整到 2–3 位有效数字（事实里是 1,050,003 美元就写 105万美元；132.836% 写 133% 或 1.3 倍），
    不能比原数更精确，不能自己算新数字（不做加减、不算比例和倍数，除非事实包里已经有）。
-   倍数照事实写「8.4 倍」「账户变成 8.4 倍」「是原来的 8.4 倍」，不要写「翻了 X 倍」「涨了 X 倍」（中文会被读成多一倍，机器会退回），
+   倍数照事实写「8.4 倍」「7 天打出 8.4 倍」「收益率 736%」，不要写「翻了 X 倍」「涨了 X 倍」（中文会被读成多一倍，机器会退回），
+   也不要写「账户变成 / 资产做到 X 倍」：倍数来自榜单收益率，不等于他的资产真的涨了这么多。
    也不要把 8.4 倍取整成 8 倍以下的整数。不带数字的「翻倍」「翻倍榜」可以用。
 2. 不写具体钟点、日期和时区；「刚刚 / 过去几小时」只能用 change.recency 给的说法。
 3. 写作约束的意思要守住：
@@ -76,7 +77,11 @@ V1_MULTIPLE = "「翻了 X 倍」只能用事实里的倍数。"
 # v3: the first square review invented "梭哈型，正踩在巅峰上" for a trader without a persona; labels and stages now
 # only come from data.persona
 PERSONA_RULE = "\n   人设标签和阶段只能用 data.persona 里有的；没有 data.persona 就不要给人贴「梭哈型」「巅峰」这类标签，用事实本身制造反差。"
-SQUARE_ZH_V2 = SQUARE_ZH.replace(PERSONA_RULE, "")
+# v4: "账户做到 8.4 倍" reads as the assets growing 8.4x; a board multiple is the board's return
+V3_MULTIPLE = "   倍数照事实写「8.4 倍」「账户变成 8.4 倍」「是原来的 8.4 倍」，不要写「翻了 X 倍」「涨了 X 倍」（中文会被读成多一倍，机器会退回），"
+SQUARE_ZH_V3 = SQUARE_ZH[:SQUARE_ZH.index("   倍数照事实写")] + V3_MULTIPLE + \
+    SQUARE_ZH[SQUARE_ZH.index("\n   也不要把 8.4 倍取整"):]
+SQUARE_ZH_V2 = SQUARE_ZH_V3.replace(PERSONA_RULE, "")
 SQUARE_ZH_V1 = SQUARE_ZH_V2.replace("账户做到了几倍", "翻了几倍").split("\n   倍数照事实写")[0] + V1_MULTIPLE + \
     SQUARE_ZH_V2[SQUARE_ZH_V2.index("\n2. 不写具体钟点"):]
 
@@ -86,6 +91,8 @@ SEEDS_SQUARE = [
     ("reporter_square", 1, "zh", SQUARE_ZH_V1 + "\n\n" + BEAT_SQUARE, SQUARE_ZH_USER),
     ("reporter_star", 2, "zh", SQUARE_ZH_V2 + "\n\n" + BEAT_STAR, SQUARE_ZH_USER),
     ("reporter_square", 2, "zh", SQUARE_ZH_V2 + "\n\n" + BEAT_SQUARE, SQUARE_ZH_USER),
-    ("reporter_star", 3, "zh", SQUARE_ZH + "\n\n" + BEAT_STAR, SQUARE_ZH_USER),
-    ("reporter_square", 3, "zh", SQUARE_ZH + "\n\n" + BEAT_SQUARE, SQUARE_ZH_USER),
+    ("reporter_star", 3, "zh", SQUARE_ZH_V3 + "\n\n" + BEAT_STAR, SQUARE_ZH_USER),
+    ("reporter_square", 3, "zh", SQUARE_ZH_V3 + "\n\n" + BEAT_SQUARE, SQUARE_ZH_USER),
+    ("reporter_star", 4, "zh", SQUARE_ZH + "\n\n" + BEAT_STAR, SQUARE_ZH_USER),
+    ("reporter_square", 4, "zh", SQUARE_ZH + "\n\n" + BEAT_SQUARE, SQUARE_ZH_USER),
 ]

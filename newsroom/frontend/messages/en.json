@@ -1682,7 +1682,13 @@
       "replies": "Replies"
     },
     "metricsSaved": "Metrics saved",
-    "save": "Save"
+    "save": "Save",
+    "openOkx": "Open OKX Square",
+    "openBinance": "Open Binance Square",
+    "squareHint": "Copies the text, then opens the square: paste it into the post box; download the card first",
+    "revise": "Revise per review",
+    "reviseHint": "The desk editor rewrites with the AI review's notes; the new version is checked and reviewed again",
+    "revising": "Sent to the editor with the review's notes; refresh shortly"
   },
   "tokens": {
     "title": "API tokens",

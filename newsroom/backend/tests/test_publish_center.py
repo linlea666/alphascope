@@ -300,3 +300,32 @@ def test_a_rewrite_is_written_as_the_next_chapter(sf):
                                      ["position.notional_usd", "position.leverage"]))
     generate_draft(sf, aid, NOW, transport=prov, sequel=True, review=False)
     assert "previous_draft" in prov.requests[0]["user"] and ZH in prov.requests[0]["user"]
+
+
+def test_revise_by_review_hands_the_notes_to_the_editor(sf):
+    from fastapi.testclient import TestClient
+
+    from nr.db import get_session
+    from nr.main import app
+    from tests.test_api import login
+    nr, eid, art = drafted(sf)
+    with sf() as s:
+        vid = s.execute(text("SELECT current_version_id FROM article WHERE id = :a"), {"a": art}).scalar()
+        s.execute(text("""INSERT INTO article_review (article_version_id, verdict, scores, issues, summary, revision_note)
+                          VALUES (:v, 'revise', '{}', '[{"quote": "x", "problem": "y", "fix": "z"}]', '开头太平', '第一句先抛反差')"""),
+                  {"v": vid})
+        s.commit()
+
+    def override():
+        with sf() as s:
+            yield s
+    app.dependency_overrides[get_session] = override
+    try:
+        c = TestClient(app)
+        h = login(c, "chief")
+        assert c.post(f"/api/articles/{art}/revise", headers=h).status_code == 200
+    finally:
+        app.dependency_overrides.clear()
+    with sf() as s:
+        p = s.execute(text("SELECT payload FROM job WHERE kind = 'draft_generate'")).scalar()
+    assert p["mode"] == "polish" and p["review_note"] == "第一句先抛反差" and p["review_issues"][0]["fix"] == "z"

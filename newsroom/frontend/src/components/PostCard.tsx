@@ -12,6 +12,7 @@ import { Badge, button, input, primary } from "./ui";
 export type Card = {
   id: number; status: string; language: string; expires_at: string | null; account_id: number; handle: string;
   display_name: string; platform: string; source: string | null; event_id: number; event_class: string; coin: string;
+  column_key: string | null;
   version_id: number; headline: string; body: string; thread: string[] | null; reply_text: string | null;
   style_key: string | null; style_name: string | null; model: string | null; agent_key: string | null; guard_status: string;
   facts_used: string[] | null;
@@ -33,6 +34,7 @@ function remaining(expires: string | null, now: number): { text: string; tone: "
 export function PostCard({ c, now, roleName, className, statusName }: { c: Card; now: number; roleName: string;
   className: string; statusName?: string }) {
   const t = useTranslations("publish");
+  const tcol = useTranslations("columnNames");
   const tg = useTranslations("guardCodes");
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -82,14 +84,18 @@ export function PostCard({ c, now, roleName, className, statusName }: { c: Card;
       t("postedDone"));
     setPosting(false);
   };
-  const intent = `https://x.com/intent/post?text=${encodeURIComponent(c.body)}`;
+  // X takes the text in its compose link; the squares have no such link, so the text goes to the clipboard first
+  const square = { okx_square: { url: "https://www.okx.com/zh-hans/square", label: t("openOkx") },
+    binance_square: { url: "https://www.binance.com/zh-CN/square", label: t("openBinance") } }[c.platform];
+  const intent = square ? square.url : `https://x.com/intent/post?text=${encodeURIComponent(c.body)}`;
+  const subject = c.column_key ? (tcol.has(c.column_key) ? tcol(c.column_key) : c.column_key) : c.coin;
   return (
     <div className={`rounded-lg border border-border bg-panel p-4 ${className}`}>
       <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
         <Badge tone="accent">{c.language === "zh" ? "中文" : "English"}</Badge>
         {c.style_name && <Badge>{c.style_name}</Badge>}
         {c.source === "trial" && <Badge tone="warn">{t("trial")}</Badge>}
-        <span className="text-muted">{c.coin} · {roleName}{c.model ? ` · ${c.model}` : ""}</span>
+        <span className="text-muted">{subject} · {roleName}{c.model ? ` · ${c.model}` : ""}</span>
         {left && c.status !== "published" && <Badge tone={left.tone}>{left.text === "0" ? t("expiredNow") : t("left", { t: left.text })}</Badge>}
         {c.status === "expired" && <Badge tone="down">{t("expired")}</Badge>}
         {statusName && <Badge tone="warn">{statusName}</Badge>}
@@ -199,12 +205,17 @@ export function PostCard({ c, now, roleName, className, statusName }: { c: Card;
           {c.card_asset_id && <a className={button} href={`/api/bff/assets/${c.card_asset_id}/file`} download>{t("downloadCard")}</a>}
         </>}
         {(c.status === "approved" || c.status === "expired") && <>
-          <a className={button} href={intent} target="_blank" rel="noreferrer" title={t("intentHint")}>{t("openX")}</a>
+          <a className={button} href={intent} target="_blank" rel="noreferrer" title={square ? t("squareHint") : t("intentHint")}
+            onClick={() => { if (square) copy(posts.join("\n\n"), t("body")); }}>{square ? square.label : t("openX")}</a>
           {!posting && <button className={primary} disabled={busy} onClick={() => setPosting(true)}>{t("posted")}</button>}
           {c.status === "approved" && !c.plan && !planning && (
             <button className={button} disabled={busy} onClick={() => setPlanning(true)}>{t("planRpa")}</button>
           )}
         </>}
+        {c.review && c.review.verdict !== "approve" && ["draft_ready", "changes_requested", "in_review", "approved"].includes(c.status) && (
+          <button className={button} disabled={busy} title={t("reviseHint")}
+            onClick={() => act(`articles/${c.id}/revise`, {}, t("revising"))}>{t("revise")}</button>
+        )}
         {["draft_ready", "changes_requested", "in_review"].includes(c.status) && c.source !== "trial" && (
           <button className={primary} disabled={busy} onClick={() => act(`articles/${c.id}/review`, { action: "quick_approve" }, t("approved"))}>{t("approve")}</button>
         )}
