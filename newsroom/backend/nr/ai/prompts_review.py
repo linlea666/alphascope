@@ -62,7 +62,33 @@ Reply with one JSON object matching the requested schema."""
 REVIEWER_EN_USER = """Review this English draft for $account_handle ($account_name), event $event_id, style: $style_name.
 Write issues, summary and revision_note in $desk_language."""
 
+# v2, from the first real reviews: the reviewer told the editor to delete the sample note and "not liquidated", and
+# proposed "梭哈"-style words the style avoids. Required statements stay (reworded is fine); a fix must not need a
+# number or claim that isn't in the facts.
+V2_ZH = """
+
+必须保留、不能建议删掉的表述（可以改得更口语、挪到句尾，或者压成半句）：
+- 样本说明：这是我们追踪的地址 / 样本，不是全市场；
+- 状态说明：还没强平、浮亏或浮盈是未实现的、目前还持有；
+- 估算说明：保证金是估算。
+修改建议不能引入事实清单里没有的数字或说法（「几十倍」「翻倍」这类模糊说法可以），也不要建议使用风格要避开的词。
+发现稿件里的数字和事实对不上时（比如把标记价写成强平价），放在 issues 第一条，并把 risk 打到 2 以下。"""
+
+V2_EN = """
+
+Never suggest deleting these (reword, shorten or move them to the end instead):
+- the sample note: our tracked wallets / sample, not the whole market;
+- the status: not liquidated, open P&L is unrealized, still holding;
+- the estimate note: margin is an estimate.
+A fix must not need a number or claim that isn't in the facts (vague words like "dozens of times" are fine), and must
+not use words the style avoids. If a figure doesn't match its fact (the mark price written as the liquidation price),
+make it the first issue and score risk 2 or lower."""
+
 SEEDS_REVIEW = [
     ("reviewer", 1, "zh", REVIEWER_ZH, REVIEWER_ZH_USER),
     ("reviewer", 1, "en", REVIEWER_EN, REVIEWER_EN_USER),
+    ("reviewer", 2, "zh", REVIEWER_ZH.replace("\n\n只回复一个符合要求格式的 JSON 对象。", V2_ZH + "\n\n只回复一个符合要求格式的 JSON 对象。"),
+     REVIEWER_ZH_USER),
+    ("reviewer", 2, "en", REVIEWER_EN.replace("\n\nReply with one JSON object", V2_EN + "\n\nReply with one JSON object"),
+     REVIEWER_EN_USER),
 ]

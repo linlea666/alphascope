@@ -39,6 +39,17 @@ def codes(text, pk=None, forbidden=()):
     return [f.code for f in phrases.check(text, pk or packet(), list(forbidden))]
 
 
+def test_a_labelled_figure_must_be_that_fact():
+    pk = packet(extra=[F("position.liq_px", "price", "59704.76"), F("position.mark_px", "price", "60498")])
+    label = lambda t: [f.code for f in numbers.check(t, pk["facts"], ALLOW)]  # noqa: E731
+    assert label("交易所报的强平价 60,498 美元，离现价只剩 2.34%") == ["LABEL_MISMATCH"]  # the mark, not the liquidation
+    assert label("强平价 59,705 美元") == [] and label("强平价约 5.97 万美元") == [] and label("Liq price $59.7K") == []
+    assert label("liquidation at $60.5K") == ["LABEL_MISMATCH"] and label("开仓均价 98,000 美元") == []
+    assert label("开仓均价 60,498 美元") == ["LABEL_MISMATCH"]
+    assert label("距强平价只剩 2.34%") == [] and label("liquidated $12.3M") == []
+    assert nums("仓位是账户权益的几十倍", pk) == [] and nums("十几倍杠杆", pk) == []
+
+
 def test_numbers_must_come_from_the_packet():
     assert nums("该地址持有约1234.57万美元的 BTC 多单，杠杆20倍。") == []
     assert nums("A $12.3M BTC long at 20x, 2.3% from liquidation.") == []

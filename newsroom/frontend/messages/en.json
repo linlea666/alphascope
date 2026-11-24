@@ -841,6 +841,10 @@
     "NEAR_DUPLICATE_WARN": {
       "what": "Similar to another draft",
       "fix": "Consider rewording (warning)"
+    },
+    "LABEL_MISMATCH": {
+      "what": "This figure isn't the thing it's labelled as",
+      "fix": "e.g. the mark price written as the liquidation price: use the matching fact for liquidation and entry prices"
     }
   },
   "gateCodes": {

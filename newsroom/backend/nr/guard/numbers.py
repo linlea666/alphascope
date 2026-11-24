@@ -37,8 +37,18 @@ NUMBER = re.compile(
 CN_DIGITS = {"零": 0, "〇": 0, "一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
 CN_UNITS = {"十": 10, "百": 100, "千": 1000}
 # Chinese-numeral amounts ("三千万美元", "二十倍") would otherwise slip past the digit check
-CN_NUMBER = re.compile(r"(?<![0-9.])(?P<num>[零〇一二两三四五六七八九十][零〇一二两三四五六七八九十百千万亿]*"
+CN_NUMBER = re.compile(r"(?<![0-9.几数])(?P<num>[零〇一二两三四五六七八九十][零〇一二两三四五六七八九十百千万亿]*"
                        r"(?:点[零〇一二三四五六七八九]+)?)\s*(?P<unit>美元|美金|刀|倍|个百分点)")
+
+
+# a number right after one of these labels must be that fact, not merely some figure in the packet: "强平价 60,498"
+# with the mark at 60,498 and the liquidation at 59,705 passes the general check but says the wrong thing
+LABELS = [
+    (re.compile(r"强平价|爆仓价|清算价|强平线|\bliq(?:uidation)?\.?\s*(?:price|px|level)\b(?:\s*(?:at|of|is|near))?|"
+                r"\bliq(?:uidation|uidated)?\s+(?:at|near)\b", re.I), ("liq_px",)),
+    (re.compile(r"开仓均价|开仓价|持仓均价|入场价|\b(?:avg\.?|average)\s*entry\b(?:\s*(?:price|px))?(?:\s*(?:at|of|is))?|"
+                r"\bentry\s*(?:price|px)\b(?:\s*(?:at|of|is))?|\b(?:entry|entered)\s+at\b", re.I), ("entry_px",)),
+]
 
 
 def cn_to_decimal(t: str) -> Decimal | None:
@@ -178,6 +188,7 @@ def check(text: str, facts: list[dict], allow: list[str]) -> list[Finding]:
         work = _blank(work, [m.span()])
     work = _blank(work, [m.span() for m in TICKER.finditer(work)])
     pool = fact_numbers(facts)
+    findings += labelled(work, facts)
     for m in CN_NUMBER.finditer(work):
         v, unit = cn_to_decimal(m.group("num")), m.group("unit")
         family = "multiple" if unit == "倍" else "percent" if unit == "个百分点" else "money"
@@ -210,3 +221,33 @@ def check(text: str, facts: list[dict], allow: list[str]) -> list[Finding]:
             findings.append(Finding("UNMATCHED_NUMBER", m.span(), m.group(0).strip(),
                                     "number not found in the fact packet within display precision"))
     return findings
+
+
+def labelled(work: str, facts: list[dict]) -> list[Finding]:
+    out = []
+    for rx, suffixes in LABELS:
+        values = []
+        for f in facts:
+            if f["id"].endswith(suffixes):
+                try:
+                    values.append(abs(Decimal(str(f["value"]))))
+                except (InvalidOperation, TypeError):
+                    pass
+        if not values:
+            continue
+        for lm in rx.finditer(work):
+            seg = work[lm.end():lm.end() + 14]
+            nm = NUMBER.search(seg)
+            if nm is None or re.search(r"\d", seg[:nm.start()]) or len(seg[:nm.start()].strip(" ：:约~≈$为是在")) > 2:
+                continue
+            raw, unit = nm.group("num"), (nm.group("unit") or "").lower()
+            v = _num(raw)
+            if v is None or unit in ("%", "个百分点", "x", "倍"):
+                continue
+            mult = MULT.get(unit, Decimal(1))
+            value, tol = v * mult, _rounded_half_unit(raw) * mult
+            if not any(abs(value - c) <= tol + Decimal("1e-9") for c in values):
+                start = lm.end() + nm.start()
+                out.append(Finding("LABEL_MISMATCH", (start, lm.end() + nm.end()), f"{lm.group(0).strip()} {nm.group(0).strip()}",
+                                   "this figure is not the labelled fact (e.g. the mark price written as the liquidation price)"))
+    return out
