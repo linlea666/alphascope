@@ -100,12 +100,14 @@
       "published": "今日已发",
       "todo": "待处理",
       "rejected": "AI 审稿退回",
-      "expired": "今日过期"
+      "expired": "今日过期",
+      "proposed": "等你接稿"
     },
     "expiringSoon": "{n} 条 30 分钟内过期",
     "rejectedHint": "需要人来决定",
     "readyCol": "待发",
-    "budgetLeft": "今天还能发 {n} 条"
+    "budgetLeft": "今天还能发 {n} 条",
+    "proposedHint": "AI 总编辑建议报道，接下后才会写稿"
   },
   "events": {
     "title": "新闻雷达",
@@ -1234,6 +1236,14 @@
     "review__ai_ready": {
       "name": "AI 审稿通过后自动进入待发布",
       "desc": "关掉后，每篇都要人工点「通过」"
+    },
+    "desk__auto_accept": {
+      "name": "AI 自动接稿",
+      "desc": "开启后，AI 总编辑建议报道的事件直接接下并开始写稿，不用再去「选题」页手动点接受；写好的稿件照样经过事实检查和 AI 审稿，通过后进入发布中心。有重复、身份或强平未确认等风险的选题仍然留给人。会产生 AI 费用（受每日预算限制）。"
+    },
+    "desk__auto_min_priority": {
+      "name": "自动接稿的最低优先级",
+      "desc": "只自动接这个优先级及以上的选题（P0 最高）。建议 P1：重大和重要的自动写，一般的留给人挑。"
     }
   },
   "scoreParts": {
@@ -1372,6 +1382,11 @@
       "budgets": "预算明细",
       "guard": "事实检查",
       "columns": "栏目"
+    },
+    "priority": {
+      "p0": "P0 最重大",
+      "p1": "P1 重要",
+      "p2": "P2 一般"
     }
   },
   "sourcesX": {

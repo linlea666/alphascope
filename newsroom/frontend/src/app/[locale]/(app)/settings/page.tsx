@@ -413,6 +413,9 @@ async function Rules() {
           <FieldForm path="settings/desk" method="PUT" fields={[
             { name: "language", ...field("desk", "language"), type: "select", value: s.desk?.language ?? "zh",
               options: [{ value: "zh", label: "中文" }, { value: "en", label: "English" }] },
+            { name: "auto_accept", ...field("desk", "auto_accept"), type: "checkbox", value: Boolean(s.desk?.auto_accept) },
+            { name: "auto_min_priority", ...field("desk", "auto_min_priority"), type: "select", value: String(s.desk?.auto_min_priority ?? "p1"),
+              options: ["p0", "p1", "p2"].map((p) => ({ value: p, label: tx(`priority.${p}`) })) },
           ]} />
           <div className="mt-4">
             <FieldForm path="settings/review" method="PUT" fields={[

@@ -100,12 +100,14 @@
       "published": "Posted today",
       "todo": "Needs attention",
       "rejected": "Sent back by the AI reviewer",
-      "expired": "Expired today"
+      "expired": "Expired today",
+      "proposed": "Proposals to accept"
     },
     "expiringSoon": "{n} expire within 30 min",
     "rejectedHint": "a person decides",
     "readyCol": "Ready",
-    "budgetLeft": "{n} posts left today"
+    "budgetLeft": "{n} posts left today",
+    "proposedHint": "the AI editor-in-chief proposed them; drafting starts once accepted"
   },
   "events": {
     "title": "News radar",
@@ -1234,6 +1236,14 @@
     "review__ai_ready": {
       "name": "AI-approved drafts go to ready-to-post",
       "desc": "Off: every draft needs a person's approval"
+    },
+    "desk__auto_accept": {
+      "name": "Autopilot: accept AI proposals",
+      "desc": "On: events the AI editor-in-chief proposes are accepted and drafted at once, no manual accept on the Assignments page. Drafts still go through the fact check and the AI reviewer before reaching the publish center. Proposals with duplicate, identity or unconfirmed-liquidation risks still wait for a person. Spends on AI (within the daily budget)."
+    },
+    "desk__auto_min_priority": {
+      "name": "Lowest priority to autopilot",
+      "desc": "Only proposals at this priority or higher are taken automatically (P0 is the highest). P1 suggested: major and important stories are written, the rest wait for a pick."
     }
   },
   "scoreParts": {
@@ -1372,6 +1382,11 @@
       "budgets": "Budget details",
       "guard": "Fact check",
       "columns": "Columns"
+    },
+    "priority": {
+      "p0": "P0 major",
+      "p1": "P1 important",
+      "p2": "P2 normal"
     }
   },
   "sourcesX": {

@@ -58,8 +58,10 @@ def create(s: Session, event_id: int, account_id: int, *, source: str, angle: st
          "due": due_at}).scalar()
 
 
-def accept(s: Session, assignment_id: int, user_id: int) -> int:
-    """Accept an assignment: the event becomes assigned and an empty article is opened for the account."""
+def accept(s: Session, assignment_id: int, user_id: int | None) -> int:
+    """Accept an assignment: the event becomes assigned and an empty article is opened for the account. No user:
+    the desk's autopilot accepted it."""
+    actor = "user" if user_id else "ai"
     a = s.execute(text("""SELECT asg.*, acc.language, ne.story_id, ne.state FROM assignment asg
                           JOIN editorial_account acc ON acc.id = asg.account_id
                           JOIN news_event ne ON ne.id = asg.news_event_id WHERE asg.id = :i FOR UPDATE OF asg"""),
@@ -75,7 +77,7 @@ def accept(s: Session, assignment_id: int, user_id: int) -> int:
               {"u": user_id, "i": assignment_id})
     if a["state"] in ("candidate", "evaluated") and not trial:  # a trial never moves the event along
         try:
-            transition(s, a["news_event_id"], "assigned", actor_kind="user", user_id=user_id, reason="assignment accepted")
+            transition(s, a["news_event_id"], "assigned", actor_kind=actor, user_id=user_id, reason="assignment accepted")
         except InvalidTransition:
             pass
     art = s.execute(text("SELECT id FROM article WHERE assignment_id = :i"), {"i": assignment_id}).scalar()
@@ -85,7 +87,8 @@ def accept(s: Session, assignment_id: int, user_id: int) -> int:
             VALUES (:e, :st, :a, :asg, :l, :u) RETURNING id"""),
             {"e": a["news_event_id"], "st": a["story_id"], "a": a["account_id"], "asg": assignment_id,
              "l": a["language"], "u": user_id}).scalar_one()
-    audit.record(s, "assignment.accept", "assignment", assignment_id, user_id=user_id, account_id=a["account_id"])
+    audit.record(s, "assignment.accept", "assignment", assignment_id, user_id=user_id, actor_kind=actor,
+                 account_id=a["account_id"])
     return art
 
 

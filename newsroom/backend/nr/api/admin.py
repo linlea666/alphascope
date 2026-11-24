@@ -74,6 +74,9 @@ def dashboard(s: Session = Depends(get_session), user: CurrentUser = Depends(act
                                       WHERE r.article_version_id = a.current_version_id ORDER BY r.id DESC LIMIT 1)
                                     = 'reject') AS reviewer_rejected,
                    count(*) FILTER (WHERE a.status = 'expired' AND a.expires_at >= :d) AS expired_today,
+                   (SELECT count(*) FROM assignment asg JOIN news_event ne ON ne.id = asg.news_event_id
+                     WHERE asg.status = 'proposed' AND asg.source = 'eic_ai' AND ne.state IN ('candidate', 'evaluated')
+                     {"" if vis is None else "AND asg.account_id = ANY(:vis)"}) AS proposed,
                    (SELECT count(*) FROM publication_record pr WHERE pr.status = 'published' AND pr.published_at >= :d
                       {"" if vis is None else "AND pr.account_id = ANY(:vis)"}) AS published_today
             FROM article a {"" if vis is None else "WHERE a.account_id = ANY(:vis)"}""",

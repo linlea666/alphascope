@@ -335,3 +335,29 @@ def test_ai_outage_leaves_the_desk_usable(sf):
         assert v["guard_status"] == "pass"
         s.commit()
     assert json.dumps  # the read side never touches the AI layer; see tests/test_api.py
+
+
+def test_autopilot_accepts_and_drafts_important_proposals_only(sf):
+    nr = newsroom(sf)
+    eid = candidate_event(sf)
+    with sf() as s:
+        settings_store.put(s, "desk", {"auto_accept": True, "auto_min_priority": "p1"})
+        s.commit()
+    out = evaluate(sf, eid, FakeProvider(eic_output(eid, [(nr["zh"], "size"), (nr["en"], "size vs history")])))
+    assert len(out["auto_accepted"]) == 2
+    with sf() as s:
+        assert s.execute(text("SELECT count(*) FROM assignment WHERE status = 'accepted'")).scalar() == 2
+        assert s.execute(text("SELECT count(*) FROM job WHERE kind = 'draft_generate'")).scalar() == 2
+        assert s.execute(text("SELECT state FROM news_event WHERE id = :e"), {"e": eid}).scalar() == "assigned"
+
+
+def test_autopilot_leaves_minor_or_risky_proposals_to_a_person(sf):
+    nr = newsroom(sf)
+    eid = candidate_event(sf)
+    with sf() as s:
+        settings_store.put(s, "desk", {"auto_accept": True, "auto_min_priority": "p0"})  # the proposal is p1
+        s.commit()
+    out = evaluate(sf, eid, FakeProvider(eic_output(eid, [(nr["zh"], "size")], silent=[nr["en"]])))
+    assert out["auto_accepted"] == [] and len(out["assignments"]) == 1
+    with sf() as s:
+        assert s.execute(text("SELECT status FROM assignment")).scalar() == "proposed"

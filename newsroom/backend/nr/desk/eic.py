@@ -15,6 +15,7 @@ from nr.ai.schemas import EicEvaluation
 from nr.desk import assignment
 from nr.events.states import InvalidTransition, transition
 from nr.guard.duplicates import similarity
+from nr.jobs.queue import enqueue
 from nr.stories.memory import add_open_questions
 
 
@@ -124,7 +125,12 @@ def evaluate_event(sf: sessionmaker, event_id: int, now: datetime, job_id: int |
                         {"e": event_id, "p": ev["current_fact_packet_id"], "c": out.call_id,
                          "o": json.dumps(payload, ensure_ascii=False), "d": o.decision, "pr": o.priority, "n": now}
                         ).scalar_one()
-        created = []
+        created, auto = [], []
+        pilot = settings_store.get(s, "desk")
+        # autopilot: a proposal at or above the chosen priority, for an active account, with no reason for a person to
+        # look first, is accepted and drafted at once; the draft still goes through the guard and the AI reviewer
+        piloted = (pilot.get("auto_accept") and o.decision == "cover" and o.priority <= pilot.get("auto_min_priority", "p1")
+                   and not flags & {"duplicate_risk", "identity_risk", "liquidation_unconfirmed", "stale_risk"})
         if o.decision == "cover":
             for r in recs:
                 aid = assignment.create(s, event_id, r.account_id, source="eic_ai", angle=r.angle, reason=r.reason,
@@ -132,13 +138,19 @@ def evaluate_event(sf: sessionmaker, event_id: int, now: datetime, job_id: int |
                                         agent_key=r.reporter)
                 if aid:
                     created.append(aid)
+                    if piloted and r.account_id not in similar:  # accounts here are all active
+                        auto.append(aid)
         s.execute(text("UPDATE news_event SET priority = :p WHERE id = :e"), {"p": o.priority, "e": event_id})
         add_open_questions(s, ev["story_id"], o.open_questions, source="eic", event_id=event_id, at=now)
         try:
             transition(s, event_id, "evaluated", actor_kind="ai", reason=f"{o.decision} {o.priority}")
         except InvalidTransition:
             pass
+        for aid in auto:  # after "evaluated", so accepting moves the event on to "assigned"
+            assignment.accept(s, aid, None)
+            enqueue(s, "draft_generate", {"assignment_id": aid}, dedupe_key=f"draft:{aid}", priority=40, now=now)
         audit.record(s, "eic.evaluate", "news_event", event_id, actor_kind="ai",
-                     after={"evaluation_id": eid, "decision": o.decision, "assignments": created})
+                     after={"evaluation_id": eid, "decision": o.decision, "assignments": created, "auto_accepted": auto})
         s.commit()
-    return {"evaluation_id": eid, "decision": o.decision, "assignments": created, "flags": sorted(flags)}
+    return {"evaluation_id": eid, "decision": o.decision, "assignments": created, "auto_accepted": auto,
+            "flags": sorted(flags)}

@@ -16,7 +16,7 @@ type Dashboard = {
   states: Record<string, number>;
   top_candidates: { id: number; event_class: string; coin: string; venue: string; direction: string; score: number; priority: string | null; state: string; detected_at: string; trader_key: string; display_name: string | null }[];
   pending_review: { id: number; status: string; handle: string; language: string; headline: string | null; updated_at: string }[];
-  publishing: { ready: number; expiring_soon: number; todo: number; reviewer_rejected: number; expired_today: number; published_today: number };
+  publishing: { proposed: number; ready: number; expiring_soon: number; todo: number; reviewer_rejected: number; expired_today: number; published_today: number };
   accounts: { id: number; handle: string; display_name: string; status: string; authorization_status: string; authorization_expires_at: string | null; daily_post_budget: number; published_today: number; ready: number }[];
   open_corrections: number;
   expiring_authorizations: { id: number; handle: string; authorization_expires_at: string }[];
@@ -40,7 +40,12 @@ export default async function DashboardPage() {
       <AiReadiness />
       <AiFixes />
       <div className="mb-2 text-sm font-semibold">{t("publishingToday")}</div>
-      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {d.publishing.proposed > 0 && (
+          <Link href="/assignments" className="hover:opacity-90">
+            <Stat label={t("pub.proposed")} value={d.publishing.proposed} sub={t("proposedHint")} />
+          </Link>
+        )}
         {([["ready", "ready", d.publishing.ready, d.publishing.expiring_soon ? t("expiringSoon", { n: d.publishing.expiring_soon }) : undefined],
            ["published", "published", d.publishing.published_today, undefined],
            ["todo", "todo", d.publishing.todo, undefined],

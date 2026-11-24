@@ -34,7 +34,9 @@ DEFAULTS: dict[str, dict] = {
                          "underwater_add": 3, "notable_trader_move": 3, "whale_close": 6},
                "default_hours": 3, "column_hours": 24},
     # the language of everything written for the desk rather than for readers (EIC notes, a draft's angle and why-now)
-    "desk": {"language": "zh"},
+    # auto_accept: the AI editor-in-chief's proposals at or above auto_min_priority are accepted and drafted without
+    # waiting for a person (each draft is still fact-checked and reviewed); off by default because it spends on AI
+    "desk": {"language": "zh", "auto_accept": False, "auto_min_priority": "p1"},
     # house style per reporter role ({language} becomes zh / en); an assignment's own style still wins
     "styles": {"by_reporter": {"reporter_breaking": "{language}_whale_alert", "reporter_derivatives": "{language}_degen",
                                "reporter_investigator": "{language}_dossier", "reporter_data": "{language}_crowd",

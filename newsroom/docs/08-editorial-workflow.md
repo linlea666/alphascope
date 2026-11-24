@@ -11,6 +11,8 @@ blocked ↔ candidate（数据恢复或再次过期）   declined / dismissed �
 
 转换表在代码（`nr/events/states.py`）和数据库（`event_state_transition`）各一份，测试保证一致；每次转换写 `event_state_history`（谁、何时、原因）。需求中的“待核实 / 已核实 / 事实冲突 / 数据不足 / 发布暂停 / 需要更正 / 已撤稿 / 过期作废”在 Phase 1 分别由这些机制表达：可信度门阻断码（待核实、数据不足、事实冲突）、紧急停止（发布暂停）、更正记录（需要更正）、发布记录撤稿（已撤稿）、归档（过期作废）。Phase 2 把它们提升为显式状态。
 
+AI 总编辑建议报道时，为每个推荐账号建一条「proposed」分派，默认等人在选题页接受。规则页的「AI 自动接稿」（`desk.auto_accept`，默认关闭）打开后，优先级不低于 `desk.auto_min_priority`（默认 P1）的建议会直接接受并排队写稿。以下情况仍然留给人：同语言账号角度相近、有身份风险、强平未确认、数据可能过时。写好的稿件照样经过事实检查和 AI 审稿。
+
 ## 2. 稿件状态
 
 `drafting → draft_ready → in_review → approved → published → (retracted)`，旁路：`changes_requested`、`stale`（事实变化）、`killed`。
