@@ -48,8 +48,9 @@ CARD_SQL = """
            st.name AS style_name, (SELECT count(*) FROM article_version x WHERE x.article_id = a.id) AS n_versions,
            (SELECT t.name FROM api_token t WHERE t.id = a.claimed_by_token) AS claimed_by,
            a.claimed_at, {why} AS why,
-           (SELECT m.id FROM media_asset m WHERE m.fact_packet_id = v.fact_packet_id AND m.template_key = v.card_template
-              AND m.language = a.language AND m.kind = 'card_png' ORDER BY m.id DESC LIMIT 1) AS card_asset_id,
+           (SELECT m.id FROM media_asset m JOIN fact_packet mp ON mp.id = m.fact_packet_id
+              WHERE mp.news_event_id = a.news_event_id AND m.template_key = v.card_template AND m.language = a.language
+                AND m.kind = 'card_png' ORDER BY (m.fact_packet_id = v.fact_packet_id) DESC, m.id DESC LIMIT 1) AS card_asset_id,
            (SELECT to_jsonb(r) FROM (SELECT verdict, scores, issues, summary FROM article_review
               WHERE article_version_id = v.id ORDER BY id DESC LIMIT 1) r) AS review,
            (SELECT to_jsonb(p) FROM (SELECT x_url, reply_url, channel, published_at, matches_version,

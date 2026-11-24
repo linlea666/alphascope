@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Link } from "@/i18n/routing";
 import { bff, toast } from "@/lib/bff";
+import { copyText } from "@/lib/clipboard";
 import type { Review } from "@/lib/types";
 import { ReviewCard } from "./ReviewCard";
 import { Badge, button, input, primary } from "./ui";
@@ -51,7 +52,7 @@ export function PostCard({ c, now, roleName, className, statusName }: { c: Card;
   const left = remaining(c.expires_at, now);
   const copy = async (text: string, what: string) => {
     try {
-      await navigator.clipboard.writeText(text);
+      await copyText(text);
       toast({ ok: true, message: t("copied", { what }) });
       bff(`articles/${c.id}/copied`, "POST", {}, { toast: false }).catch(() => undefined);
     } catch {

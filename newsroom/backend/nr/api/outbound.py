@@ -49,8 +49,10 @@ def scoped(t: dict, account_id: int) -> None:
 READY = """
     SELECT a.id AS article_id, a.expires_at, a.claimed_by_token, a.claimed_at, acc.id AS account_id, acc.handle,
            acc.platform, a.language, v.body, v.thread, v.reply_text, v.style_key, ne.event_class, ne.coin,
-           (SELECT m.id FROM media_asset m WHERE m.fact_packet_id = v.fact_packet_id AND m.template_key = v.card_template
-              AND m.language = a.language AND m.kind = 'card_png' ORDER BY m.id DESC LIMIT 1) AS asset_id
+           -- the card drawn from this version's facts, else the newest one of the same card for the event
+           (SELECT m.id FROM media_asset m JOIN fact_packet mp ON mp.id = m.fact_packet_id
+              WHERE mp.news_event_id = a.news_event_id AND m.template_key = v.card_template AND m.language = a.language
+                AND m.kind = 'card_png' ORDER BY (m.fact_packet_id = v.fact_packet_id) DESC, m.id DESC LIMIT 1) AS asset_id
     FROM article a JOIN article_version v ON v.id = a.current_version_id JOIN editorial_account acc ON acc.id = a.account_id
     JOIN news_event ne ON ne.id = a.news_event_id
     WHERE a.status = 'approved' AND a.deleted_at IS NULL AND acc.status = 'active'
@@ -142,7 +144,7 @@ def asset(asset_id: int, authorization: str | None = Header(None), s: Session = 
     """A card image, for posts this token may see."""
     t = token_of(s, authorization)
     m = one(s, """SELECT m.file_path, m.template_key, a.account_id FROM media_asset m
-                  JOIN article a ON a.current_version_id IN (SELECT id FROM article_version WHERE fact_packet_id = m.fact_packet_id)
+                  JOIN fact_packet mp ON mp.id = m.fact_packet_id JOIN article a ON a.news_event_id = mp.news_event_id
                   WHERE m.id = :i AND m.kind = 'card_png' AND a.status IN ('approved', 'published') LIMIT 1""", {"i": asset_id})
     if m is None:
         raise HTTPException(404, "image not found")

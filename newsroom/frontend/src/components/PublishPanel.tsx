@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { bff } from "@/lib/bff";
+import { copyText } from "@/lib/clipboard";
 import { button, input, primary } from "./ui";
 
 /** Review buttons, copy-to-post and the "record as published" form. Publishing itself happens on X, by a person. */
@@ -50,7 +51,7 @@ export function PublishForm({ articleId, handle, text, platform = "x" }: { artic
   return (
     <div className="space-y-3">
       <button className={button} onClick={async () => {
-        await navigator.clipboard.writeText(text);
+        await copyText(text);
         setCopied(true);
         const r = await bff<{ blockers: string[] }>(`articles/${articleId}/copied`, "POST", {}).catch(() => null);
         setBlockers(r?.blockers ?? null);

@@ -68,6 +68,14 @@ def refresh_to_current_facts(s: Session, article_id: int, user_id: int) -> None:
         style_key=v["style_key"], reply_text=v["reply_text"]),
         # the same text, by the same writer: only the facts it is checked against are newer
         origin=v["origin"], user_id=v["author_user_id"], agent_key=v["agent_key"], prompt_ref=v["prompt_ref"], model=v["model"])
+    if v["card_template"]:  # the card is drawn again from the latest facts (until then the previous one is shown)
+        from nr.jobs.queue import enqueue
+        art = versions.load(s, article_id)
+        brand = "default" if s.execute(text("SELECT show_avatar FROM editorial_account WHERE id = :a"),
+                                       {"a": art["account_id"]}).scalar() else "default:plain"
+        enqueue(s, "card_render", {"fact_packet_id": art["current_fact_packet_id"], "template": v["card_template"],
+                                   "language": art["language"], "brand": brand},
+                dedupe_key=f"card:{art['current_fact_packet_id']}:{v['card_template']}:{art['language']}", priority=20)
     if out["guard_status"] == "fail":
         s.flush()
         raise HTTPException(409, {"message": "the facts moved: a figure in this draft no longer matches; rewrite it "
