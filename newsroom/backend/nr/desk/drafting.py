@@ -243,6 +243,12 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
                   {"i": assignment_id})
         if review and v["made_current"] and v["guard_status"] != "fail":  # the desk reviewer reads it next
             enqueue(s, "draft_review", {"version_id": v["id"]}, dedupe_key=f"review:{v['id']}", priority=50, now=now)
+        elif review and v["made_current"] and mode != "fix" and not s.execute(text(
+                "SELECT 1 FROM article_version WHERE article_id = :a AND agent_key = 'fact_checker' LIMIT 1"),
+                {"a": a["article_id"]}).scalar():
+            # the fact check stopped it: the fact checker gets one go at the findings before a person is needed
+            enqueue(s, "draft_generate", {"assignment_id": assignment_id, "mode": "fix"},
+                    dedupe_key=f"fix:{v['id']}", priority=45, now=now)
         s.commit()
     if card:  # the image that goes with the post; a card that fails to draw never costs the draft
         try:

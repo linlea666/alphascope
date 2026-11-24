@@ -91,8 +91,8 @@ def seed(s: Session) -> dict:
     for st in STYLES + LIBRARY + HOUSE + HOUSE_V2 + SQUARE:
         out["styles"] += s.execute(text("""
             INSERT INTO editorial_style (key, version, language, name, guide, structure, forbidden, examples)
-            VALUES (:k, 1, :l, :n, :g, CAST(:s AS jsonb), CAST(:f AS jsonb), CAST(:e AS jsonb)) ON CONFLICT DO NOTHING"""),
-            {"k": st["key"], "l": st["language"], "n": st["name"], "g": st["guide"],
+            VALUES (:k, :v, :l, :n, :g, CAST(:s AS jsonb), CAST(:f AS jsonb), CAST(:e AS jsonb)) ON CONFLICT DO NOTHING"""),
+            {"k": st["key"], "v": st.get("version", 1), "l": st["language"], "n": st["name"], "g": st["guide"],
              "s": json.dumps(st["structure"], ensure_ascii=False), "f": json.dumps(st["forbidden"], ensure_ascii=False),
              "e": json.dumps(st.get("examples", []), ensure_ascii=False)}
         ).rowcount

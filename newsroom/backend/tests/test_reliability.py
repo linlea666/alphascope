@@ -114,3 +114,18 @@ def test_a_thread_that_repeats_the_body_is_dropped(sf):
     with sf() as s:
         thread = s.execute(text("SELECT thread FROM article_version ORDER BY id DESC LIMIT 1")).scalar()
     assert thread == ["第二条：他的开仓均价约98000美元。"]
+
+
+def test_a_draft_the_fact_check_stops_gets_one_fix_then_waits_for_a_person(sf):
+    nr = newsroom(sf)
+    aid = article(sf, nr)
+    wrong = draft_output("zh", "一个已验证趋势风格的地址开出约9000万美元 BTC 多单，杠杆20倍。",
+                         ["position.notional_usd", "position.leverage"])
+    generate_draft(sf, aid, NOW, transport=FakeProvider(wrong))
+    with sf() as s:
+        jobs = s.execute(text("SELECT payload->>'mode' FROM job WHERE kind = 'draft_generate'")).scalars().all()
+    assert jobs == ["fix"]  # one go for the fact checker
+    generate_draft(sf, aid, NOW, mode="fix", transport=FakeProvider(wrong))
+    with sf() as s:
+        assert s.execute(text("SELECT count(*) FROM job WHERE kind = 'draft_generate'")).scalar() == 1  # no second fix
+        assert s.execute(text("SELECT count(*) FROM job WHERE kind = 'draft_review'")).scalar() == 0

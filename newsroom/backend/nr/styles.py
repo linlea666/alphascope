@@ -170,7 +170,7 @@ SQUARE = [
             "allow": ["梭哈"], "prefer_hooks": ["stage_turn", "streak", "vs_last"]},
            ["{昵称}又上头了。\n\n30 天收益 {收益率}，刚又开了 {金额} 的 $ETH 空单，{杠杆} 倍。\n"
             "上一笔 $ETH 空单他赚了 {盈利}。\n\n这次还能吃到吗？你跟不跟？",
-            "从 30 天翻 {倍数} 倍到回吐 {回撤}，{昵称}只用了一周。\n\n{过程一行}\n{现状一行}\n\n是洗盘还是陨落？评论区说说"]),
+            "30 天账户做到 {倍数} 倍，再回吐 {回撤}，{昵称}只用了一周。\n\n{过程一行}\n{现状一行}\n\n是洗盘还是陨落？评论区说说"]),
     _house("square_board", "zh", "榜单盘点",
            "把榜单写成人：一条讲 3–5 个交易员，每人一行「昵称：倍数 / 收益额 / 名次变化」，最后挑最有戏的那个多说一句。"
            "带单资产很小的要写出资产规模，不让人以为是大资金。",
@@ -183,7 +183,7 @@ SQUARE = [
            "一句点出转折在哪。不幸灾乐祸，不下结论，让读者判断。",
            {"lines": "4-6", "emoji": "0-2", "cashtag": True, "closing": "预测：还能回来吗 / 会不会继续跌",
             "allow": ["梭哈"], "prefer_hooks": ["stage_turn", "off_peak"]},
-           ["一个月前，{昵称}是 OKX 30 天榜第 {名次}，翻了 {倍数} 倍。\n\n现在：从高点回撤 {回撤}，已经掉出前 100。\n\n"
+           ["一个月前，{昵称}是 OKX 30 天榜第 {名次}，账户做到 {倍数} 倍。\n\n现在：从高点回撤 {回撤}，已经掉出前 100。\n\n"
             "天才陨落，还是只是休息？"]),
     _house("square_star", "zh", "明星追踪",
            "追星式报道：读者认识他，开头直接叫名字说动作和金额（「{昵称}刚开了…」「{昵称}平掉…进账…」），"
@@ -193,6 +193,11 @@ SQUARE = [
            ["{昵称}刚开了约 {金额} 的 $ETH 空单，{杠杆} 倍杠杆。\n\n他上一笔 $BTC 多单刚赚了 {盈利}，已经 {N} 连胜。\n\n这次还跟吗？",
             "{昵称}平掉 $ETH 空单，进账 {盈利} 💰\n\n拿了 {时长}，24 小时一共赚了 {合计}。\n\n下一单你猜他做多还是做空？"]),
 ]
+# version 2 of these two: multiples written as "做到 X 倍", not "翻 X 倍" (which reads as X+1 and the guard stops)
+for _st in SQUARE:
+    if _st["key"] in ("zh_square_story", "zh_square_fall"):
+        _st["version"] = 2
+
 # English house voices, second version: the hooks and closers CT actually uses (WHALE ALERT!!, BREAKING:, JUST IN:)
 HOUSE_EN_V2 = {
     "en_whale_alert": ["WHALE ALERT!!\n\nThis whale just opened a ${N} MILLION $BTC long\n\nLiquidation at {liq price}"
