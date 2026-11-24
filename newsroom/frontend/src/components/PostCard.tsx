@@ -7,16 +7,19 @@ import { Link } from "@/i18n/routing";
 import { bff, toast } from "@/lib/bff";
 import type { Review } from "@/lib/types";
 import { ReviewCard } from "./ReviewCard";
-import { Badge, button, primary } from "./ui";
+import { Badge, button, input, primary } from "./ui";
 
 export type Card = {
   id: number; status: string; language: string; expires_at: string | null; account_id: number; handle: string;
   display_name: string; platform: string; source: string | null; event_id: number; event_class: string; coin: string;
   version_id: number; headline: string; body: string; thread: string[] | null; reply_text: string | null;
   style_key: string | null; style_name: string | null; model: string | null; agent_key: string | null; guard_status: string;
+  facts_used: string[] | null;
   x_length: number | null; length_limit: number | null; card_asset_id: number | null; review: Review | null;
-  publication: { x_url: string | null; reply_url: string | null; channel: string; published_at: string } | null;
+  publication: { x_url: string | null; reply_url: string | null; channel: string; published_at: string;
+    matches_version: boolean; guard_status: string | null; warnings: string[] | null } | null;
 };
+type Check = { matches_version: boolean; blocked: boolean; findings: { code: string; severity: string; text: string | null }[] };
 
 function remaining(expires: string | null, now: number): { text: string; tone: "up" | "warn" | "down" } | null {
   if (!expires) return null;
@@ -26,10 +29,17 @@ function remaining(expires: string | null, now: number): { text: string; tone: "
 }
 
 /** One post the way it will look on X, with everything needed to get it out by hand or hand it to a robot. */
-export function PostCard({ c, now, roleName, className }: { c: Card; now: number; roleName: string; className: string }) {
+export function PostCard({ c, now, roleName, className, statusName }: { c: Card; now: number; roleName: string;
+  className: string; statusName?: string }) {
   const t = useTranslations("publish");
+  const tg = useTranslations("guardCodes");
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [url, setUrl] = useState("");
+  const [edited, setEdited] = useState("");
+  const [check, setCheck] = useState<Check | null>(null);
+  const guardWord = (code: string) => (tg.has(`${code}.what`) ? tg(`${code}.what`) : code);
   const posts = [c.body, ...(c.thread ?? [])];
   const left = remaining(c.expires_at, now);
   const copy = async (text: string, what: string) => {
@@ -50,12 +60,23 @@ export function PostCard({ c, now, roleName, className }: { c: Card; now: number
       setBusy(false);
     }
   };
+  // "I posted it": an edited text is checked first (the claims guard on what actually went out); a failure stops the
+  // record, warnings need a second click
   const posted = async () => {
-    const url = window.prompt(t("postedPrompt"), "");
-    if (url === null) return;
+    const text = edited.trim();
+    if (text && !check) {
+      setBusy(true);
+      try {
+        const r = await bff<Check>(`articles/${c.id}/check-text`, "POST", { text }, { toast: false });
+        if (!r.matches_version && (r.blocked || r.findings.length > 0)) { setCheck(r); return; }
+      } catch { return; } finally { setBusy(false); }
+    }
+    if (check?.blocked) return;
     const expired = c.status === "expired";
     if (expired && !window.confirm(t("expiredConfirm"))) return;
-    await act(`articles/${c.id}/publish`, { x_url: url.trim() || null, allow_expired: expired }, t("postedDone"));
+    await act(`articles/${c.id}/publish`, { x_url: url.trim() || null, final_text: text || null, allow_expired: expired },
+      t("postedDone"));
+    setPosting(false);
   };
   const intent = `https://x.com/intent/post?text=${encodeURIComponent(c.body)}`;
   return (
@@ -67,6 +88,7 @@ export function PostCard({ c, now, roleName, className }: { c: Card; now: number
         <span className="text-muted">{c.coin} · {roleName}{c.model ? ` · ${c.model}` : ""}</span>
         {left && c.status !== "published" && <Badge tone={left.tone}>{left.text === "0" ? t("expiredNow") : t("left", { t: left.text })}</Badge>}
         {c.status === "expired" && <Badge tone="down">{t("expired")}</Badge>}
+        {statusName && <Badge tone="warn">{statusName}</Badge>}
         <Link className="ml-auto text-accent" href={`/desk/${c.id}`}>{t("openEditor")}</Link>
       </div>
       {/* the post, roughly as X shows it */}
@@ -102,6 +124,36 @@ export function PostCard({ c, now, roleName, className }: { c: Card; now: number
         <div className="mt-3 text-xs text-muted">
           {t("publishedVia", { channel: t(`channel.${c.publication.channel}`) })}
           {c.publication.x_url && <> · <a className="text-accent" href={c.publication.x_url} target="_blank" rel="noreferrer">{t("viewPost")}</a></>}
+          {c.publication.matches_version === false && (
+            <div className={c.publication.warnings?.length ? "text-warn" : ""}>
+              {t("editedPosted")} · {c.publication.warnings?.length
+                ? t("editedWarn", { codes: c.publication.warnings.map((w) => guardWord(w)).join("、") })
+                : t("editedPass")}
+            </div>
+          )}
+        </div>
+      )}
+      {posting && (
+        <div className="mt-3 space-y-2 rounded border border-accent/40 p-3 text-sm">
+          <input className={`${input} w-full`} placeholder={t("postedPrompt")} value={url} onChange={(e) => setUrl(e.target.value)} />
+          <details>
+            <summary className="cursor-pointer text-xs text-muted">{t("editedToggle")}</summary>
+            <textarea className={`${input} mt-2 h-28 w-full`} placeholder={t("editedPlaceholder")} value={edited}
+              onChange={(e) => { setEdited(e.target.value); setCheck(null); }} />
+          </details>
+          {check && (
+            <div className={`text-xs ${check.blocked ? "text-down" : "text-warn"}`}>
+              <b>{check.blocked ? t("checkBlocked") : t("checkWarn")}</b>
+              <ul className="mt-1 list-disc pl-4">
+                {check.findings.map((f, i) => <li key={i}>{guardWord(f.code)}{f.text ? `：${f.text}` : ""}</li>)}
+              </ul>
+            </div>
+          )}
+          <div className="flex gap-2">
+            <button className={primary} disabled={busy || !!check?.blocked} onClick={posted}>
+              {check && !check.blocked ? t("postedAnyway") : t("postedConfirm")}</button>
+            <button className={button} onClick={() => { setPosting(false); setCheck(null); }}>{t("cancel")}</button>
+          </div>
         </div>
       )}
       <div className="mt-3 flex flex-wrap gap-2">
@@ -112,7 +164,7 @@ export function PostCard({ c, now, roleName, className }: { c: Card; now: number
         </>}
         {(c.status === "approved" || c.status === "expired") && <>
           <a className={button} href={intent} target="_blank" rel="noreferrer" title={t("intentHint")}>{t("openX")}</a>
-          <button className={primary} disabled={busy} onClick={posted}>{t("posted")}</button>
+          {!posting && <button className={primary} disabled={busy} onClick={() => setPosting(true)}>{t("posted")}</button>}
         </>}
         {["draft_ready", "changes_requested", "in_review"].includes(c.status) && c.source !== "trial" && (
           <button className={primary} disabled={busy} onClick={() => act(`articles/${c.id}/review`, { action: "quick_approve" }, t("approved"))}>{t("approve")}</button>

@@ -130,8 +130,10 @@ def result(article_id: int, body: ResultIn, authorization: str | None = Header(N
     pid = pub.mark_published(s, article_id, t["created_by"], body.x_url, body.published_at or now(), now(),
                              body.final_text, channel=t["channel"], reply_url=body.reply_url, api_token_id=t["id"])
     s.execute(text("UPDATE article SET claimed_by_token = NULL, claimed_at = NULL WHERE id = :a"), {"a": article_id})
+    check = one(s, "SELECT matches_version, guard_report->>'status' AS guard FROM publication_record WHERE id = :p",
+                {"p": pid})
     s.commit()
-    return {"ok": True, "publication_id": pid}
+    return {"ok": True, "publication_id": pid, **check}
 
 
 @router.get("/feed/assets/{asset_id}")

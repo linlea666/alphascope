@@ -93,7 +93,19 @@
     "emergencyHint": "Stops all publication records and AI work; sync and detection keep running.",
     "emergencyReason": "Reason",
     "aiOn": "AI on",
-    "aiOff": "AI off"
+    "aiOff": "AI off",
+    "publishingToday": "Publishing today",
+    "pub": {
+      "ready": "Ready to post",
+      "published": "Posted today",
+      "todo": "Needs attention",
+      "rejected": "Sent back by the AI reviewer",
+      "expired": "Expired today"
+    },
+    "expiringSoon": "{n} expire within 30 min",
+    "rejectedHint": "a person decides",
+    "readyCol": "Ready",
+    "budgetLeft": "{n} posts left today"
   },
   "events": {
     "title": "News radar",
@@ -1548,7 +1560,7 @@
     "openX": "Open in X",
     "intentHint": "Opens X's composer with the text; add the card by hand",
     "posted": "I posted it",
-    "postedPrompt": "Paste the post link (optional)",
+    "postedPrompt": "Post link (optional)",
     "postedDone": "Recorded",
     "expiredConfirm": "This post expired. Did it go out anyway?",
     "approve": "Approve",
@@ -1563,7 +1575,26 @@
     "copied": "Copied the {what}",
     "copyFailed": "Copy failed: select and copy by hand",
     "body": "post",
-    "reply": "reply"
+    "reply": "reply",
+    "postedConfirm": "Record it",
+    "postedAnyway": "Record anyway",
+    "cancel": "Cancel",
+    "editedToggle": "Edited it before posting? Paste what went out and it's checked again",
+    "editedPlaceholder": "The text you actually posted (leave empty if unchanged)",
+    "checkBlocked": "The edited text fails the fact check and can't be recorded: fix or delete the post on X first",
+    "checkWarn": "The edited text has warnings: check them, then Record anyway",
+    "editedPosted": "The posted text differs from the approved version",
+    "editedPass": "re-checked, fact check passed",
+    "editedWarn": "re-checked, with warnings: {codes}",
+    "pair": "Pair Chinese and English",
+    "unpair": "One by one",
+    "pairHint": "Chinese and English posts on the same event side by side; the other language comes along from any tab.",
+    "noPartner": "No {lang} post on this event yet",
+    "factsSame": "Both use the same facts",
+    "factsDiff": "The two use different facts",
+    "onlyIn": "Only in {lang}: {facts}",
+    "langZh": "Chinese",
+    "langEn": "English"
   },
   "tokens": {
     "title": "API tokens",
@@ -1596,5 +1627,18 @@
     },
     "docs": "Full reference: newsroom/docs/15-publish-api.md in the repository",
     "legacy": "old single-token API, still works"
+  },
+  "fixes": {
+    "title": "One-click fixes",
+    "promptsBehind": "These roles are on an old prompt: {roles}. Old prompts don't state the length, so drafts often come back too long.",
+    "switchLatest": "Switch them to the newest version",
+    "badModel": "Model “{model}” isn't working ({why}).",
+    "testFailed": "its last test failed",
+    "primaryIn": "Main model of: {roles}.",
+    "fallbackIn": "Fallback of: {roles}.",
+    "replace": "Replace it with “{to}”",
+    "replaceConfirm": "Replace “{from}” with “{to}” in every role?",
+    "dropFallback": "Stop using it as a fallback",
+    "noSpare": "No other tested model to switch to: add and test one under AI models"
   }
 }

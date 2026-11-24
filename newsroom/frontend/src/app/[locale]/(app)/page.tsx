@@ -1,5 +1,6 @@
 import { getLocale, getTranslations } from "next-intl/server";
 import { Action } from "@/components/Action";
+import { AiFixes } from "@/components/AiFixes";
 import { AiReadiness } from "@/components/AiReadiness";
 import { Onboarding } from "@/components/Onboarding";
 import { ClassLabel, StateBadge } from "@/components/badges";
@@ -15,7 +16,8 @@ type Dashboard = {
   states: Record<string, number>;
   top_candidates: { id: number; event_class: string; coin: string; venue: string; direction: string; score: number; priority: string | null; state: string; detected_at: string; trader_key: string; display_name: string | null }[];
   pending_review: { id: number; status: string; handle: string; language: string; headline: string | null; updated_at: string }[];
-  accounts: { id: number; handle: string; display_name: string; status: string; authorization_status: string; authorization_expires_at: string | null; daily_post_budget: number; published_today: number }[];
+  publishing: { ready: number; expiring_soon: number; todo: number; reviewer_rejected: number; expired_today: number; published_today: number };
+  accounts: { id: number; handle: string; display_name: string; status: string; authorization_status: string; authorization_expires_at: string | null; daily_post_budget: number; published_today: number; ready: number }[];
   open_corrections: number;
   expiring_authorizations: { id: number; handle: string; authorization_expires_at: string }[];
 };
@@ -36,6 +38,19 @@ export default async function DashboardPage() {
       </PageHeader>
       <Onboarding />
       <AiReadiness />
+      <AiFixes />
+      <div className="mb-2 text-sm font-semibold">{t("publishingToday")}</div>
+      <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+        {([["ready", "ready", d.publishing.ready, d.publishing.expiring_soon ? t("expiringSoon", { n: d.publishing.expiring_soon }) : undefined],
+           ["published", "published", d.publishing.published_today, undefined],
+           ["todo", "todo", d.publishing.todo, undefined],
+           ["rejected", "todo", d.publishing.reviewer_rejected, t("rejectedHint")],
+           ["expired", "expired", d.publishing.expired_today, undefined]] as const).map(([k, tab, n, sub]) => (
+          <Link key={k} href={`/publish?tab=${tab}`} className="hover:opacity-90">
+            <Stat label={t(`pub.${k}`)} value={n} sub={sub} />
+          </Link>
+        ))}
+      </div>
       <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Stat label={t("source")} value={d.source.reachable ? t("reachable") : t("unreachable")} sub={d.source.health_error ?? undefined} />
         <Stat label={t("radar")} value={`HL ${d.source.radar.hyperliquid} · OKX ${d.source.radar.okx}`} />
@@ -91,12 +106,14 @@ export default async function DashboardPage() {
         </div>
         <Panel title={t("accounts")}>
           <table className="w-full text-sm">
-            <thead><tr><th className={th}>@</th><th className={th}>{t("publishedToday")}</th><th className={th} /></tr></thead>
+            <thead><tr><th className={th}>@</th><th className={th}>{t("publishedToday")}</th><th className={th}>{t("readyCol")}</th><th className={th} /></tr></thead>
             <tbody>
               {d.accounts.map((a) => (
                 <tr key={a.id} className="border-b border-border/60">
                   <td className={td}>{a.handle}</td>
-                  <td className={`${td} num`}>{a.published_today}/{a.daily_post_budget}</td>
+                  <td className={`${td} num ${a.published_today >= a.daily_post_budget ? "text-down" : ""}`}
+                    title={t("budgetLeft", { n: Math.max(0, a.daily_post_budget - a.published_today) })}>{a.published_today}/{a.daily_post_budget}</td>
+                  <td className={`${td} num`}><Link className="text-accent" href={`/publish?tab=ready&account_id=${a.id}`}>{a.ready}</Link></td>
                   <td className={td}><StateBadge state={a.status} /> <Badge tone={a.authorization_status === "authorized" ? "up" : ["revoked", "expired"].includes(a.authorization_status) ? "down" : "neutral"}>{tw(a.authorization_status)}</Badge></td>
                 </tr>
               ))}

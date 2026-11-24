@@ -5,15 +5,18 @@ from datetime import timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from nr import audit
 from nr.api.common import now, one, rows
+from nr.articles import versions
 from nr.auth.deps import active_user, check_account, visible_accounts
 from nr.auth.sessions import CurrentUser
 from nr.db import get_session
 from nr.jobs.queue import enqueue
+from nr.publish import service as pub
 
 router = APIRouter(prefix="/api", tags=["publish"])
 Tab = Literal["ready", "todo", "published", "expired", "trash"]
@@ -28,15 +31,19 @@ CARD_SQL = """
     SELECT a.id, a.status, a.language, a.expires_at, a.updated_at, a.deleted_at IS NOT NULL AS deleted,
            acc.id AS account_id, acc.handle, acc.display_name, acc.platform, asg.source,
            ne.id AS event_id, ne.event_class, ne.coin, ne.direction,
-           v.id AS version_id, v.headline, v.body, v.thread, v.reply_text, v.style_key, v.model, v.agent_key,
+           v.id AS version_id, v.headline, v.body, v.thread, v.reply_text, v.style_key, v.model, v.agent_key, v.facts_used,
            v.guard_status, (v.guard_report->>'x_length')::int AS x_length, (v.guard_report->>'length_limit')::int AS length_limit,
            st.name AS style_name,
            (SELECT m.id FROM media_asset m WHERE m.fact_packet_id = v.fact_packet_id AND m.template_key = v.card_template
               AND m.language = a.language AND m.kind = 'card_png' ORDER BY m.id DESC LIMIT 1) AS card_asset_id,
            (SELECT to_jsonb(r) FROM (SELECT verdict, scores, issues, summary FROM article_review
               WHERE article_version_id = v.id ORDER BY id DESC LIMIT 1) r) AS review,
-           (SELECT to_jsonb(p) FROM (SELECT x_url, reply_url, channel, published_at FROM publication_record
-              WHERE article_id = a.id AND status = 'published' ORDER BY id DESC LIMIT 1) p) AS publication
+           (SELECT to_jsonb(p) FROM (SELECT x_url, reply_url, channel, published_at, matches_version,
+                     guard_report->>'status' AS guard_status,
+                     (SELECT jsonb_agg(f->>'code') FROM jsonb_array_elements(guard_report->'findings') f
+                        WHERE f->>'severity' = 'warn') AS warnings
+              FROM publication_record WHERE article_id = a.id AND status = 'published' ORDER BY id DESC LIMIT 1) p)
+             AS publication
     FROM article a JOIN editorial_account acc ON acc.id = a.account_id JOIN news_event ne ON ne.id = a.news_event_id
     LEFT JOIN assignment asg ON asg.id = a.assignment_id JOIN article_version v ON v.id = a.current_version_id
     LEFT JOIN LATERAL (SELECT name FROM editorial_style WHERE key = v.style_key ORDER BY version DESC LIMIT 1) st ON true"""
@@ -45,7 +52,9 @@ CARD_SQL = """
 @router.get("/publish")
 def publish_center(tab: Tab = "ready", language: Literal["zh", "en"] | None = None, account_id: int | None = None,
                    style: str | None = Query(None, max_length=64), event_class: str | None = Query(None, max_length=32),
-                   s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
+                   pair: bool = False, s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
+    """With `pair`, the other-language posts on the same events come along (from any tab but the trash), so the
+    Chinese and English versions can be read side by side."""
     vis = visible_accounts(s, user)
     where, p = [TABS[tab]], {"vis": vis, "now": now()}
     for col, val in (("a.language", language), ("a.account_id", account_id), ("v.style_key", style),
@@ -66,7 +75,30 @@ def publish_center(tab: Tab = "ready", language: Literal["zh", "en"] | None = No
     today = one(s, """SELECT count(*) FILTER (WHERE status = 'published' AND published_at > now() - interval '24 hours') AS published_24h
                       FROM publication_record""")
     styles = rows(s, "SELECT DISTINCT ON (key) key, name, language FROM editorial_style ORDER BY key, version DESC")
-    return {"tab": tab, "cards": cards, "counts": counts, "now": p["now"], "today": today, "styles": styles}
+    siblings = rows(s, f"""{CARD_SQL} WHERE a.news_event_id = ANY(:e) AND a.id <> ALL(:ids) AND a.deleted_at IS NULL
+                           AND a.status NOT IN ('killed', 'retracted') {"AND a.account_id = ANY(:vis)" if vis is not None else ""}
+                           ORDER BY a.id DESC""",
+                    {"e": list({c["event_id"] for c in cards}), "ids": [c["id"] for c in cards], "vis": vis}) \
+        if pair and cards else []
+    return {"tab": tab, "cards": cards, "siblings": siblings, "counts": counts, "now": p["now"], "today": today,
+            "styles": styles}
+
+
+class CheckTextIn(BaseModel):
+    text: str = Field(min_length=1, max_length=8000)
+
+
+@router.post("/articles/{article_id}/check-text")
+def check_text(article_id: int, body: CheckTextIn, s: Session = Depends(get_session),
+               user: CurrentUser = Depends(active_user)):
+    """Before "I posted it" with an edited text: what the claims guard says about the text that actually went out."""
+    art = versions.load(s, article_id)
+    check_account(s, user, art["account_id"], "publish")
+    v = versions.current_version(s, article_id)
+    _, report, matches = pub.check_posted(s, art, v, body.text)
+    return {"matches_version": matches, "blocked": bool(pub.hard_findings(report)), "status": report["status"],
+            "findings": [{"code": f["code"], "severity": f["severity"], "text": f.get("text")}
+                         for f in report["findings"] if f["severity"] in ("fail", "warn")]}
 
 
 @router.post("/articles/{article_id}/rewrite")

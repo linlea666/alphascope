@@ -1,4 +1,5 @@
 import { getLocale, getTranslations } from "next-intl/server";
+import { AiFixes } from "@/components/AiFixes";
 import { AiReadiness } from "@/components/AiReadiness";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { ClassLabel, StateBadge } from "@/components/badges";
@@ -30,6 +31,7 @@ export default async function DraftsPage({ searchParams }: { searchParams: Promi
         <AutoRefresh active={waiting > 0} label={`${t("refreshing")} (${waiting})`} />
       </PageHeader>
       <AiReadiness />
+      <AiFixes />
       <form className="mb-4 flex flex-wrap gap-2 text-sm">
         <input name="days" defaultValue={sp.days ?? "7"} className={`${input} w-20`} title={t("days")} />
         <select name="model" defaultValue={sp.model ?? ""} className={`${input} w-56`}>

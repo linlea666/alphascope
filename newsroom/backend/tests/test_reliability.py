@@ -65,3 +65,41 @@ def test_ids_that_are_not_facts_are_dropped_not_rewritten(sf):
     with sf() as s:
         v = s.execute(text("SELECT facts_used, guard_status FROM article_version")).one()
     assert len(prov.requests) == 1 and v[0] == ["position.notional_usd"]
+
+
+def test_fixes_name_the_blocked_model_and_one_click_replaces_it(sf):
+    from fastapi.testclient import TestClient
+
+    from nr.api.admin import ai_fixes
+    from nr.db import get_session
+    from nr.main import app
+    from tests.test_api import login
+    newsroom(sf)
+    with sf() as s:
+        ids = dict(s.execute(text("SELECT name, id FROM ai_model_config")).all())
+        s.execute(text("UPDATE ai_model_config SET last_test_ok = (name = 'primary')"))
+        s.execute(text("UPDATE ai_agent_profile SET prompt_version = 1"))
+        s.execute(text("INSERT INTO user_role SELECT id, 'admin' FROM app_user WHERE username = 'chief'"))
+        s.commit()
+        fixes = {f["kind"]: f for f in ai_fixes(s, NOW)}
+    fix = fixes["replace_model"]
+    assert fix["model"]["id"] == ids["fallback"] and fix["reason"] == "test_failed" and fix["primary_in"] == []
+    assert fix["suggest"]["id"] == ids["primary"] and "reporter" in fix["fallback_in"]
+    assert "reporter" in fixes["prompts_behind"]["agents"]
+
+    def override():
+        with sf() as s:
+            yield s
+    app.dependency_overrides[get_session] = override
+    try:
+        c = TestClient(app)
+        h = login(c, "chief")
+        r = c.post("/api/ai/agents/replace-model", json={"from_model_id": ids["fallback"], "to_model_id": ids["primary"]},
+                   headers=h)
+        assert r.status_code == 200, r.text
+    finally:
+        app.dependency_overrides.clear()
+    with sf() as s:
+        # the fallback would equal the role's own model, so it is dropped rather than duplicated
+        assert s.execute(text("SELECT count(*) FROM ai_agent_profile WHERE active AND fallback_model_config_id IS NOT NULL")).scalar() == 0
+        assert [f["kind"] for f in ai_fixes(s, NOW)] == ["prompts_behind"]

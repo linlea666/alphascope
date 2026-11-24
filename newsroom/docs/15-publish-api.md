@@ -63,7 +63,9 @@ Authorization: Bearer nrt_xxxxxxxx
  "published_at": "2026-11-24T08:03:00Z", "final_text": null}
 ```
 
-`x_url`、`reply_url`、`published_at` 都可以不填（不填时间就是现在）。`final_text` 只在实际发出的文字和稿件不同时填，系统会重新核对事实。返回 `{"ok": true, "publication_id": 789}`。
+`x_url`、`reply_url`、`published_at` 都可以不填（不填时间就是现在）。`final_text` 只在实际发出的文字和稿件不同时填，系统会用事实检查重新核对实际发出的文字：没通过返回 409（不记录，请先在 X 上改正或删帖），通过就记录，并在发布中心标出「发出的文字和审过的版本不同」。
+
+返回 `{"ok": true, "publication_id": 789, "matches_version": true, "guard": "pass"}`。`matches_version` 表示发出的文字是否和审过的版本一致（只差空白也算一致），`guard` 是对实际发出文字的事实检查结果（pass / warn）。
 
 失败（例如登录失效）：
 

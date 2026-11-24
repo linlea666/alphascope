@@ -93,7 +93,19 @@
     "emergencyHint": "停止一切发布记录与 AI 任务；数据同步与检测继续运行。",
     "emergencyReason": "停止原因",
     "aiOn": "AI 已开启",
-    "aiOff": "AI 已关闭"
+    "aiOff": "AI 已关闭",
+    "publishingToday": "今日发布",
+    "pub": {
+      "ready": "待发布",
+      "published": "今日已发",
+      "todo": "待处理",
+      "rejected": "AI 审稿退回",
+      "expired": "今日过期"
+    },
+    "expiringSoon": "{n} 条 30 分钟内过期",
+    "rejectedHint": "需要人来决定",
+    "readyCol": "待发",
+    "budgetLeft": "今天还能发 {n} 条"
   },
   "events": {
     "title": "新闻雷达",
@@ -1548,7 +1560,7 @@
     "openX": "去 X 发布",
     "intentHint": "打开 X 的发帖页并填好正文；配图要先下载，再手动添加",
     "posted": "我已发布",
-    "postedPrompt": "贴上帖子链接（可以不填，直接确定）",
+    "postedPrompt": "帖子链接（可以不填）",
     "postedDone": "已记录发布",
     "expiredConfirm": "这篇已经过期，确定已经发出去了吗？",
     "approve": "通过，加入待发布",
@@ -1563,7 +1575,26 @@
     "copied": "已复制{what}",
     "copyFailed": "复制失败，请手动选中复制",
     "body": "正文",
-    "reply": "评论"
+    "reply": "评论",
+    "postedConfirm": "确认已发布",
+    "postedAnyway": "仍然记录",
+    "cancel": "取消",
+    "editedToggle": "发之前改过文字？贴上实际发出的内容，系统再核对一遍",
+    "editedPlaceholder": "实际发出的正文（没改过就留空）",
+    "checkBlocked": "改过的文字没通过事实检查，不能记录：请在 X 上改正或删帖后再来",
+    "checkWarn": "改过的文字有提醒，确认没问题再点「仍然记录」",
+    "editedPosted": "发出的文字和审过的版本不同",
+    "editedPass": "已重新核对，事实检查通过",
+    "editedWarn": "已重新核对，有提醒：{codes}",
+    "pair": "中英文配对",
+    "unpair": "逐条显示",
+    "pairHint": "同一事件的中文稿和英文稿并排显示；另一种语言的稿件即使在别的标签页也会带出来。",
+    "noPartner": "这个事件还没有{lang}稿",
+    "factsSame": "两版用的事实一致",
+    "factsDiff": "两版用的事实不同",
+    "onlyIn": "只在{lang}稿里：{facts}",
+    "langZh": "中文",
+    "langEn": "英文"
   },
   "tokens": {
     "title": "接口令牌",
@@ -1596,5 +1627,18 @@
     },
     "docs": "完整说明见仓库 newsroom/docs/15-publish-api.md",
     "legacy": "旧版单令牌接口，仍可用"
+  },
+  "fixes": {
+    "title": "一键修复",
+    "promptsBehind": "这些角色还在用旧提示词：{roles}。旧版字数没写进提示词，经常写超长被退回。",
+    "switchLatest": "全部切到最新版本",
+    "badModel": "模型「{model}」用不了（{why}）。",
+    "testFailed": "最近一次测试没通过",
+    "primaryIn": "主模型：{roles}。",
+    "fallbackIn": "备用模型：{roles}。",
+    "replace": "全部换成「{to}」",
+    "replaceConfirm": "把所有角色里的「{from}」换成「{to}」？",
+    "dropFallback": "不再用它做备用",
+    "noSpare": "没有测试通过的其他模型可换，请先在 AI 模型里添加并测试一个"
   }
 }

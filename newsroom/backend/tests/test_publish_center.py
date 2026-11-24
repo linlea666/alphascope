@@ -160,3 +160,63 @@ def test_the_publish_center_lists_ready_posts_with_their_review_and_reply(sf):
         assert d["cards"][0]["publication"]["channel"] == "manual"
     finally:
         app.dependency_overrides.clear()
+
+
+def test_an_edited_post_is_checked_again_and_the_record_says_so(sf):
+    from fastapi.testclient import TestClient
+
+    from nr.db import get_session
+    from nr.main import app
+    from tests.test_api import login
+    nr, eid, art = drafted(sf)
+    with sf() as s:
+        pub.quick_approve(s, art, nr["chief"])
+        s.commit()
+
+    def override():
+        with sf() as s:
+            yield s
+    app.dependency_overrides[get_session] = override
+    try:
+        c = TestClient(app)
+        h = login(c, "chief")
+        same = c.post(f"/api/articles/{art}/check-text", json={"text": ZH + "\n"}, headers=h).json()
+        assert same["matches_version"] and not same["blocked"]
+        wrong = c.post(f"/api/articles/{art}/check-text", json={"text": ZH.replace("3000万", "9000万")}, headers=h).json()
+        assert not wrong["matches_version"] and wrong["blocked"]  # a number the facts don't support
+        edited = ZH.replace("杠杆20倍。", "20倍杠杆。")
+        assert c.post(f"/api/articles/{art}/publish", json={"final_text": edited}, headers=h).status_code == 200
+        pub_ = c.get("/api/publish", params={"tab": "published"}, headers=h).json()["cards"][0]["publication"]
+        assert pub_["matches_version"] is False and pub_["guard_status"] in ("pass", "warn")
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_pair_view_brings_the_other_language_from_any_tab(sf):
+    from fastapi.testclient import TestClient
+
+    from nr.db import get_session
+    from nr.main import app
+    from tests.test_api import login
+    nr, eid, art = drafted(sf)
+    with sf() as s:
+        aid = assignment.create(s, eid, nr["en"], source="editor", status="accepted", user_id=nr["chief"])
+        en = assignment.accept(s, aid, nr["chief"])
+        save_version(s, en, Draft(body="A verified trend trader opened a ~$30M BTC long at 20x.",
+                                  facts_used=["position.notional_usd", "position.leverage"]), origin="ai")
+        pub.quick_approve(s, art, nr["chief"])
+        s.commit()
+
+    def override():
+        with sf() as s:
+            yield s
+    app.dependency_overrides[get_session] = override
+    try:
+        c = TestClient(app)
+        h = login(c, "chief")
+        d = c.get("/api/publish", params={"tab": "ready", "pair": "true"}, headers=h).json()
+        assert [x["id"] for x in d["cards"]] == [art] and [x["id"] for x in d["siblings"]] == [en]
+        assert d["siblings"][0]["status"] == "draft_ready" and d["siblings"][0]["facts_used"]
+        assert c.get("/api/publish", params={"tab": "ready"}, headers=h).json()["siblings"] == []
+    finally:
+        app.dependency_overrides.clear()

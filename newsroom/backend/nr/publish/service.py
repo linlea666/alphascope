@@ -144,6 +144,25 @@ def publish_blockers(s: Session, account_id: int, now: datetime) -> list[str]:
     return out
 
 
+def _same(a: str, b: str) -> bool:
+    return " ".join(a.split()) == " ".join(b.split())
+
+
+def check_posted(s: Session, art: dict, v: dict, final_text: str | None) -> tuple[str, dict, bool]:
+    """The last check, on what actually went out: when the posted text differs from the approved version (edited on
+    X, or by a robot), the claims guard reads the posted text itself. Returns the text, the report, and whether it
+    matches the approved version."""
+    version_text = versions.parts_of(v["headline"], v["body"], v["thread"])
+    approved = "\n\n".join(t for k, t in version_text.items() if k != "headline" and t)
+    if final_text is None or not final_text.strip() or _same(final_text, approved) or _same(final_text, v["body"]):
+        return approved, versions.guard(s, art, v["fact_packet_id"], version_text, list(v["facts_used"])), True
+    return final_text, versions.guard(s, art, v["fact_packet_id"], {"body": final_text}, list(v["facts_used"])), False
+
+
+def hard_findings(report: dict) -> list[dict]:
+    return [f for f in report["findings"] if f["severity"] == "fail" and f["code"] != "NEAR_DUPLICATE"]
+
+
 def mark_published(s: Session, article_id: int, user_id: int, x_url: str | None, published_at: datetime, now: datetime,
                    final_text: str | None = None, channel: str = "manual", reply_url: str | None = None,
                    api_token_id: int | None = None, allow_expired: bool = False) -> int:
@@ -163,13 +182,8 @@ def mark_published(s: Session, article_id: int, user_id: int, x_url: str | None,
     v = versions.current_version(s, article_id)
     if art["gate_status"] != "pass" or v["fact_packet_id"] != art["current_fact_packet_id"]:
         raise HTTPException(409, "the facts changed after approval: review again")
-    version_text = versions.parts_of(v["headline"], v["body"], v["thread"])
-    posted = final_text if final_text is not None else "\n\n".join(t for k, t in version_text.items()
-                                                                  if k != "headline" and t)
-    parts = {"body": posted} if final_text is not None else version_text
-    report = versions.guard(s, art, v["fact_packet_id"], parts, list(v["facts_used"]))
-    hard = [f for f in report["findings"] if f["severity"] == "fail" and f["code"] != "NEAR_DUPLICATE"]
-    if hard:
+    posted, report, matches = check_posted(s, art, v, final_text)
+    if hard_findings(report):
         raise HTTPException(409, {"message": "the posted text fails the claims guard", "guard": report})
     h = hashlib.sha256(posted.encode()).hexdigest()
     assets = list(s.execute(text("""SELECT id FROM media_asset WHERE fact_packet_id = :p AND template_key = :t
@@ -181,7 +195,7 @@ def mark_published(s: Session, article_id: int, user_id: int, x_url: str | None,
           api_token_id)
         VALUES (:a, :v, :acc, :pid, :url, :at, :u, :t, :h, :mv, CAST(:g AS jsonb), :assets, :ch, :ru, :tok) RETURNING id"""),
         {"a": article_id, "v": v["id"], "acc": art["account_id"], "pid": post_id, "url": x_url or None,
-         "at": published_at, "u": user_id, "t": posted, "h": h, "mv": final_text is None or posted == v["body"],
+         "at": published_at, "u": user_id, "t": posted, "h": h, "mv": matches,
          "g": json.dumps(report, ensure_ascii=False, default=str), "assets": assets, "ch": channel,
          "ru": (reply_url or "").strip() or None, "tok": api_token_id}).scalar_one()
     versions.set_status(s, article_id, "published")
@@ -196,7 +210,7 @@ def mark_published(s: Session, article_id: int, user_id: int, x_url: str | None,
                       WHERE news_event_id = :e"""), {"p": v["fact_packet_id"], "e": art["news_event_id"]})
     audit.record(s, "publication.record", "publication", pid, user_id=user_id, account_id=art["account_id"],
                  after={"article_id": article_id, "version_id": v["id"], "x_url": x_url, "channel": channel,
-                        "matches_version": final_text is None or posted == v["body"]})
+                        "matches_version": matches})
     return pid
 
 

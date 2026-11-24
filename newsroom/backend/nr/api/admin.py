@@ -61,10 +61,29 @@ def dashboard(s: Session = Depends(get_session), user: CurrentUser = Depends(act
                                      WHERE a.status IN ('in_review', 'approved', 'stale')
                                      {"" if vis is None else "AND acc.id = ANY(:vis)"}
                                      ORDER BY a.updated_at DESC LIMIT 20""", {"vis": vis}),
+        # today's publishing at a glance: what is waiting, what went out, what ran out of time, what the AI reviewer
+        # sent back to a person
+        "publishing": one(s, f"""
+            SELECT count(*) FILTER (WHERE a.status = 'approved' AND a.deleted_at IS NULL) AS ready,
+                   count(*) FILTER (WHERE a.status = 'approved' AND a.deleted_at IS NULL
+                                    AND a.expires_at < :soon) AS expiring_soon,
+                   count(*) FILTER (WHERE a.status IN ('draft_ready', 'changes_requested', 'in_review', 'stale')
+                                    AND a.deleted_at IS NULL) AS todo,
+                   count(*) FILTER (WHERE a.status IN ('draft_ready', 'changes_requested', 'in_review')
+                                    AND a.deleted_at IS NULL AND (SELECT r.verdict FROM article_review r
+                                      WHERE r.article_version_id = a.current_version_id ORDER BY r.id DESC LIMIT 1)
+                                    = 'reject') AS reviewer_rejected,
+                   count(*) FILTER (WHERE a.status = 'expired' AND a.expires_at >= :d) AS expired_today,
+                   (SELECT count(*) FROM publication_record pr WHERE pr.status = 'published' AND pr.published_at >= :d
+                      {"" if vis is None else "AND pr.account_id = ANY(:vis)"}) AS published_today
+            FROM article a {"" if vis is None else "WHERE a.account_id = ANY(:vis)"}""",
+            {"d": day, "soon": t + timedelta(minutes=30), "vis": vis}),
         "accounts": rows(s, f"""SELECT acc.id, acc.handle, acc.display_name, acc.language, acc.status,
                                        acc.authorization_status, acc.authorization_expires_at, acc.daily_post_budget,
                                        (SELECT count(*) FROM publication_record pr WHERE pr.account_id = acc.id
-                                        AND pr.published_at >= :d) AS published_today
+                                        AND pr.published_at >= :d) AS published_today,
+                                       (SELECT count(*) FROM article a WHERE a.account_id = acc.id
+                                        AND a.status = 'approved' AND a.deleted_at IS NULL) AS ready
                                 FROM editorial_account acc {acc_filter} ORDER BY acc.id""", {"d": day, "vis": vis}),
         "open_corrections": s.execute(text("SELECT count(*) FROM correction_record WHERE status = 'open'")).scalar(),
         "expiring_authorizations": rows(s, """SELECT id, handle, authorization_expires_at FROM editorial_account
@@ -423,6 +442,84 @@ def ai_readiness(s: Session) -> dict:
 @router.get("/ai/status")
 def ai_status(s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
     return ai_readiness(s)
+
+
+BLOCKING = ("firewall", "bad_key", "no_channel", "quota")  # causes a retry never gets past
+
+
+def ai_fixes(s: Session, t) -> list[dict]:
+    """What to change so the failures stop, each with the one action that does it: roles on an old prompt, and
+    models that can't be reached (a failed test, or blocked calls in the last day) with a working model to use instead."""
+    fixes: list[dict] = []
+    behind = list(s.execute(text("""
+        SELECT a.agent_key FROM ai_agent_profile a WHERE a.active
+          AND a.prompt_version < (SELECT max(version) FROM prompt_template p WHERE p.key = a.prompt_key)
+        ORDER BY a.agent_key""")).scalars())
+    if behind:
+        fixes.append({"kind": "prompts_behind", "agents": behind})
+    models = rows(s, "SELECT id, name, model, last_test_ok FROM ai_model_config WHERE enabled ORDER BY id")
+    blocked: dict[int, list[str]] = {}
+    for r in rows(s, """SELECT model_config_id, status, error FROM ai_call_log
+                        WHERE status <> 'ok' AND model_config_id IS NOT NULL AND created_at > :d""", {"d": t - timedelta(hours=24)}):
+        if (code := diagnose(r["status"], r["error"])) in BLOCKING:
+            blocked.setdefault(r["model_config_id"], []).append(code)
+    bad = {m["id"]: ("test_failed" if m["last_test_ok"] is False else max(set(blocked[m["id"]]), key=blocked[m["id"]].count))
+           for m in models if m["last_test_ok"] is False or len(blocked.get(m["id"], [])) >= 2}
+    agents = rows(s, "SELECT agent_key, model_config_id, fallback_model_config_id FROM ai_agent_profile WHERE active")
+    use = {}
+    for a in agents:
+        if a["model_config_id"] is not None:
+            use[a["model_config_id"]] = use.get(a["model_config_id"], 0) + 1
+    good = sorted((m for m in models if m["last_test_ok"] and m["id"] not in bad), key=lambda m: -use.get(m["id"], 0))
+    for m in models:
+        if m["id"] not in bad:
+            continue
+        primary = sorted(a["agent_key"] for a in agents if a["model_config_id"] == m["id"])
+        fallback = sorted(a["agent_key"] for a in agents if a["fallback_model_config_id"] == m["id"])
+        if primary or fallback:
+            fixes.append({"kind": "replace_model", "model": {"id": m["id"], "name": m["name"]}, "reason": bad[m["id"]],
+                          "primary_in": primary, "fallback_in": fallback,
+                          "suggest": {"id": good[0]["id"], "name": good[0]["name"]} if good else None})
+    return fixes
+
+
+@router.get("/ai/fixes")
+def list_fixes(s: Session = Depends(get_session), user: CurrentUser = Depends(active_user)):
+    return {"fixes": ai_fixes(s, now())}
+
+
+class ReplaceModelIn(BaseModel):
+    from_model_id: int
+    to_model_id: int | None = None  # None: only drop it where it is a fallback
+
+
+@router.post("/ai/agents/replace-model")
+def replace_model(body: ReplaceModelIn, s: Session = Depends(get_session), user: CurrentUser = Depends(ADMIN)):
+    """Every role using a model (as its model or its fallback) switches to another; a fallback that would equal the
+    role's own model is dropped instead."""
+    if body.to_model_id is not None and not s.execute(
+            text("SELECT 1 FROM ai_model_config WHERE id = :i AND enabled"), {"i": body.to_model_id}).scalar():
+        raise HTTPException(422, f"model {body.to_model_id} not found or disabled")
+    changed, skipped = [], []
+    for cur in s.execute(text("SELECT * FROM ai_agent_profile WHERE active ORDER BY agent_key")).mappings().all():
+        primary, fallback = cur["model_config_id"], cur["fallback_model_config_id"]
+        if body.from_model_id not in (primary, fallback):
+            continue
+        if primary == body.from_model_id:
+            if body.to_model_id is None:
+                skipped.append({"agent": cur["agent_key"], "reason": "it is this role's own model: pick a replacement"})
+                continue
+            primary = body.to_model_id
+        if fallback == body.from_model_id:
+            fallback = body.to_model_id
+        if fallback == primary:
+            fallback = None
+        _agent_version(s, cur, user.id, model_config_id=primary, fallback_model_config_id=fallback)
+        changed.append(cur["agent_key"])
+    audit.record(s, "ai.agent_replace_model", "ai_agent", f"{len(changed)} roles", user_id=user.id,
+                 after={**body.model_dump(), "changed": changed})
+    s.commit()
+    return {"changed": changed, "skipped": skipped}
 
 
 @router.get("/onboarding")
