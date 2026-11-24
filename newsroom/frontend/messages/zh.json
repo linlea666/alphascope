@@ -17,11 +17,12 @@
     "calendar": "发布日历",
     "columns": "栏目",
     "public": "公开页",
-    "drafts": "AI 稿件",
+    "drafts": "AI 调试记录",
     "experiments": "内容实验",
-    "publish": "发布中心",
+    "publish": "稿件管理",
     "reports": "质量周报",
-    "stars": "明星交易员"
+    "stars": "明星交易员",
+    "more": "更多"
   },
   "common": {
     "save": "保存",
@@ -1493,7 +1494,7 @@
     },
     "publish": {
       "title": "审核并记录第一条发布",
-      "how": "稿件库里提交审核、通过，发出去后在编辑室「记录发布」填帖子链接"
+      "how": "在「稿件管理 → 可发布」里复制稿件去发，或交给插件 / RPA；发出后点「我已发布」"
     }
   },
   "diagnosis": {
@@ -1578,29 +1579,32 @@
     }
   },
   "publish": {
-    "title": "发布中心",
-    "subtitle": "所有能发的稿件都在这里：预览、复制、去 X 发布，发完点「我已发布」记录下来。",
+    "title": "稿件管理",
+    "subtitle": "一篇稿件只出现一次、只显示最终版。「可发布」就是浏览器插件和 RPA 能取走的清单。",
     "autoRefresh": "自动刷新中",
     "tab": {
-      "ready": "待发布",
-      "todo": "待处理",
+      "ready": "可发布",
+      "review": "审核中",
+      "attention": "需要你处理",
+      "writing": "写稿中",
       "published": "已发布",
-      "expired": "已过期",
       "trash": "回收站"
     },
     "tabHint": {
-      "ready": "AI 审稿通过或人工通过的稿件，按剩余时间排序，越早过期越靠前。",
-      "todo": "写好了但还没通过：AI 审稿要求修改或退回、事实已更新需重核、试写稿。可以「通过」或「重写」。",
+      "ready": "已通过、还在有效期内的稿件，越早过期越靠前。插件 / RPA 取的就是这份清单；你也可以自己复制去发。",
+      "review": "AI 正在审稿或改稿的稿件。审完自动进「可发布」，有问题会进「需要你处理」。你也可以直接点「通过」。",
+      "attention": "需要人看一眼：AI 审稿退回、事实检查没过、或者事实有更新。点开看原因，选择「按审稿意见改一版」「通过」或「作废」。",
+      "writing": "AI 正在写的稿件，写完会自动进入审核。",
       "published": "已经发出去的稿件和发布记录。",
-      "expired": "超过时效没发的稿件。仓位有新进展时可以「按最新事实重写」。",
-      "trash": "删掉的稿件。"
+      "trash": "过期、作废、删除的稿件。仓位有新进展时可以「按最新事实重写」。"
     },
     "empty": {
-      "ready": "暂时没有待发布的稿件。AI 写完、审稿通过后会出现在这里。",
-      "todo": "没有待处理的稿件。",
-      "published": "还没有发布记录。",
-      "expired": "没有过期稿件。",
-      "trash": "回收站是空的。"
+      "ready": "暂时没有可发布的稿件。AI 写完、审稿通过后会出现在这里。",
+      "review": "这里没有稿件。",
+      "attention": "这里没有稿件。",
+      "writing": "这里没有稿件。",
+      "published": "这里没有稿件。",
+      "trash": "这里没有稿件。"
     },
     "today": "过去 24 小时已发 {n} 条",
     "allLanguages": "全部语言",
@@ -1694,7 +1698,43 @@
     "squareHint": "会先把正文复制好，再打开广场；在广场发帖框里粘贴，配图要先下载",
     "revise": "按审稿意见改一版",
     "reviseHint": "把 AI 审稿的问题和修改建议交给编辑改一个新版本，改完自动再检查、再审稿",
-    "revising": "已交给编辑按审稿意见修改，稍后刷新查看"
+    "revising": "已交给编辑按审稿意见修改，稍后刷新查看",
+    "tile": {
+      "ready": "已通过，可以直接发",
+      "review": "AI 在写或在审，不用管",
+      "attention": "被退回、事实没过、事实有变",
+      "published": "今天已发"
+    },
+    "robots": "浏览器插件 / RPA 现在能取到这 {n} 条",
+    "noRobots": "还没有接口令牌：在「系统管理 → 接口令牌」创建后，插件或 RPA 就能自动取这些稿件",
+    "robotSeen": "{name} 最近 {at}",
+    "allVenues": "全部数据源",
+    "allAgents": "全部记者",
+    "venue": {
+      "hyperliquid": "Hyperliquid",
+      "okx": "OKX",
+      "binance": "币安",
+      "multi": "综合"
+    },
+    "viewList": "列表",
+    "viewPreview": "预览",
+    "edits": "改过 {n} 次 · 查看记录",
+    "why": {
+      "stale": "事实有更新，需重核",
+      "guard": "事实检查没过",
+      "rejected": "AI 审稿退回"
+    },
+    "claimed": "已被「{name}」领取",
+    "selected": "已选 {n} 篇",
+    "bulkApprove": "批量通过",
+    "bulkKill": "批量作废",
+    "bulkDone": "已处理 {done} 篇{failed}",
+    "bulkFailed": "，{n} 篇没成功（原因见编辑室）",
+    "score": "审稿 {n}",
+    "open": "展开",
+    "close": "收起",
+    "noTitle": "（无标题）",
+    "selectAll": "全选"
   },
   "tokens": {
     "title": "接口令牌",

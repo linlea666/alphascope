@@ -53,9 +53,9 @@ export default async function DashboardPage() {
         )}
         {([["ready", "ready", d.publishing.ready, d.publishing.expiring_soon ? t("expiringSoon", { n: d.publishing.expiring_soon }) : undefined],
            ["published", "published", d.publishing.published_today, undefined],
-           ["todo", "todo", d.publishing.todo, undefined],
-           ["rejected", "todo", d.publishing.reviewer_rejected, t("rejectedHint")],
-           ["expired", "expired", d.publishing.expired_today, undefined]] as const).map(([k, tab, n, sub]) => (
+           ["todo", "review", d.publishing.todo, undefined],
+           ["rejected", "attention", d.publishing.reviewer_rejected, t("rejectedHint")],
+           ["expired", "trash", d.publishing.expired_today, undefined]] as const).map(([k, tab, n, sub]) => (
           <Link key={k} href={`/publish?tab=${tab}`} className="hover:opacity-90">
             <Stat label={t(`pub.${k}`)} value={n} sub={sub} />
           </Link>

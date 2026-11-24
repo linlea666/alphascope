@@ -12,7 +12,8 @@ import { Badge, button, input, primary } from "./ui";
 export type Card = {
   id: number; status: string; language: string; expires_at: string | null; account_id: number; handle: string;
   display_name: string; platform: string; source: string | null; event_id: number; event_class: string; coin: string;
-  column_key: string | null;
+  column_key: string | null; venue: string; n_versions: number; claimed_by: string | null; claimed_at: string | null;
+  why: "stale" | "guard" | "rejected" | null;
   version_id: number; headline: string; body: string; thread: string[] | null; reply_text: string | null;
   style_key: string | null; style_name: string | null; model: string | null; agent_key: string | null; guard_status: string;
   facts_used: string[] | null;
@@ -99,7 +100,8 @@ export function PostCard({ c, now, roleName, className, statusName }: { c: Card;
         {left && c.status !== "published" && <Badge tone={left.tone}>{left.text === "0" ? t("expiredNow") : t("left", { t: left.text })}</Badge>}
         {c.status === "expired" && <Badge tone="down">{t("expired")}</Badge>}
         {statusName && <Badge tone="warn">{statusName}</Badge>}
-        <Link className="ml-auto text-accent" href={`/desk/${c.id}`}>{t("openEditor")}</Link>
+        <Link className="ml-auto text-accent" href={`/desk/${c.id}`}>
+          {c.n_versions > 1 ? t("edits", { n: c.n_versions - 1 }) : t("openEditor")}</Link>
       </div>
       {/* the post, roughly as X shows it */}
       <div className="rounded-lg border border-border/70 bg-bg p-3">

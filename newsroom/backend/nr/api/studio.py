@@ -482,7 +482,7 @@ def restore(article_id: int, s: Session = Depends(get_session), user: CurrentUse
 
 class BulkIn(BaseModel):
     ids: list[int] = Field(min_length=1, max_length=200)
-    action: Literal["trash", "restore", "submit", "kill"]
+    action: Literal["trash", "restore", "submit", "kill", "approve"]
     reason: str = Field("", max_length=500)
 
 
@@ -497,6 +497,9 @@ def bulk(body: BulkIn, s: Session = Depends(get_session), user: CurrentUser = De
                     trash_article(s, user, aid, body.reason)
                 elif body.action == "restore":
                     restore_article(s, user, aid)
+                elif body.action == "approve":  # one click from a finished draft to ready-to-post, every check included
+                    check_account(s, user, _article(s, aid)["account_id"], "review")
+                    pub.quick_approve(s, aid, user.id)
                 elif body.action == "submit":
                     check_account(s, user, _article(s, aid)["account_id"], "draft")
                     pub.submit(s, aid, user.id)

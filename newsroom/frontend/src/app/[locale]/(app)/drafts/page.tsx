@@ -7,7 +7,7 @@ import { Badge, Empty, PageHeader, Panel, button, input, td, th } from "@/compon
 import { Link } from "@/i18n/routing";
 import { nrGet } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
-import { named, parsePromptRef, word } from "@/lib/glossary";
+import { named, parsePromptRef, platformName, word } from "@/lib/glossary";
 
 type V = { id: number; article_id: number; version_no: number; model: string | null; agent_key: string | null; prompt_ref: string | null;
   headline: string; body: string; guard_status: string; length: number | null; created_at: string; is_current: boolean;
@@ -60,7 +60,7 @@ export default async function DraftsPage({ searchParams }: { searchParams: Promi
                       <td className={`${td} max-w-xl whitespace-normal`}>
                         <div className="text-xs text-muted">
                           <Link href={`/radar/${v.event_id}`} className="text-accent">#{v.event_id}</Link> <ClassLabel cls={v.event_class} /> · {v.coin} ·{" "}
-                          {v.platform === "okx_square" ? "OKX 广场" : "X"} @{v.handle}
+                          {platformName(v.platform)} @{v.handle}
                           {v.source === "trial" && <> <Badge tone="warn">{t("trial")}</Badge></>}
                           {v.is_current && <> <Badge tone="accent">{t("current")}</Badge></>} <StateBadge state={v.article_status} />
                         </div>

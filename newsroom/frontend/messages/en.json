@@ -17,11 +17,12 @@
     "calendar": "Calendar",
     "columns": "Columns",
     "public": "Public",
-    "drafts": "AI drafts",
+    "drafts": "AI debug log",
     "experiments": "Experiments",
-    "publish": "Publish",
+    "publish": "Posts",
     "reports": "Quality report",
-    "stars": "Star traders"
+    "stars": "Star traders",
+    "more": "More"
   },
   "common": {
     "save": "Save",
@@ -1493,7 +1494,7 @@
     },
     "publish": {
       "title": "Review and record the first post",
-      "how": "Library: submit, approve, post it, then Record publication in the editor"
+      "how": "In Posts → Ready, copy a post or let the extension take it; then click 'I posted it'"
     }
   },
   "diagnosis": {
@@ -1578,29 +1579,32 @@
     }
   },
   "publish": {
-    "title": "Publish",
-    "subtitle": "Every post worth sending: preview, copy, open X, then record it with 'I posted it'.",
+    "title": "Posts",
+    "subtitle": "Each post appears once, in its final version. 'Ready' is exactly what the extension and RPA can take.",
     "autoRefresh": "refreshing",
     "tab": {
       "ready": "Ready",
-      "todo": "To do",
-      "published": "Published",
-      "expired": "Expired",
-      "trash": "Trash"
+      "review": "In review",
+      "attention": "Needs you",
+      "writing": "Writing",
+      "published": "Posted",
+      "trash": "Bin"
     },
     "tabHint": {
-      "ready": "Approved by the AI reviewer or a person, soonest to expire first.",
-      "todo": "Written but not approved yet: the reviewer asked for changes or a person, facts changed, or trials.",
-      "published": "Posts that went out, with their records.",
-      "expired": "Posts that ran out of time. Rewrite from fresh facts if the position moved on.",
-      "trash": "Deleted posts."
+      "ready": "Approved and in time, soonest to expire first. The extension / RPA take exactly this list.",
+      "review": "Being reviewed or revised by the AI; they move on by themselves.",
+      "attention": "A person decides: reviewer rejection, failed fact check, or changed facts.",
+      "writing": "The AI is writing these.",
+      "published": "Posted, with their records.",
+      "trash": "Expired, killed or deleted."
     },
     "empty": {
-      "ready": "Nothing ready yet. Drafts land here once the AI reviewer approves them.",
-      "todo": "Nothing to do.",
-      "published": "No posts yet.",
-      "expired": "Nothing expired.",
-      "trash": "Trash is empty."
+      "ready": "Nothing ready yet.",
+      "review": "Nothing here.",
+      "attention": "Nothing here.",
+      "writing": "Nothing here.",
+      "published": "Nothing here.",
+      "trash": "Nothing here."
     },
     "today": "{n} posted in the last 24h",
     "allLanguages": "All languages",
@@ -1694,7 +1698,43 @@
     "squareHint": "Copies the text, then opens the square: paste it into the post box; download the card first",
     "revise": "Revise per review",
     "reviseHint": "The desk editor rewrites with the AI review's notes; the new version is checked and reviewed again",
-    "revising": "Sent to the editor with the review's notes; refresh shortly"
+    "revising": "Sent to the editor with the review's notes; refresh shortly",
+    "tile": {
+      "ready": "approved, ready to post",
+      "review": "AI is writing or reviewing",
+      "attention": "sent back, failed check, facts changed",
+      "published": "posted today"
+    },
+    "robots": "The extension / RPA can take these {n} now",
+    "noRobots": "No API token yet: create one under Settings → API tokens",
+    "robotSeen": "{name} last seen {at}",
+    "allVenues": "All sources",
+    "allAgents": "All reporters",
+    "venue": {
+      "hyperliquid": "Hyperliquid",
+      "okx": "OKX",
+      "binance": "Binance",
+      "multi": "Mixed"
+    },
+    "viewList": "List",
+    "viewPreview": "Preview",
+    "edits": "Revised {n} times · history",
+    "why": {
+      "stale": "facts changed",
+      "guard": "failed fact check",
+      "rejected": "reviewer rejected"
+    },
+    "claimed": "taken by {name}",
+    "selected": "{n} selected",
+    "bulkApprove": "Approve all",
+    "bulkKill": "Kill all",
+    "bulkDone": "{done} done{failed}",
+    "bulkFailed": ", {n} failed",
+    "score": "review {n}",
+    "open": "Open",
+    "close": "Close",
+    "noTitle": "(untitled)",
+    "selectAll": "Select all"
   },
   "tokens": {
     "title": "API tokens",

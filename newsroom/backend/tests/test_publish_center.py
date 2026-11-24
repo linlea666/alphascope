@@ -142,6 +142,7 @@ def test_the_publish_center_lists_ready_posts_with_their_review_and_reply(sf):
     nr, eid, art = drafted(sf)
     with sf() as s:
         pub.quick_approve(s, art, nr["chief"])
+        s.execute(text("UPDATE article SET expires_at = now() + interval '1 hour' WHERE id = :a"), {"a": art})
         s.commit()
 
     def override():
@@ -205,6 +206,7 @@ def test_pair_view_brings_the_other_language_from_any_tab(sf):
         save_version(s, en, Draft(body="A verified trend trader opened a ~$30M BTC long at 20x.",
                                   facts_used=["position.notional_usd", "position.leverage"]), origin="ai")
         pub.quick_approve(s, art, nr["chief"])
+        s.execute(text("UPDATE article SET expires_at = now() + interval '1 hour' WHERE id = :a"), {"a": art})
         s.commit()
 
     def override():
@@ -329,3 +331,39 @@ def test_revise_by_review_hands_the_notes_to_the_editor(sf):
     with sf() as s:
         p = s.execute(text("SELECT payload FROM job WHERE kind = 'draft_generate'")).scalar()
     assert p["mode"] == "polish" and p["review_note"] == "第一句先抛反差" and p["review_issues"][0]["fix"] == "z"
+
+
+def test_each_post_has_one_plain_state_and_bulk_approve_moves_it_to_ready(sf):
+    from fastapi.testclient import TestClient
+
+    from nr.db import get_session
+    from nr.main import app
+    from tests.test_api import login
+    nr, eid, art = drafted(sf)
+    with sf() as s:
+        s.execute(text("UPDATE article SET expires_at = now() + interval '1 hour' WHERE id = :a"), {"a": art})
+        s.commit()
+
+    def override():
+        with sf() as s:
+            yield s
+    app.dependency_overrides[get_session] = override
+    try:
+        c = TestClient(app)
+        h = login(c, "chief")
+        d = c.get("/api/publish", params={"tab": "review"}, headers=h).json()
+        assert [x["id"] for x in d["cards"]] == [art] and d["counts"]["review"] == 1 and d["counts"]["ready"] == 0
+        assert d["cards"][0]["n_versions"] == 1 and d["cards"][0]["venue"] == "hyperliquid"
+        assert c.get("/api/publish", params={"tab": "review", "venue": "okx"}, headers=h).json()["cards"] == []
+        with sf() as s:  # the AI reviewer turns it down: a person is needed
+            vid = s.execute(text("SELECT current_version_id FROM article WHERE id = :a"), {"a": art}).scalar()
+            s.execute(text("""INSERT INTO article_review (article_version_id, verdict, scores, summary)
+                              VALUES (:v, 'reject', '{}', 'x')"""), {"v": vid})
+            s.commit()
+        d = c.get("/api/publish", params={"tab": "attention"}, headers=h).json()
+        assert d["cards"][0]["why"] == "rejected" and d["counts"]["review"] == 0
+        r = c.post("/api/articles/bulk", json={"ids": [art], "action": "approve"}, headers=h).json()
+        assert r["done"] == [art]
+        assert [x["id"] for x in c.get("/api/publish", params={"tab": "ready"}, headers=h).json()["cards"]] == [art]
+    finally:
+        app.dependency_overrides.clear()

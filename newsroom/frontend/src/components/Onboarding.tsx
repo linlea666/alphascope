@@ -3,7 +3,7 @@ import { Link } from "@/i18n/routing";
 import { nrGetOptional } from "@/lib/api";
 
 type Steps = { steps: { key: string; done: boolean; tab: string | null }[]; done: boolean };
-const HREF: Record<string, string> = { account: "/accounts", trial: "/radar", publish: "/library" };
+const HREF: Record<string, string> = { account: "/accounts", trial: "/radar", publish: "/publish?tab=ready" };
 
 /** The getting-started checklist: what is done, what is next and where to do it. Gone once everything is done. */
 export async function Onboarding() {
