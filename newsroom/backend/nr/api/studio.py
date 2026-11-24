@@ -308,15 +308,18 @@ def rpa_next(authorization: str | None = Header(None), s: Session = Depends(get_
         return {"plan": None}
     if blockers := pub.publish_blockers(s, p["account_id"], t):
         return {"plan": None, "reason": "; ".join(blockers)}
-    v = one(s, """SELECT v.body, v.thread, v.fact_packet_id FROM article a JOIN article_version v ON v.id = a.current_version_id
-                  WHERE a.id = :a""", {"a": p["article_id"]})
+    v = one(s, """SELECT v.body, v.thread, v.reply_text, v.fact_packet_id, v.card_template, a.language
+                  FROM article a JOIN article_version v ON v.id = a.current_version_id WHERE a.id = :a""",
+            {"a": p["article_id"]})
     s.execute(text("UPDATE publication_plan SET status = 'claimed', claimed_at = :t WHERE id = :i"), {"t": t, "i": p["id"]})
     audit.record(s, "rpa.claim", "plan", p["id"], actor_kind="system", account_id=p["account_id"])
     s.commit()
-    assets = rows(s, """SELECT id, template_key, language FROM media_asset WHERE fact_packet_id = :f AND kind = 'card_png'""",
-                  {"f": v["fact_packet_id"]})
+    # this post's own card only (the packet can hold cards in both languages and several templates)
+    assets = rows(s, """SELECT id, template_key, language FROM media_asset WHERE fact_packet_id = :f AND kind = 'card_png'
+                        AND template_key = :t AND language = :l ORDER BY id DESC LIMIT 1""",
+                  {"f": v["fact_packet_id"], "t": v["card_template"], "l": v["language"]})
     return {"plan": {**p, "text": "\n\n".join([v["body"], *(v["thread"] or [])]), "posts": [v["body"], *(v["thread"] or [])],
-                     "assets": assets}}
+                     "reply": v["reply_text"], "assets": assets}}
 
 
 class RpaResult(BaseModel):

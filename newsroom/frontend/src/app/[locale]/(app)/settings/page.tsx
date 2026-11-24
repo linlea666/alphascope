@@ -45,7 +45,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {tab === "rules" && <Rules />}
       {tab === "jobs" && <Jobs locale={locale} />}
       {tab === "styles" && <Styles />}
-      {tab === "rpa" && <Rpa />}
+      {tab === "rpa" && <Rpa locale={locale} />}
       {tab === "audit" && <Audit locale={locale} />}
     </>
   );
@@ -521,14 +521,55 @@ async function Styles() {
   );
 }
 
-async function Rpa() {
-  const tx = await getTranslations("settingsX");
+async function Rpa({ locale }: { locale: string }) {
+  const [tx, tk] = await Promise.all([getTranslations("settingsX"), getTranslations("tokens")]);
+  const [tokens, accounts] = await Promise.all([
+    nrGetOptional<{ id: number; name: string; channel: string; account_ids: number[]; active: boolean; created_at: string;
+      last_used_at: string | null; publications: number }[]>("api-tokens"),
+    nrGet<{ id: number; handle: string }[]>("accounts")]);
+  if (!tokens) return <NoAccess />;
+  const handle = (id: number) => accounts.find((a) => a.id === id)?.handle ?? id;
   return (
-    <Panel title={tx("rpa")} hint={tx("rpaHint")}>
-      <FieldForm fields={[]} path="settings/rpa-token" submitLabel={tx("newToken")} showResult />
-      <pre className="mt-3 overflow-auto rounded bg-panel-2 p-2 text-xs">{`GET  /api/rpa/next                     Authorization: Bearer <token>
-POST /api/rpa/plans/<id>/result        {"ok": true, "x_url": "...", "published_at": "...", "final_text": "..."}
-POST /api/rpa/plans/<id>/result        {"ok": false, "error": "..."}`}</pre>
-    </Panel>
+    <div className="space-y-5">
+      <Panel title={tk("title")} hint={tk("hint")}>
+        <table className="w-full text-sm">
+          <thead><tr><th className={th}>{tk("name")}</th><th className={th}>{tk("channel")}</th><th className={th}>{tk("accounts")}</th>
+            <th className={th}>{tk("lastUsed")}</th><th className={th}>{tk("published")}</th><th className={th} /></tr></thead>
+          <tbody>
+            {tokens.map((k) => (
+              <tr key={k.id} className={`border-b border-border/60 ${k.active ? "" : "opacity-50"}`}>
+                <td className={td}>{k.name}</td><td className={td}>{tk(`ch.${k.channel}`)}</td>
+                <td className={td}>{k.account_ids.length ? k.account_ids.map((i) => `@${handle(i)}`).join(" ") : tk("allAccounts")}</td>
+                <td className={`${td} text-xs`}>{fmtTime(k.last_used_at, locale)}</td><td className={td}>{k.publications}</td>
+                <td className={td}>{k.active ? <Action path={`api-tokens/${k.id}/disable`} tone="danger" confirm={tk("disableConfirm")}>{tk("disable")}</Action>
+                  : <Badge>{tk("disabled")}</Badge>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Panel>
+      <Panel title={tk("create")} hint={tk("createHint")}>
+        <FieldForm path="api-tokens" submitLabel={tk("createBtn")} showResult fields={[
+          { name: "name", label: tk("name"), required: true, placeholder: tk("namePlaceholder") },
+          { name: "channel", label: tk("channel"), type: "select", value: "extension",
+            options: ["extension", "rpa", "api"].map((c) => ({ value: c, label: tk(`ch.${c}`) })) },
+          { name: "account_ids", label: tk("accounts"), type: "multi", options: accounts.map((a) => ({ value: String(a.id), label: `@${a.handle}` })),
+            help: tk("accountsHelp"), wide: true },
+        ]} />
+      </Panel>
+      <Panel title={tk("howTitle")}>
+        <pre className="overflow-auto rounded bg-panel-2 p-3 text-xs leading-relaxed">{`GET  /api/feed/ready?language=zh                     ${tk("api.ready")}
+POST /api/feed/<article_id>/claim                    ${tk("api.claim")}
+GET  /api/feed/assets/<asset_id>                     ${tk("api.asset")}
+POST /api/feed/<article_id>/result  {"ok": true, "x_url": "https://x.com/...", "reply_url": "..."}
+POST /api/feed/<article_id>/result  {"ok": false, "error": "..."}    ${tk("api.fail")}
+POST /api/feed/publications/<id>/metrics  {"impressions": 1200, "likes": 31}
+Authorization: Bearer <token>`}</pre>
+        <p className="mt-2 text-xs text-muted">{tk("docs")}</p>
+      </Panel>
+      <details><summary className="cursor-pointer text-sm text-muted">{tx("rpa")}（{tk("legacy")}）</summary>
+        <div className="mt-3"><FieldForm fields={[]} path="settings/rpa-token" submitLabel={tx("newToken")} showResult /></div>
+      </details>
+    </div>
   );
 }

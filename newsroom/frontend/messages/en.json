@@ -349,7 +349,8 @@
     "runs": "Sync runs",
     "cursor": "Cursor",
     "head": "Source head",
-    "save": "Save"
+    "save": "Save",
+    "rpa": "API tokens"
   },
   "columns": {
     "title": "Columns",
@@ -428,7 +429,7 @@
   },
   "settingsX": {
     "styles": "Style library",
-    "rpa": "RPA interface",
+    "rpa": "API tokens (RPA / extension)",
     "rpaHint": "An external RPA uses this token to pull due plans and report results. A new token replaces the old one at once and is shown only once.",
     "newToken": "New token",
     "preset": "Preset",
@@ -1055,7 +1056,9 @@
     "rpa": "RPA",
     "settings": "Settings",
     "style": "Style",
-    "user": "User"
+    "user": "User",
+    "feed": "API",
+    "token": "Token"
   },
   "auditActions": {
     "create": "created",
@@ -1103,7 +1106,9 @@
     "create_admin": "admin created",
     "reset_password": "password reset",
     "expired": "expired",
-    "promote": "promoted"
+    "promote": "promoted",
+    "disable": "disabled",
+    "rewrite": "rewrite"
   },
   "settingFields": {
     "ai__enabled": {
@@ -1559,5 +1564,37 @@
     "copyFailed": "Copy failed: select and copy by hand",
     "body": "post",
     "reply": "reply"
+  },
+  "tokens": {
+    "title": "API tokens",
+    "hint": "For browser extensions, RPA or other programs: they list ready posts, take one, report back and send metrics. Each token can be limited to accounts and disabled any time; every call is logged.",
+    "name": "Name",
+    "namePlaceholder": "e.g. my Chrome extension",
+    "channel": "Used by",
+    "accounts": "Accounts",
+    "accountsHelp": "None ticked = every account",
+    "allAccounts": "all accounts",
+    "lastUsed": "Last used",
+    "published": "Published",
+    "disable": "Disable",
+    "disabled": "disabled",
+    "disableConfirm": "Disable this token now?",
+    "create": "New token",
+    "createHint": "The token is shown once: copy it now.",
+    "createBtn": "Create token",
+    "ch": {
+      "extension": "Browser extension",
+      "rpa": "RPA",
+      "api": "Other program"
+    },
+    "howTitle": "How to connect",
+    "api": {
+      "ready": "ready posts (text, thread, reply, image URL, expiry)",
+      "claim": "take one; others can't for 15 minutes",
+      "asset": "download the card",
+      "fail": "report a failure; the post goes back"
+    },
+    "docs": "Full reference: newsroom/docs/15-publish-api.md in the repository",
+    "legacy": "old single-token API, still works"
   }
 }
