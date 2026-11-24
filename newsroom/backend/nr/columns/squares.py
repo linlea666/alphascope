@@ -98,6 +98,7 @@ def okx_multipliers(s: Session, c: FeedClient, now: datetime, params: dict) -> l
         if (b := stale(d["run"]["completed_at"], now, 48, "OKX board")):
             it.blocking.append(b)
         text_fact(f, "window", WINDOW_ZH[window], "board window")
+        count_fact(f, "window_days", int(window[:-1]), "board window", label="days the board covers (7 天榜 / 30 天榜)")
         time_fact(f, "board.date", d["run"]["completed_at"], "okx_leaderboard_run.completed_at")
         rows_chart = []
         for i, r in enumerate(rows, 1):
@@ -131,6 +132,7 @@ def okx_dark_horses(s: Session, c: FeedClient, now: datetime, params: dict) -> l
     if (b := stale(d["run"]["completed_at"], now, 48, "OKX board")):
         it.blocking.append(b)
     time_fact(f, "board.date", d["run"]["completed_at"], "okx_leaderboard_run.completed_at")
+    count_fact(f, "window_days", 7, "board window", label="days the board covers (7 天榜)")
     for i, r in enumerate(rows, 1):
         board_row(f, f"row.{i}", r)
         if r["prev_rank"]:
@@ -174,6 +176,7 @@ def okx_fallen(s: Session, c: FeedClient, now: datetime, params: dict) -> list[C
         pct_fact(f, "peak.return", pk["pnl_ratio"], "trader_board_snapshot.pnl_ratio (best in 30 days)")
         count_fact(f, "peak.rank", pk["rank"], "trader_board_snapshot.rank")
         text_fact(f, "peak.board", WINDOW_ZH.get(pk["board"], pk["board"]), "board window of the peak")
+        count_fact(f, "peak.board_days", int(pk["board"][:-1]), "board window of the peak")
         time_fact(f, "peak.date", datetime.combine(pk["business_date"], datetime.min.time()).replace(tzinfo=now.tzinfo),
                   "trader_board_snapshot.business_date")
         if gone:

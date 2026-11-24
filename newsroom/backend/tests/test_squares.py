@@ -49,6 +49,9 @@ def test_multiples_list_leaves_out_tiny_accounts_and_snapshots_the_board(sf):
             "SELECT content->'facts' FROM fact_packet WHERE news_event_id = :e"), {"e": out[0]["event_id"]}).scalar()}
         assert facts["row.1.trader"]["value"] == "中二的天才交易员" and facts["row.1.multiple"]["display"]["zh"] == ["8.4倍"]
         assert facts["small_accounts_skipped"]["value"] == 1 and facts["row.3.new_entry"]["value"] == "新上榜"
+        # "OKX 7 天翻倍榜": the 7 is a fact the guard can match
+        from nr.guard import numbers
+        assert numbers.check("OKX 7 天翻倍榜，中二的天才交易员 8.4 倍", list(facts.values()), []) == []
         # 1st on the previous board, 2nd now: the id itself says which way
         assert facts["row.1.places_down"]["value"] == 1 and "row.1.places_up" not in facts
         assert s.execute(text("SELECT count(*) FROM trader_board_snapshot")).scalar() == 5
