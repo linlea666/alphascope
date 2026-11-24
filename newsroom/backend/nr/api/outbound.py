@@ -166,7 +166,7 @@ class MetricsIn(BaseModel):
 @router.post("/feed/publications/{publication_id}/metrics")
 def metrics(publication_id: int, body: MetricsIn, authorization: str | None = Header(None),
             s: Session = Depends(get_session)):
-    """How a post did, read off the page by an extension: feeds the weekly report and the reviewer's calibration."""
+    """How a post did, read off the page by an extension: feeds the weekly quality report (GET /api/reports/weekly)."""
     t = token_of(s, authorization)
     p = one(s, "SELECT account_id FROM publication_record WHERE id = :p", {"p": publication_id})
     if p is None:

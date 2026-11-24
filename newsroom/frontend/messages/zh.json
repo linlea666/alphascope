@@ -19,7 +19,8 @@
     "public": "公开页",
     "drafts": "AI 稿件",
     "experiments": "内容实验",
-    "publish": "发布中心"
+    "publish": "发布中心",
+    "reports": "质量周报"
   },
   "common": {
     "save": "保存",
@@ -101,13 +102,15 @@
       "todo": "待处理",
       "rejected": "AI 审稿退回",
       "expired": "今日过期",
-      "proposed": "等你接稿"
+      "proposed": "等你接稿",
+      "metricsDue": "待录入表现"
     },
     "expiringSoon": "{n} 条 30 分钟内过期",
     "rejectedHint": "需要人来决定",
     "readyCol": "待发",
     "budgetLeft": "今天还能发 {n} 条",
-    "proposedHint": "AI 总编辑建议报道，接下后才会写稿"
+    "proposedHint": "AI 总编辑建议报道，接下后才会写稿",
+    "metricsDueHint": "发出超过 24 小时"
   },
   "events": {
     "title": "新闻雷达",
@@ -1613,7 +1616,30 @@
     "factsDiff": "两版用的事实不同",
     "onlyIn": "只在{lang}稿里：{facts}",
     "langZh": "中文",
-    "langEn": "英文"
+    "langEn": "英文",
+    "anyTimeLeft": "剩余时间不限",
+    "within": {
+      "30": "30 分钟内过期",
+      "60": "1 小时内过期",
+      "180": "3 小时内过期",
+      "1440": "今天内过期"
+    },
+    "planRpa": "排期给 RPA",
+    "planConfirm": "确认排期",
+    "planHint": "到时间后 RPA 或插件会取走这篇去发；账号要在账号页打开「允许 RPA」",
+    "planned": "已排期",
+    "plannedAt": "已排期：{at}",
+    "cancelPlan": "取消排期",
+    "planCancelled": "已取消排期",
+    "metricsDue": "发出已超过 24 小时，录一下表现数据（看 X 帖子下方的数字），周报会用到",
+    "metric": {
+      "impressions": "浏览",
+      "likes": "点赞",
+      "reposts": "转发",
+      "replies": "评论"
+    },
+    "metricsSaved": "已保存表现数据",
+    "save": "保存"
   },
   "tokens": {
     "title": "接口令牌",
@@ -1659,5 +1685,35 @@
     "replaceConfirm": "把所有角色里的「{from}」换成「{to}」？",
     "dropFallback": "不再用它做备用",
     "noSpare": "没有测试通过的其他模型可换，请先在 AI 模型里添加并测试一个"
+  },
+  "reports": {
+    "title": "质量周报",
+    "subtitle": "写了多少、发出多少、过期多少，AI 审稿怎么看，读者反应如何（录入了表现数据的帖子）。只给编辑部看。",
+    "days": "最近 {n} 天",
+    "show": "查看",
+    "aiCalls": "AI 调用失败 / 总数",
+    "outOf5": "满分 5",
+    "byStyle": "按风格",
+    "byAgent": "按记者",
+    "byAccount": "按账号",
+    "byPublishable": "按审稿「能否直接发」评分",
+    "byPublishableHint": "看审稿分高的稿件，互动是不是也更好",
+    "score": "{n} 分",
+    "col": {
+      "written": "写稿",
+      "published": "已发",
+      "expired": "过期",
+      "guard_failed": "事实检查未过",
+      "review_approved": "审稿通过",
+      "publishable": "能否直接发",
+      "ai_tone": "无 AI 味",
+      "native": "地道",
+      "hook": "开头",
+      "with_metrics": "有表现数据",
+      "impressions": "浏览",
+      "likes": "点赞",
+      "reposts": "转发",
+      "replies": "评论"
+    }
   }
 }

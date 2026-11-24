@@ -57,7 +57,8 @@ def handle(sf: sessionmaker, deps: Deps, job: dict, now: datetime) -> dict:
                               user_id=p.get("user_id"), mode=p.get("mode", "draft"),
                               model_config_id=p.get("model_config_id"), compare=p.get("compare", False),
                               style_key=p.get("style_key"), prompt_version=p.get("prompt_version"),
-                              review_note=p.get("review_note"), review_issues=p.get("review_issues"))
+                              review_note=p.get("review_note"), review_issues=p.get("review_issues"),
+                              sequel=p.get("sequel", False))
     if kind == "draft_review":
         from nr.desk.review import review_version
         return review_version(sf, p["version_id"], now, job_id=job["id"], transport=deps.provider)

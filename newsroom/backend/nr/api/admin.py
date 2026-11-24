@@ -77,10 +77,14 @@ def dashboard(s: Session = Depends(get_session), user: CurrentUser = Depends(act
                    (SELECT count(*) FROM assignment asg JOIN news_event ne ON ne.id = asg.news_event_id
                      WHERE asg.status = 'proposed' AND asg.source = 'eic_ai' AND ne.state IN ('candidate', 'evaluated')
                      {"" if vis is None else "AND asg.account_id = ANY(:vis)"}) AS proposed,
+                   (SELECT count(*) FROM publication_record pr WHERE pr.status = 'published'
+                      AND pr.published_at < :d24 AND NOT EXISTS (SELECT 1 FROM performance_snapshot ps
+                                                                WHERE ps.publication_id = pr.id)
+                      {"" if vis is None else "AND pr.account_id = ANY(:vis)"}) AS metrics_due,
                    (SELECT count(*) FROM publication_record pr WHERE pr.status = 'published' AND pr.published_at >= :d
                       {"" if vis is None else "AND pr.account_id = ANY(:vis)"}) AS published_today
             FROM article a {"" if vis is None else "WHERE a.account_id = ANY(:vis)"}""",
-            {"d": day, "soon": t + timedelta(minutes=30), "vis": vis}),
+            {"d": day, "d24": t - timedelta(hours=24), "soon": t + timedelta(minutes=30), "vis": vis}),
         "accounts": rows(s, f"""SELECT acc.id, acc.handle, acc.display_name, acc.language, acc.status,
                                        acc.authorization_status, acc.authorization_expires_at, acc.daily_post_budget,
                                        (SELECT count(*) FROM publication_record pr WHERE pr.account_id = acc.id

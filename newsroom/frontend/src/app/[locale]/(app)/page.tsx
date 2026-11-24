@@ -16,7 +16,7 @@ type Dashboard = {
   states: Record<string, number>;
   top_candidates: { id: number; event_class: string; coin: string; venue: string; direction: string; score: number; priority: string | null; state: string; detected_at: string; trader_key: string; display_name: string | null }[];
   pending_review: { id: number; status: string; handle: string; language: string; headline: string | null; updated_at: string }[];
-  publishing: { proposed: number; ready: number; expiring_soon: number; todo: number; reviewer_rejected: number; expired_today: number; published_today: number };
+  publishing: { proposed: number; metrics_due: number; ready: number; expiring_soon: number; todo: number; reviewer_rejected: number; expired_today: number; published_today: number };
   accounts: { id: number; handle: string; display_name: string; status: string; authorization_status: string; authorization_expires_at: string | null; daily_post_budget: number; published_today: number; ready: number }[];
   open_corrections: number;
   expiring_authorizations: { id: number; handle: string; authorization_expires_at: string }[];
@@ -44,6 +44,11 @@ export default async function DashboardPage() {
         {d.publishing.proposed > 0 && (
           <Link href="/assignments" className="hover:opacity-90">
             <Stat label={t("pub.proposed")} value={d.publishing.proposed} sub={t("proposedHint")} />
+          </Link>
+        )}
+        {d.publishing.metrics_due > 0 && (
+          <Link href="/publish?tab=published" className="hover:opacity-90">
+            <Stat label={t("pub.metricsDue")} value={d.publishing.metrics_due} sub={t("metricsDueHint")} />
           </Link>
         )}
         {([["ready", "ready", d.publishing.ready, d.publishing.expiring_soon ? t("expiringSoon", { n: d.publishing.expiring_soon }) : undefined],

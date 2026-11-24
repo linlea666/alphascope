@@ -19,7 +19,8 @@
     "public": "Public",
     "drafts": "AI drafts",
     "experiments": "Experiments",
-    "publish": "Publish"
+    "publish": "Publish",
+    "reports": "Quality report"
   },
   "common": {
     "save": "Save",
@@ -101,13 +102,15 @@
       "todo": "Needs attention",
       "rejected": "Sent back by the AI reviewer",
       "expired": "Expired today",
-      "proposed": "Proposals to accept"
+      "proposed": "Proposals to accept",
+      "metricsDue": "Metrics to enter"
     },
     "expiringSoon": "{n} expire within 30 min",
     "rejectedHint": "a person decides",
     "readyCol": "Ready",
     "budgetLeft": "{n} posts left today",
-    "proposedHint": "the AI editor-in-chief proposed them; drafting starts once accepted"
+    "proposedHint": "the AI editor-in-chief proposed them; drafting starts once accepted",
+    "metricsDueHint": "posted over 24 h ago"
   },
   "events": {
     "title": "News radar",
@@ -1613,7 +1616,30 @@
     "factsDiff": "The two use different facts",
     "onlyIn": "Only in {lang}: {facts}",
     "langZh": "Chinese",
-    "langEn": "English"
+    "langEn": "English",
+    "anyTimeLeft": "Any time left",
+    "within": {
+      "30": "Expires in 30 min",
+      "60": "Expires in 1 h",
+      "180": "Expires in 3 h",
+      "1440": "Expires today"
+    },
+    "planRpa": "Schedule for RPA",
+    "planConfirm": "Schedule",
+    "planHint": "At that time the RPA or extension picks it up; the account needs RPA enabled on the Accounts page",
+    "planned": "Scheduled",
+    "plannedAt": "Scheduled: {at}",
+    "cancelPlan": "Unschedule",
+    "planCancelled": "Unscheduled",
+    "metricsDue": "Posted over 24 h ago: enter how it did (the numbers under the post on X); the quality report uses them",
+    "metric": {
+      "impressions": "Views",
+      "likes": "Likes",
+      "reposts": "Reposts",
+      "replies": "Replies"
+    },
+    "metricsSaved": "Metrics saved",
+    "save": "Save"
   },
   "tokens": {
     "title": "API tokens",
@@ -1659,5 +1685,35 @@
     "replaceConfirm": "Replace “{from}” with “{to}” in every role?",
     "dropFallback": "Stop using it as a fallback",
     "noSpare": "No other tested model to switch to: add and test one under AI models"
+  },
+  "reports": {
+    "title": "Quality report",
+    "subtitle": "What got written, out and expired, what the AI reviewer thought, and how readers responded (posts with metrics). Desk only.",
+    "days": "Last {n} days",
+    "show": "Show",
+    "aiCalls": "AI calls failed / total",
+    "outOf5": "out of 5",
+    "byStyle": "By style",
+    "byAgent": "By reporter",
+    "byAccount": "By account",
+    "byPublishable": "By the reviewer's publishable score",
+    "byPublishableHint": "Do posts the reviewer scored higher get more engagement?",
+    "score": "{n} / 5",
+    "col": {
+      "written": "Written",
+      "published": "Posted",
+      "expired": "Expired",
+      "guard_failed": "Failed fact check",
+      "review_approved": "Reviewer approved",
+      "publishable": "Publishable",
+      "ai_tone": "No AI smell",
+      "native": "Native",
+      "hook": "Hook",
+      "with_metrics": "With metrics",
+      "impressions": "Views",
+      "likes": "Likes",
+      "reposts": "Reposts",
+      "replies": "Replies"
+    }
   }
 }

@@ -88,6 +88,8 @@ def test_assignment_desk_calendar_and_rpa(client, sf):
         s.execute(text("""INSERT INTO publication_plan (article_id, account_id, planned_at, status)
                           VALUES (:a, :acc, :t, 'cancelled')"""), {"a": art, "acc": nr["zh"], "t": t})
         s.execute(text("UPDATE editorial_account SET rpa_enabled = true WHERE id = :a"), {"a": nr["zh"]})
+        # the API runs on the real clock: keep the post in time (an expired post is never handed out)
+        s.execute(text("UPDATE article SET expires_at = now() + interval '1 hour' WHERE id = :a"), {"a": art})
         s.commit()
     r = client.post(f"/api/articles/{art}/plan", json={"planned_at": t.isoformat()}, headers=h)
     assert r.status_code == 200

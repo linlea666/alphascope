@@ -7,7 +7,7 @@ import { LogoutButton } from "./LogoutButton";
 const LINKS = [
   ["/", "dashboard"], ["/publish", "publish"], ["/radar", "radar"], ["/drafts", "drafts"], ["/experiments", "experiments"], ["/assignments", "assignments"], ["/calendar", "calendar"],
   ["/columns", "columns"], ["/library", "library"], ["/stories", "stories"], ["/accounts", "accounts"],
-  ["/publications", "publications"], ["/settings", "settings"], ["/p", "public"],
+  ["/publications", "publications"], ["/reports", "reports"], ["/settings", "settings"], ["/p", "public"],
 ] as const;
 
 export async function Nav() {

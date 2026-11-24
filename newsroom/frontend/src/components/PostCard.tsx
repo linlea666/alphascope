@@ -18,6 +18,7 @@ export type Card = {
   x_length: number | null; length_limit: number | null; card_asset_id: number | null; review: Review | null;
   publication: { x_url: string | null; reply_url: string | null; channel: string; published_at: string;
     matches_version: boolean; guard_status: string | null; warnings: string[] | null } | null;
+  plan: { id: number; planned_at: string; status: string } | null; metrics_due: number | null;
 };
 type Check = { matches_version: boolean; blocked: boolean; findings: { code: string; severity: string; text: string | null }[] };
 
@@ -39,6 +40,9 @@ export function PostCard({ c, now, roleName, className, statusName }: { c: Card;
   const [url, setUrl] = useState("");
   const [edited, setEdited] = useState("");
   const [check, setCheck] = useState<Check | null>(null);
+  const [planning, setPlanning] = useState(false);
+  const [when, setWhen] = useState("");
+  const [metrics, setMetrics] = useState<Record<string, string>>({});
   const guardWord = (code: string) => (tg.has(`${code}.what`) ? tg(`${code}.what`) : code);
   const posts = [c.body, ...(c.thread ?? [])];
   const left = remaining(c.expires_at, now);
@@ -133,6 +137,38 @@ export function PostCard({ c, now, roleName, className, statusName }: { c: Card;
           )}
         </div>
       )}
+      {c.metrics_due && (
+        <div className="mt-3 rounded border border-warn/40 bg-warn/10 p-3 text-xs">
+          <div className="mb-2 text-warn">{t("metricsDue")}</div>
+          <div className="flex flex-wrap items-center gap-2">
+            {["impressions", "likes", "reposts", "replies"].map((k) => (
+              <input key={k} className={`${input} w-24`} inputMode="numeric" placeholder={t(`metric.${k}`)} value={metrics[k] ?? ""}
+                onChange={(e) => setMetrics({ ...metrics, [k]: e.target.value.replace(/\D/g, "") })} />
+            ))}
+            <button className={button} disabled={busy || Object.values(metrics).every((v) => !v)} onClick={() => act(
+              `publications/${c.metrics_due}/performance`,
+              { captured_at: new Date().toISOString(), ...Object.fromEntries(Object.entries(metrics).filter(([, v]) => v).map(([k, v]) => [k, Number(v)])) },
+              t("metricsSaved"))}>{t("save")}</button>
+          </div>
+        </div>
+      )}
+      {c.plan && (
+        <div className="mt-3 flex items-center gap-2 text-xs text-muted">
+          {t("plannedAt", { at: new Date(c.plan.planned_at).toLocaleString() })}
+          <button className="text-accent" disabled={busy} onClick={() => act(`plans/${c.plan!.id}/cancel`, {}, t("planCancelled"))}>{t("cancelPlan")}</button>
+        </div>
+      )}
+      {planning && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded border border-accent/40 p-3 text-sm">
+          <input type="datetime-local" className={`${input} w-56`} value={when} onChange={(e) => setWhen(e.target.value)} />
+          <button className={primary} disabled={busy || !when} onClick={async () => {
+            await act(`articles/${c.id}/plan`, { planned_at: new Date(when).toISOString() }, t("planned"));
+            setPlanning(false);
+          }}>{t("planConfirm")}</button>
+          <button className={button} onClick={() => setPlanning(false)}>{t("cancel")}</button>
+          <span className="w-full text-xs text-muted">{t("planHint")}</span>
+        </div>
+      )}
       {posting && (
         <div className="mt-3 space-y-2 rounded border border-accent/40 p-3 text-sm">
           <input className={`${input} w-full`} placeholder={t("postedPrompt")} value={url} onChange={(e) => setUrl(e.target.value)} />
@@ -165,6 +201,9 @@ export function PostCard({ c, now, roleName, className, statusName }: { c: Card;
         {(c.status === "approved" || c.status === "expired") && <>
           <a className={button} href={intent} target="_blank" rel="noreferrer" title={t("intentHint")}>{t("openX")}</a>
           {!posting && <button className={primary} disabled={busy} onClick={() => setPosting(true)}>{t("posted")}</button>}
+          {c.status === "approved" && !c.plan && !planning && (
+            <button className={button} disabled={busy} onClick={() => setPlanning(true)}>{t("planRpa")}</button>
+          )}
         </>}
         {["draft_ready", "changes_requested", "in_review"].includes(c.status) && c.source !== "trial" && (
           <button className={primary} disabled={busy} onClick={() => act(`articles/${c.id}/review`, { action: "quick_approve" }, t("approved"))}>{t("approve")}</button>

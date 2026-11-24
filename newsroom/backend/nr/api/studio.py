@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from nr import audit, settings_store
 from nr.ai.diagnose import diagnose
 from nr.api.common import now, one, rows
+from nr.api.outbound import CLAIM_FOR
 from nr.auth.deps import active_user, check_account, require_roles, visible_accounts
 from nr.auth.rbac import EVENT_DESK_ROLES
 from nr.auth.sessions import CurrentUser
@@ -300,10 +301,13 @@ def rpa_next(authorization: str | None = Header(None), s: Session = Depends(get_
     p = one(s, """
         SELECT p.id, p.article_id, p.account_id, acc.handle, p.planned_at
         FROM publication_plan p JOIN editorial_account acc ON acc.id = p.account_id
+        JOIN article ar ON ar.id = p.article_id
         WHERE p.status = 'planned' AND p.planned_at <= :t AND acc.rpa_enabled AND acc.status = 'active'
+          AND ar.status = 'approved' AND ar.deleted_at IS NULL AND (ar.expires_at IS NULL OR ar.expires_at > :t)
+          AND (ar.claimed_by_token IS NULL OR ar.claimed_at < :stale)
           AND acc.authorization_status NOT IN ('revoked', 'expired')
           AND (acc.authorization_expires_at IS NULL OR acc.authorization_expires_at > :t)
-        ORDER BY p.planned_at LIMIT 1 FOR UPDATE OF p SKIP LOCKED""", {"t": t})
+        ORDER BY p.planned_at LIMIT 1 FOR UPDATE OF p SKIP LOCKED""", {"t": t, "stale": t - CLAIM_FOR})
     if p is None:
         return {"plan": None}
     if blockers := pub.publish_blockers(s, p["account_id"], t):
@@ -342,10 +346,9 @@ def rpa_result(plan_id: int, body: RpaResult, authorization: str | None = Header
         audit.record(s, "rpa.failed", "plan", plan_id, actor_kind="system", account_id=p["account_id"], reason=body.error)
         s.commit()
         return {"ok": True, "requeued": True}
-    if not body.x_url or not body.published_at:
-        raise HTTPException(422, "x_url and published_at are required")
-    # recorded in the name of whoever scheduled it; every check of a manual record applies
-    pid = pub.mark_published(s, p["article_id"], p["created_by"], body.x_url, body.published_at, now(), body.final_text)
+    # recorded in the name of whoever scheduled it, with the same checks as the token API (docs/15)
+    pid = pub.mark_published(s, p["article_id"], p["created_by"], body.x_url, body.published_at or now(), now(),
+                             body.final_text, channel="rpa")
     audit.record(s, "rpa.published", "plan", plan_id, actor_kind="system", account_id=p["account_id"],
                  after={"publication_id": pid})
     s.commit()

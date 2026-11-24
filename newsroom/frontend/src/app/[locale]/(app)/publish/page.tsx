@@ -18,6 +18,7 @@ export default async function PublishPage({ searchParams }: { searchParams: Prom
   const [t, tr, tc, ts, tf, d, accounts] = await Promise.all([getTranslations("publish"), getTranslations("roles"),
     getTranslations("classes"), getTranslations("states"), getTranslations("factNames"),
     nrGet<D>("publish", { tab, language: sp.language, account_id: sp.account_id, style: sp.style, event_class: sp.event_class,
+      within: sp.within,
       pair: pair ? "true" : undefined }),
     nrGet<Account[]>("accounts")]);
   const now = new Date(d.now).getTime();
@@ -62,6 +63,12 @@ export default async function PublishPage({ searchParams }: { searchParams: Prom
           {["whale_open", "whale_add", "underwater_add", "flip", "near_liquidation", "liquidation", "whale_close", "notable_trader_move"]
             .map((c) => <option key={c} value={c}>{tc(c)}</option>)}
         </select>
+        {(tab === "ready" || tab === "todo") && (
+          <select name="within" defaultValue={sp.within ?? ""} className={`${input} w-40`}>
+            <option value="">{t("anyTimeLeft")}</option>
+            {[30, 60, 180, 1440].map((m) => <option key={m} value={m}>{t(`within.${m}`)}</option>)}
+          </select>
+        )}
         <button className={button}>{t("filter")}</button>
       </form>
       {d.cards.length === 0 ? <Empty>{t(`empty.${tab}`)}</Empty> : pair ? (

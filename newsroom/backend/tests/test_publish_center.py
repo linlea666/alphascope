@@ -243,3 +243,60 @@ def test_a_first_draft_past_its_shelf_life_is_not_written_and_old_proposals_clos
     with sf() as s:
         assert s.execute(text("SELECT status FROM article WHERE id = :a"), {"a": art}).scalar() == "expired"
         assert s.execute(text("SELECT status FROM assignment WHERE id = :a"), {"a": proposed}).scalar() == "cancelled"
+
+
+def test_time_left_filter_plan_and_metrics_due_and_weekly_report(sf):
+    from datetime import timedelta
+
+    from fastapi.testclient import TestClient
+
+    from nr.db import get_session
+    from nr.main import app
+    from tests.test_api import login
+    nr, eid, art = drafted(sf)
+    with sf() as s:
+        pub.quick_approve(s, art, nr["chief"])
+        s.execute(text("UPDATE article SET expires_at = now() + interval '20 minutes' WHERE id = :a"), {"a": art})
+        s.commit()
+
+    def override():
+        with sf() as s:
+            yield s
+    app.dependency_overrides[get_session] = override
+    try:
+        c = TestClient(app)
+        h = login(c, "chief")
+        assert [x["id"] for x in c.get("/api/publish", params={"within": 30}, headers=h).json()["cards"]] == [art]
+        assert c.get("/api/publish", params={"within": 10}, headers=h).json()["cards"] == []
+        from datetime import UTC, datetime
+        at = (datetime.now(UTC) + timedelta(minutes=10)).isoformat()
+        assert c.post(f"/api/articles/{art}/plan", json={"planned_at": at}, headers=h).status_code == 200
+        assert c.get("/api/publish", headers=h).json()["cards"][0]["plan"]["status"] == "planned"
+        assert c.post(f"/api/articles/{art}/publish", json={}, headers=h).status_code == 200
+        with sf() as s:
+            s.execute(text("UPDATE publication_record SET published_at = now() - interval '30 hours'"))
+            s.commit()
+        card = c.get("/api/publish", params={"tab": "published"}, headers=h).json()["cards"][0]
+        assert card["metrics_due"] is not None
+        rep = c.get("/api/reports/weekly", headers=h).json()
+        assert rep["total"]["written"] == 1 and rep["total"]["published"] == 1
+        assert rep["by_account"][0]["key"] == "alphascope_cn"
+        assert c.post(f"/api/publications/{card['metrics_due']}/performance", headers=h,
+                      json={"captured_at": at, "likes": 12, "impressions": 900}).status_code == 200
+        assert c.get("/api/publish", params={"tab": "published"}, headers=h).json()["cards"][0]["metrics_due"] is None
+        assert c.get("/api/reports/weekly", headers=h).json()["total"]["likes"] == 12
+    finally:
+        app.dependency_overrides.clear()
+
+
+def test_a_rewrite_is_written_as_the_next_chapter(sf):
+    from nr.desk.drafting import generate_draft
+    from tests.fakes import FakeProvider
+    from tests.helpers import draft_output
+    nr, eid, art = drafted(sf)
+    with sf() as s:
+        aid = s.execute(text("SELECT assignment_id FROM article WHERE id = :a"), {"a": art}).scalar()
+    prov = FakeProvider(draft_output("zh", "这头巨鲸又加了：约3000万美元 BTC 多单，20倍。",
+                                     ["position.notional_usd", "position.leverage"]))
+    generate_draft(sf, aid, NOW, transport=prov, sequel=True, review=False)
+    assert "previous_draft" in prov.requests[0]["user"] and ZH in prov.requests[0]["user"]

@@ -87,7 +87,7 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
                    transport: Callable | None = None, user_id: int | None = None, mode: str = "draft",
                    model_config_id: int | None = None, compare: bool = False, prompt_version: int | None = None,
                    variant: str | None = None, style_key: str | None = None, review_note: str | None = None,
-                   review_issues: list | None = None, review: bool = True) -> dict:
+                   review_issues: list | None = None, review: bool = True, sequel: bool = False) -> dict:
     if mode not in MODES:
         raise ValueError(f"unknown mode {mode}")
     with sf() as s:
@@ -187,6 +187,10 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
         data["hooks"] = hooks(packet, a["language"], memory, (style["structure"] or {}).get("prefer_hooks") if style else None)
     if mode != "draft":
         data["current_draft"] = {k: current[k] for k in ("headline", "body", "thread", "facts_used", "angle")}
+    if sequel and current is not None:  # a rewrite after the news moved on: pick up where the last draft left off
+        data["previous_draft"] = {"body": current["body"], "thread": current["thread"],
+                                  "note": "This is the next chapter. Open with one short line that picks up from this "
+                                          "earlier draft, then tell what changed; don't repeat it."}
     if review_note:  # a revision the desk reviewer asked for
         data["desk_review"] = {"instructions": review_note, "issues": review_issues or []}
     if mode == "fix":
