@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { bff } from "@/lib/bff";
+import { platformName } from "@/lib/glossary";
 import { input, primary } from "./ui";
 
 type Acc = { id: number; handle: string; platform: string; venues: string[]; status: string; language: string };
@@ -38,7 +39,7 @@ export function TrialPanel({ eventId, venue, accounts, models, styles }: {
           {fits.map((a) => (
             <label key={a.id} className="flex items-center gap-1">
               <input type="checkbox" checked={acc.includes(a.id)} onChange={(e) => setAcc(toggle(acc, a.id, e.target.checked))} />
-              @{a.handle} <span className="text-xs text-muted">{a.platform === "okx_square" ? "OKX 广场" : "X"} · {a.language} · {a.status}</span>
+              @{a.handle} <span className="text-xs text-muted">{platformName(a.platform)} · {a.language} · {a.status}</span>
             </label>
           ))}
         </div>

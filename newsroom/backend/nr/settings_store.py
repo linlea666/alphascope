@@ -21,6 +21,13 @@ DEFAULTS: dict[str, dict] = {
         # older observations still build position state but are no longer news (e.g. the first full sync)
         "max_event_age_hours": 6,
     },
+    # star traders (docs/16): every move from this size on is news, written by the star reporter for the square of
+    # the star's venue; moves within merge_minutes of the last piece on the same star wait for that one
+    "stars": {"min_notional_usd": 10_000, "merge_minutes": 30},
+    # the squares (OKX / Binance Square, docs/16): a board figure needs this much in the account to be headline
+    # material (tiny accounts make absurd returns), and a closed result this big is news on its own
+    "squares": {"min_asset_usd": 3_000, "min_pnl_usd": 5_000, "big_result_usd": 50_000, "fall_off_peak": 0.4,
+                "board_top": 5},
     "gate": {"max_backlog": 5000, "max_sync_age_minutes": 10, "max_health_age_minutes": 10},
     "budgets": {"global_daily_usd": 5.0, "agent_daily_usd": {"eic": 2.0, "reporter": 3.0}},
     "emergency_stop": {"active": False, "reason": "", "since": None},
@@ -40,11 +47,13 @@ DEFAULTS: dict[str, dict] = {
     # house style per reporter role ({language} becomes zh / en); an assignment's own style still wins
     "styles": {"by_reporter": {"reporter_breaking": "{language}_whale_alert", "reporter_derivatives": "{language}_degen",
                                "reporter_investigator": "{language}_dossier", "reporter_data": "{language}_crowd",
+                               "reporter_star": "zh_square_star", "reporter_square": "zh_square_story",
                                "reporter_historian": "{language}_outcome", "reporter": "{language}_one_liner"}},
     # per publishing platform: length limit (X counts CJK double and links as 23) and the hosts a post URL may use.
     # OKX Square publishes no official limit we could find: 1000 characters is a conservative default to adjust.
     "platforms": {"x": {"limit": 280, "weighted": True, "hosts": ["x.com", "twitter.com"]},
-                  "okx_square": {"limit": 1000, "weighted": False, "hosts": ["okx.com", "www.okx.com"]}},
+                  "okx_square": {"limit": 1000, "weighted": False, "hosts": ["okx.com", "www.okx.com"]},
+                  "binance_square": {"limit": 1000, "weighted": False, "hosts": ["binance.com", "www.binance.com"]}},
     "guard": {"allow_numbers": ["24h", "7d", "30d", "90d", "24小时", "7天", "30天", "90天", "24 hours", "24-hour", "24 hrs"],
               "duplicate_block": 0.45, "duplicate_warn": 0.30, "duplicate_hours": 72},
 }

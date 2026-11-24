@@ -132,3 +132,13 @@ v4 起（记者现行版本 v5：示例数字改成「原数 → 写法」，并
 - 试写稿不会改变事件状态，也不能提交审核；要正式使用，在事件页把事件分派给这个账号（试写不会占用正式分派的名额）。
 - “删除”是移入回收站，可以恢复；稿件的每个版本永久保留，用于追溯。已发布的稿件不能删除，只能撤稿。
 - 生成需要排队，页面会在有任务时每 5 秒自动刷新；没有配置可用模型时，「AI 稿件」页顶部会提示。
+
+## 16. 币安带单员中转插件（明星交易员，docs/16）
+
+- 插件装在本机，只监听 `127.0.0.1:7600`：`sudo kolcue-relay status | logs | update | secret`。配置文件在 `/etc/kolcue-relay/relay.env`，监听地址、白名单只留本机，不开 TLS。
+- `newsroom/data/newsroom.env` 里加两行：
+  - `NEWSROOM_RELAY_URL=http://127.0.0.1:7600`
+  - `NEWSROOM_RELAY_SECRET=<relay.env 里的 RELAY_SECRET>`
+  加完重启 worker 和 API。两项留空，币安数据源就是关闭的。
+- 「明星交易员」页面顶部显示插件最近一次同步的时间和报错。插件更新：`sudo kolcue-relay update`，与 Newsroom 无关。
+- 上游 cryptostrategyget.com 如果开始拦截本服务器 IP，币安事件会被门挡住（`SOURCE_STALE`）。不要做任何绕过，改到别的服务器部署插件，再把地址和密钥填回来。

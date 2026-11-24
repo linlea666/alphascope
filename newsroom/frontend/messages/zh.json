@@ -20,7 +20,8 @@
     "drafts": "AI 稿件",
     "experiments": "内容实验",
     "publish": "发布中心",
-    "reports": "质量周报"
+    "reports": "质量周报",
+    "stars": "明星交易员"
   },
   "common": {
     "save": "保存",
@@ -302,7 +303,7 @@
     "userId": "用户 ID",
     "brand": "品牌",
     "platform": "发布平台",
-    "venues": "报道的交易所（逗号分隔：hyperliquid, okx；X 账号建议只填 hyperliquid）",
+    "venues": "报道的数据源（逗号分隔：hyperliquid, okx, binance；X 账号只填 hyperliquid，OKX 广场填 okx，币安广场填 binance）",
     "linkInThread": "评论区附完整钱包地址",
     "styleHelp": "没有指定记者风格时用这个；记者默认风格在 系统管理 → 规则 里设置",
     "statusHelp": "启用：参与选题和写稿；暂停：不参与，但可以试写；停用：不再使用",
@@ -311,7 +312,11 @@
     "authUntil": "授权到期",
     "linkInThreadHelp": "正文只写短地址；完整地址自动生成一条评论（例如「钱包地址：0x…」），发帖后贴到评论区",
     "replyLink": "评论里再附区块浏览器链接",
-    "replyLinkHelp": "默认关闭，免得白给浏览器网站打广告；需要时再打开"
+    "replyLinkHelp": "默认关闭，免得白给浏览器网站打广告；需要时再打开",
+    "nameDisplay": "交易员称呼",
+    "nameDisplayHelp": "广场帖子里怎么称呼交易员：直接用昵称，或中间打码（如「熬x」「中xxx员」）。X 账号用短地址，不受影响。",
+    "nameFull": "直接用昵称",
+    "nameMasked": "中间打码"
   },
   "publications": {
     "title": "发布记录",
@@ -754,6 +759,14 @@
     "reviewer": {
       "name": "AI 审稿编辑",
       "desc": "事实检查通过后读一遍：有没有 AI 味、地不地道、开头抓不抓人、能不能直接发；通过就进入待发布，需要修改就交给编辑改一次。"
+    },
+    "reporter_star": {
+      "name": "明星追踪记者",
+      "desc": "在广场上跟踪明星交易员的每一步：开仓、平仓和结果、连胜连败、30 天战绩"
+    },
+    "reporter_square": {
+      "name": "广场故事记者",
+      "desc": "把榜单和交易员写成人物故事：翻倍榜、黑马、陨落与逆袭、续篇"
     }
   },
   "guardCodes": {
@@ -1251,6 +1264,34 @@
     "desk__auto_min_priority": {
       "name": "自动接稿的最低优先级",
       "desc": "只自动接这个优先级及以上的选题（P0 最高）。建议 P1：重大和重要的自动写，一般的留给人挑。"
+    },
+    "squares__min_asset_usd": {
+      "name": "上榜故事的最低带单资产（美元）",
+      "desc": "带单资产低于这个数的交易员不进翻倍榜等榜单故事。小资金很容易刷出几十上百倍的收益率，写出来会误导读者。"
+    },
+    "squares__min_pnl_usd": {
+      "name": "上榜故事的最低收益额（美元）",
+      "desc": "榜单收益额低于这个数的不写。"
+    },
+    "squares__big_result_usd": {
+      "name": "大额盈亏门槛（美元）",
+      "desc": "非明星交易员的平仓，盈亏超过这个数才会发到广场。"
+    },
+    "squares__fall_off_peak": {
+      "name": "「陨落」回撤线",
+      "desc": "从自己的高点回撤超过这个比例（0.4 = 40%）就算陨落。"
+    },
+    "squares__board_top": {
+      "name": "榜单故事讲几个人",
+      "desc": "翻倍榜每条讲几个交易员。"
+    },
+    "stars__min_notional_usd": {
+      "name": "明星动作的最低金额（美元）",
+      "desc": "明星交易员的开仓、加仓、平仓，金额到这个数就报道（不受普通巨鲸门槛限制）。每个明星也可以单独设置。"
+    },
+    "stars__merge_minutes": {
+      "name": "连续动作合并（分钟）",
+      "desc": "同一个明星在这么多分钟内的连续动作合成一篇，避免刷屏。"
     }
   },
   "scoreParts": {
@@ -1394,7 +1435,9 @@
       "p0": "P0 最重大",
       "p1": "P1 重要",
       "p2": "P2 一般"
-    }
+    },
+    "squaresTitle": "广场与明星",
+    "squaresHint": "OKX 广场、币安广场的选题门槛，以及明星交易员的报道规则"
   },
   "sourcesX": {
     "reachable": "能连上 AlphaScope",
@@ -1715,5 +1758,98 @@
       "reposts": "转发",
       "replies": "评论"
     }
+  },
+  "stars": {
+    "title": "明星交易员",
+    "subtitle": "手动挑选的交易员，系统会跟踪他们的每一步：开仓、平仓、战绩和起落，由明星追踪记者写成广场连载。币安的发到币安广场，OKX 的发到 OKX 广场。",
+    "relayTitle": "币安带单员数据源（中转插件）",
+    "relayOff": "中转插件还没配置：服务器的 newsroom.env 里要填 NEWSROOM_RELAY_URL 和 NEWSROOM_RELAY_SECRET。",
+    "relayOk": "正常，最近同步：{at}",
+    "relayNever": "已配置，还没有同步过（加入币安明星后开始）",
+    "relayError": "最近一次出错：{e}",
+    "addTitle": "加入明星",
+    "addHint": "搜索名字，点「加入」。币安的从插件的带单员目录里找，OKX 的从 AlphaScope 收录的交易员里找。",
+    "venue": {
+      "binance": "币安带单员",
+      "okx": "OKX 交易员"
+    },
+    "searchBinance": "名字（留空列出全部）",
+    "searchOkx": "昵称的一部分",
+    "search": "搜索",
+    "binanceHint": "插件目录里约有几十位币安带单员；留空可以看全部。",
+    "okxHint": "OKX 交易员要先被 AlphaScope 收录（上过榜或在观察池里）。",
+    "noHits": "没找到",
+    "inactive": "已停止带单",
+    "binanceStats": "30 天收益率 {roi} · 收益 {pnl} · 胜率 {win}",
+    "okxStats": "30 天榜第 {rank} · 收益率 {roi} · 带单资产 {asset}",
+    "onList": "已在名单",
+    "add": "加入",
+    "namePrompt": "在帖子里怎么称呼他？（例如「熬鹰」）",
+    "added": "已加入：{name}",
+    "empty": "还没有明星交易员。在上面搜索并加入。",
+    "paused": "已暂停",
+    "stats30": "30 天：收益率 {roi} · 收益 {pnl} · 胜率 {win} · 最大回撤 {dd} · {trades} 笔",
+    "equity": "账户 {v}",
+    "positions": "当前持仓",
+    "noPositions": "空仓",
+    "okxPositionsHint": "OKX 明星的持仓变化通过 AlphaScope 的雷达跟踪",
+    "closes": "最近平仓",
+    "col": {
+      "coin": "币种",
+      "side": "方向",
+      "notional": "仓位",
+      "lever": "杠杆",
+      "upl": "浮盈亏"
+    },
+    "side": {
+      "long": "多单",
+      "short": "空单"
+    },
+    "stage": {
+      "rising": "崛起",
+      "streak": "连胜",
+      "peak": "巅峰",
+      "crisis": "危机",
+      "fall": "陨落",
+      "comeback": "逆袭",
+      "quiet": "沉寂"
+    },
+    "posts": "已发 {published} 篇 · 待发 {ready} 篇",
+    "goPublish": "去发布中心",
+    "edit": "编辑 / 暂停 / 移除",
+    "f": {
+      "name": "称呼",
+      "note": "备注（只给编辑看）",
+      "min": "最低报道金额（美元，留空用规则里的默认值）",
+      "minHelp": "这个明星的开平仓金额到这个数才写；留空用「规则 → 广场与明星」里的默认值。",
+      "persona": "人物设定补充（写稿时交给记者）",
+      "personaHelp": "例如「外号鹰哥，喜欢半夜开空单」。人设标签和故事阶段由数据自动算出。"
+    },
+    "pause": "暂停跟踪",
+    "resume": "恢复跟踪",
+    "remove": "移除",
+    "removeConfirm": "把「{name}」移出明星名单？已发的稿件和故事会保留。"
+  },
+  "columnNames": {
+    "weekly_scorecard": "一周巨鲸成绩单",
+    "long_short_duel": "多空对决",
+    "streak_breaker": "连胜终结者",
+    "recap": "故事复盘",
+    "dossier": "交易员真实性调查",
+    "copy_vs_board": "榜单收益 vs 真实可跟单收益",
+    "board_dropouts": "榜单幸存者偏差追踪",
+    "liq_ladder": "强平价阶梯周报",
+    "forecast_ledger": "预测公开账本",
+    "funding_divergence": "资金费率与巨鲸方向背离",
+    "holding_profile": "谁拿得住：持仓时长画像",
+    "style_changes": "风格变迁档案",
+    "okx_multipliers": "OKX 翻倍榜",
+    "okx_dark_horses": "OKX 新晋黑马",
+    "okx_fallen": "天才陨落",
+    "story_turn": "故事转折",
+    "star_daily": "明星带单员今日战绩",
+    "duel": "明星对决",
+    "duel_result": "对决结果",
+    "prediction_followup": "上期问题的答案"
   }
 }

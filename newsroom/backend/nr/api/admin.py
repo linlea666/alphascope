@@ -26,7 +26,8 @@ from nr.feed import health
 router = APIRouter(prefix="/api", tags=["admin"])
 ADMIN = require_roles("admin")
 CHIEF = require_roles("admin", "editor_in_chief")
-EDITABLE_SETTINGS = ("detect", "gate", "budgets", "ai", "guard", "review", "columns", "styles", "desk", "expiry")
+EDITABLE_SETTINGS = ("detect", "gate", "budgets", "ai", "guard", "review", "columns", "styles", "desk", "expiry",
+                     "squares", "stars")
 
 
 @router.get("/dashboard")
@@ -103,8 +104,8 @@ def dashboard(s: Session = Depends(get_session), user: CurrentUser = Depends(act
 class AccountIn(BaseModel):
     handle: str = Field(pattern=r"^[A-Za-z0-9_.\-]{1,40}$")  # X handles are up to 15; OKX Square names longer
     display_name: str = Field(max_length=100)
-    platform: Literal["x", "okx_square"] = "x"
-    venues: list[Literal["hyperliquid", "okx"]] = Field(default_factory=lambda: ["hyperliquid"])
+    platform: Literal["x", "okx_square", "binance_square"] = "x"
+    venues: list[Literal["hyperliquid", "okx", "binance"]] = Field(default_factory=lambda: ["hyperliquid"])
     language: Literal["zh", "en"]
     status: Literal["active", "paused", "retired"] = "paused"
     brand: str | None = Field(None, max_length=64)
@@ -119,6 +120,7 @@ class AccountIn(BaseModel):
     long_post_allowed: bool = False
     link_in_thread: bool = True  # the full address goes in the post's first reply
     reply_explorer_link: bool = False  # ...with an explorer link (off: no free ads for the explorer)
+    name_display: Literal["nickname", "masked"] = "nickname"  # how square posts name a trader (docs/16)
     rpa_enabled: bool = False
     authorization_status: Literal["pending", "authorized", "expired", "revoked"] = "pending"
     authorization_expires_at: str | None = None

@@ -409,6 +409,14 @@ async function Rules() {
             { name: "auto_eic_score", ...field("detect", "auto_eic_score"), type: "number", value: s.detect.auto_eic_score },
           ]} />
         </Panel>
+        <Panel title={tx("squaresTitle")} hint={tx("squaresHint")}>
+          <FieldForm path="settings/squares" method="PUT" fields={(["min_asset_usd", "min_pnl_usd", "big_result_usd", "fall_off_peak",
+            "board_top"] as const).map((k) => ({ name: k, ...field("squares", k), type: "number" as const, value: s.squares?.[k] }))} />
+          <div className="mt-4">
+            <FieldForm path="settings/stars" method="PUT" fields={(["min_notional_usd", "merge_minutes"] as const).map((k) => ({
+              name: k, ...field("stars", k), type: "number" as const, value: s.stars?.[k] }))} />
+          </div>
+        </Panel>
         <Panel title={tx("deskTitle")}>
           <FieldForm path="settings/desk" method="PUT" fields={[
             { name: "language", ...field("desk", "language"), type: "select", value: s.desk?.language ?? "zh",

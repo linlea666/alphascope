@@ -70,6 +70,22 @@ def hooks(packet: dict, language: str, memory: dict | None = None, prefer: list[
         add("opened_many_today", 80, f"今天新开了 {int(opened)} 个仓位：{_d(f, 'book.opened_24h_coins', language)}",
             f"opened {int(opened)} positions today: {_d(f, 'book.opened_24h_coins', language)}",
             ["book.opened_24h", "book.opened_24h_coins"])
+    # the copy-trading platforms (docs/16): a trader's results and streaks are the story
+    if (pnl := _v(f, "close.realized_pnl_usd")) is not None:
+        won = pnl > 0
+        add("result", 90, f"{'进账' if won else '亏了'} {_d(f, 'close.realized_pnl_usd', language)}",
+            f"{'banked' if won else 'lost'} {_d(f, 'close.realized_pnl_usd', language)}", ["close.realized_pnl_usd"])
+    for fid, zh_word, en_word in (("history.binance_win_streak", "连胜", "wins in a row"),
+                                  ("history.binance_loss_streak", "连败", "losses in a row")):
+        if (n := _v(f, fid)) is not None:
+            add("streak", 78 + min(10, int(n) * 2), f"{int(n)} {zh_word}", f"{int(n)} {en_word}", [fid])
+    if (last := _v(f, "contrast.last_coin_close_pnl_usd")) is not None:
+        add("vs_last", 74, f"他上一笔 {packet['event']['coin']} 的结果：{_d(f, 'contrast.last_coin_close_pnl_usd', language)}",
+            f"his last {packet['event']['coin']} trade: {_d(f, 'contrast.last_coin_close_pnl_usd', language)}",
+            ["contrast.last_coin_close_pnl_usd"])
+    if (roi := _v(f, "trader.binance_roi_30d")) is not None and roi >= 1:
+        add("record", 76, f"30 天收益率 {_d(f, 'trader.binance_roi_30d', language)}（平台数据）",
+            f"{_d(f, 'trader.binance_roi_30d', language)} in 30 days (platform figure)", ["trader.binance_roi_30d"])
     if memory and memory.get("published"):
         add("sequel", 82, "这是我们报道过的故事的续集", "a sequel to a story we covered", [])
     for fid in ("position.notional_usd", "change.notional_usd"):

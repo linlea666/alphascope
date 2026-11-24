@@ -1,18 +1,29 @@
 """Assignments: which account covers an event, from which angle. Nothing is drafted for an account without an
 accepted assignment, so an account the editor-in-chief kept silent, or an editor rejected, never gets a story."""
 
+from decimal import Decimal
+
 from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from nr import audit
+from nr import audit, settings_store
 from nr.events.states import InvalidTransition, transition
+
+SQUARES = ("okx_square", "binance_square")  # platforms where the story is the trader (docs/16)
 
 
 def account_fits(s: Session, account_id: int, event_id: int, trial: bool = False) -> tuple[bool, str]:
     """A trial only needs the venue to match: paused accounts and low scores are fine for trying a model out."""
     a = s.execute(text("""SELECT acc.status, acc.allowed_event_classes, acc.min_score, acc.venues, acc.platform,
-                                 ne.event_class, ne.score, ne.venue
+                                 ne.event_class, ne.score, ne.venue, ne.column_key,
+                                 EXISTS (SELECT 1 FROM trader t JOIN star_trader st ON st.trader_key = t.trader_key
+                                         WHERE t.id = ne.trader_id AND st.active) AS star,
+                                 (SELECT max(abs((f->>'value')::numeric)) FROM fact_packet p,
+                                         jsonb_array_elements(p.content->'facts') f
+                                  WHERE p.id = ne.current_fact_packet_id
+                                    AND f->>'id' IN ('close.realized_pnl_usd', 'close.pnl_estimate_usd',
+                                                     'liquidation.realized_pnl_usd', 'liquidation.closed_pnl_usd')) AS result_usd
                           FROM editorial_account acc, news_event ne WHERE acc.id = :a AND ne.id = :e"""),
                   {"a": account_id, "e": event_id}).mappings().first()
     if a is None:
@@ -25,9 +36,25 @@ def account_fits(s: Session, account_id: int, event_id: int, trial: bool = False
         return False, f"{a['venue']} material is outside this account's venues ({', '.join(a['venues'])})"
     if a["allowed_event_classes"] and a["event_class"] not in a["allowed_event_classes"]:
         return False, f"{a['event_class']} is outside this account's beat"
+    if a["platform"] in SQUARES and a["column_key"] is None and not a["star"] and not trial:
+        # on the squares a move is told through a person: a star's, a liquidation, or a big result
+        big = Decimal(str(settings_store.get(s, "squares")["big_result_usd"]))
+        if a["event_class"] != "liquidation" and not (a["event_class"] == "whale_close" and (a["result_usd"] or 0) >= big):
+            return False, "square accounts carry a plain move only for star traders, liquidations and big results"
     if not trial and (a["score"] or 0) < a["min_score"]:
         return False, "score below this account's minimum"
     return True, ""
+
+
+def square_agent(s: Session, account_id: int, event_id: int) -> str | None:
+    """On the squares the writer is the star tracker for a star's move and the square storyteller for the rest."""
+    r = s.execute(text("""SELECT acc.platform, EXISTS (SELECT 1 FROM trader t JOIN star_trader st ON st.trader_key = t.trader_key
+                                                       WHERE t.id = ne.trader_id AND st.active) AS star, ne.column_key
+                          FROM editorial_account acc, news_event ne WHERE acc.id = :a AND ne.id = :e"""),
+                  {"a": account_id, "e": event_id}).mappings().first()
+    if r is None or r["platform"] not in SQUARES:
+        return None
+    return "reporter_star" if r["star"] and r["column_key"] is None else "reporter_square"
 
 
 def _default_agent(s: Session, event_id: int) -> str:
@@ -45,6 +72,8 @@ def create(s: Session, event_id: int, account_id: int, *, source: str, angle: st
         if source in ("editor", "trial"):
             raise HTTPException(409, why)
         return None
+    if agent_key is None or source in ("eic_ai", "star"):
+        agent_key = square_agent(s, account_id, event_id) or agent_key
     return s.execute(text("""
         INSERT INTO assignment (news_event_id, account_id, angle, reason, format, source, eic_evaluation_id, needs_human,
                                 status, decided_by, decided_at, agent_key, style_key, model_config_id, due_at)

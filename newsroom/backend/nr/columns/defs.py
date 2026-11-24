@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from nr.columns.base import (ColumnIssue, chart, count_fact, day_key, hours_fact, month_key, pct_fact, short_name,
                              stale, text_fact, time_fact, week_key)
+from nr.columns import squares as sq
 from nr.facts import fmt
 from nr.facts.builder import D, Facts
 from nr.feed.client import FeedClient
@@ -27,7 +28,7 @@ class Column:
     cadence: str  # weekly | monthly | daily | hourly | trigger
     build: Callable[[Session, FeedClient, datetime, dict], list[ColumnIssue]]
     phase: str
-    venue: str  # hyperliquid | okx | multi: which source the gate checks and which accounts may carry it
+    venue: str  # hyperliquid | okx | binance | multi | trader: which source the gate checks and which accounts carry it
 
 
 def _usd(f: Facts, fid: str, v, source: str, kind: str = "notional", **x) -> None:
@@ -528,4 +529,13 @@ COLUMNS: dict[str, Column] = {col.key: col for col in (
     Column("funding_divergence", "资金费率与巨鲸方向背离", "Funding vs specialists", "daily", funding_divergence, "N5", "hyperliquid"),
     Column("holding_profile", "谁拿得住：持仓时长画像", "Who holds: holding times", "monthly", holding_profile, "N6", "hyperliquid"),
     Column("style_changes", "风格变迁档案", "Style change archive", "monthly", style_changes, "N7", "multi"),
+    # the squares (docs/16)
+    Column("okx_multipliers", "OKX 翻倍榜", "OKX multiples", "daily", sq.okx_multipliers, "O1", "okx"),
+    Column("okx_dark_horses", "OKX 新晋黑马", "OKX dark horses", "daily", sq.okx_dark_horses, "O2", "okx"),
+    Column("okx_fallen", "天才陨落", "Fallen genius", "daily", sq.okx_fallen, "O3", "okx"),
+    Column("story_turn", "故事转折", "A turn in the story", "trigger", sq.story_turn, "O4", "trader"),
+    Column("star_daily", "明星带单员今日战绩", "The stars' day", "daily", sq.star_daily, "S1", "binance"),
+    Column("duel", "明星对决", "Star duel", "trigger", sq.duel, "S2", "binance"),
+    Column("duel_result", "对决结果", "Duel result", "trigger", sq.duel_result, "S2", "binance"),
+    Column("prediction_followup", "上期问题的答案", "The answer", "trigger", sq.prediction_followup, "S3", "trader"),
 )}

@@ -70,7 +70,8 @@ export function PublishForm({ articleId, handle, text, platform = "x" }: { artic
         }
       }}>
         <input name="x_url" className={input} required
-          placeholder={platform === "okx_square" ? "https://www.okx.com/…/square/post/…" : `https://x.com/${handle}/status/…`} />
+          placeholder={platform === "okx_square" ? "https://www.okx.com/…/square/post/…" : platform === "binance_square"
+            ? "https://www.binance.com/…/square/post/…" : `https://x.com/${handle}/status/…`} />
         <label className="block text-xs text-muted">{t("publishedAt")}
           <input name="published_at" type="datetime-local" className={input} required defaultValue={new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)} />
         </label>

@@ -44,22 +44,26 @@ def packet(it: ColumnIssue, blocking: list[dict]) -> dict:
 def issue_venue(it: ColumnIssue) -> str:
     col = COLUMNS[it.column]
     if col.venue == "trader":
-        return "okx" if (it.trader_key or "").startswith("okx:") else "hyperliquid"
+        return trader_venue(it.trader_key or "")
     return col.venue
+
+
+def trader_venue(key: str) -> str:
+    return "okx" if key.startswith("okx:") else "binance" if key.startswith("binance:") else "hyperliquid"
 
 
 def store(s: Session, it: ColumnIssue, now: datetime) -> dict:
     venue = issue_venue(it)
-    # an OKX column only depends on OKX staying available, and never holds back Hyperliquid columns
-    blocking = list(it.blocking) + health.source_blockers(s, "okx" if venue == "okx" else "hyperliquid", now,
-                                                          settings_store.get(s, "gate"))
+    # a column only depends on its own source staying available: OKX or the relay never hold back Hyperliquid
+    blocking = list(it.blocking) + health.source_blockers(s, venue if venue in ("okx", "binance") else "hyperliquid",
+                                                          now, settings_store.get(s, "gate"))
     content = packet(it, blocking)
     trader_id = None
     if it.trader_key:
         trader_id = s.execute(text("""INSERT INTO trader (trader_key, venue) VALUES (:k, :v)
                                       ON CONFLICT (trader_key) DO UPDATE SET trader_key = EXCLUDED.trader_key
                                       RETURNING id"""),
-                              {"k": it.trader_key, "v": "okx" if it.trader_key.startswith("okx:") else "hyperliquid"}
+                              {"k": it.trader_key, "v": trader_venue(it.trader_key)}
                               ).scalar_one()
     eid = s.execute(text("""
         INSERT INTO news_event (dedupe_key, event_class, rule_version, trader_id, venue, coin, column_key, period_key,

@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     replay_minutes: int = 60
     # trader context calls hit AlphaScope's API process; keep them well below anything that could slow it down
     context_calls_per_hour: int = 600
+    # Binance lead traders via the kolcue relay (docs/16); empty URL or secret = the source is off
+    relay_url: str = ""
+    relay_secret: str = ""
 
     secret_key_path: Path = NEWSROOM_DIR / "data" / "secret.key"
     asset_dir: Path = NEWSROOM_DIR / "data" / "assets"

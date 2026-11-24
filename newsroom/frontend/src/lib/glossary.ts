@@ -49,3 +49,8 @@ export function auditName(groups: T, actions: T, action: string): string {
   const a = rest.join(".");
   return [word(groups, g), a ? word(actions, a) : ""].filter(Boolean).join(" · ");
 }
+
+/** A publishing platform's name as the desk says it. */
+export function platformName(p: string | null | undefined): string {
+  return { okx_square: "OKX 广场", binance_square: "币安广场", x: "X" }[p ?? "x"] ?? p ?? "X";
+}

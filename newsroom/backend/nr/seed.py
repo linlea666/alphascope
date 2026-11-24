@@ -10,8 +10,9 @@ from sqlalchemy.orm import Session
 
 from nr.ai.prompts import SEEDS, SEEDS_V2, SEEDS_V3
 from nr.ai.prompts_review import SEEDS_REVIEW
+from nr.ai.prompts_square import SEEDS_SQUARE
 from nr.ai.prompts_v4 import SEEDS_V4, SEEDS_V5
-from nr.styles import HOUSE, HOUSE_EN_V2, HOUSE_V2, LIBRARY
+from nr.styles import HOUSE, HOUSE_EN_V2, HOUSE_V2, LIBRARY, SQUARE
 
 STYLES = [
     {"key": "zh_data_explainer", "language": "zh", "name": "中文数据解读",
@@ -38,10 +39,16 @@ ACCOUNTS = [
      "audience_profile": {"region": "global", "depth": "intermediate", "interests": ["whales", "derivatives risk"]}},
     # OKX data can disappear at any time; OKX material goes to OKX's own Square, never to the X accounts
     {"handle": "alphascope_okx_square", "display_name": "AlphaScope · OKX 广场", "language": "zh",
-     "timezone": "Asia/Shanghai", "style_key": "zh_data_explainer", "platform": "okx_square", "venues": ["okx"],
+     "timezone": "Asia/Shanghai", "style_key": "zh_square_story", "platform": "okx_square", "venues": ["okx"],
      "long_post_allowed": True,
      "positioning": "OKX 带单员的可核验数据：榜单与真实可跟单收益、离榜之后、强平与风险。只发在 OKX 广场。",
      "audience_profile": {"region": "OKX 用户", "depth": "进阶", "interests": ["带单员", "跟单收益", "风险"]}},
+    # Binance lead traders via the kolcue relay (docs/16): the star list's stories, only on Binance Square
+    {"handle": "alphascope_binance_square", "display_name": "AlphaScope · 币安广场", "language": "zh",
+     "timezone": "Asia/Shanghai", "style_key": "zh_square_star", "platform": "binance_square", "venues": ["binance"],
+     "long_post_allowed": True,
+     "positioning": "币安明星带单员的追踪报道：开仓、平仓、战绩和起落，像追连续剧一样追人。只发在币安广场。",
+     "audience_profile": {"region": "币安用户", "depth": "入门到进阶", "interests": ["带单员", "明星交易员", "跟单"]}},
 ]
 AGENTS = [
     {"agent_key": "eic", "display_name": "AI 总编辑 / Editor-in-chief",
@@ -61,6 +68,12 @@ AGENTS = [
      "role_description": "Leverage, estimated margin, liquidation distance; never announces unconfirmed liquidations."},
     {"agent_key": "reporter_historian", "display_name": "历史故事记者 / Story historian",
      "role_description": "Running stories, recaps and trader dossiers, chapter by chapter."},
+    {"agent_key": "reporter_star", "display_name": "明星追踪记者 / Star tracker",
+     "role_description": "Follows the star traders move by move on the squares: opens, closes and their results, "
+                         "streaks, the account's 30-day record."},
+    {"agent_key": "reporter_square", "display_name": "广场故事记者 / Square storyteller",
+     "role_description": "Turns boards and traders into character stories for OKX and Binance Square: multiples, "
+                         "rises and falls, sequels."},
     {"agent_key": "editor_zh", "display_name": "中文市场编辑 / Chinese desk editor",
      "role_description": "Localizes and polishes a draft for Chinese readers without new claims."},
     {"agent_key": "editor_en", "display_name": "全球英文编辑 / Global English editor",
@@ -75,7 +88,7 @@ AGENTS = [
 
 def seed(s: Session) -> dict:
     out = {"styles": 0, "accounts": 0, "prompts": 0, "agents": 0}
-    for st in STYLES + LIBRARY + HOUSE + HOUSE_V2:
+    for st in STYLES + LIBRARY + HOUSE + HOUSE_V2 + SQUARE:
         out["styles"] += s.execute(text("""
             INSERT INTO editorial_style (key, version, language, name, guide, structure, forbidden, examples)
             VALUES (:k, 1, :l, :n, :g, CAST(:s AS jsonb), CAST(:f AS jsonb), CAST(:e AS jsonb)) ON CONFLICT DO NOTHING"""),
@@ -99,7 +112,7 @@ def seed(s: Session) -> dict:
              "p": a["positioning"], "ap": json.dumps(a["audience_profile"], ensure_ascii=False),
              "pf": a.get("platform", "x"), "v": a["venues"], "lp": a.get("long_post_allowed", False)}).rowcount
     prompts = [(k, p["version"], None, p["system"], p["user"]) for k, p in
-               [*SEEDS.items(), *SEEDS_V2.items(), *SEEDS_V3.items()]] + SEEDS_V4 + SEEDS_V5 + SEEDS_REVIEW
+               [*SEEDS.items(), *SEEDS_V2.items(), *SEEDS_V3.items()]] + SEEDS_V4 + SEEDS_V5 + SEEDS_REVIEW + SEEDS_SQUARE
     for key, version, language, system, user in prompts:
         out["prompts"] += s.execute(text("""
             INSERT INTO prompt_template (key, version, language, system_text, user_template, sha256, notes)

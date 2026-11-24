@@ -10,7 +10,9 @@ from sqlalchemy.orm import sessionmaker
 
 from nr import settings_store
 from nr.ai.runner import call_json
+from nr.ai.prompts_square import REVIEW_SQUARE_FOCUS
 from nr.ai.schemas import ReviewOut
+from nr.desk.assignment import SQUARES
 from nr.jobs.queue import enqueue
 from nr.publish import service as pub
 
@@ -45,7 +47,8 @@ def review_version(sf: sessionmaker, version_id: int, now: datetime, job_id: int
                     data={"draft": {"headline": v["headline"], "body": v["body"], "thread": v["thread"],
                                     "reply": v["reply_text"]},
                           "style": dict(style) if style else None, "platform": v["platform"],
-                          "facts_the_draft_uses": facts})
+                          "facts_the_draft_uses": facts,
+                          **({"platform_focus": REVIEW_SQUARE_FOCUS} if v["platform"] in SQUARES else {})})
     r: ReviewOut = out.parsed
     with sf() as s:
         rid = s.execute(text("""

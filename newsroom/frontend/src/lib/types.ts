@@ -102,5 +102,6 @@ export type Account = {
   authorization_note: string | null;
   link_in_thread?: boolean;
   reply_explorer_link?: boolean;
+  name_display?: string;
 };
 export type Me = { id: number; username: string; roles: string[]; must_change_password: boolean; account_permissions: Record<string, string[]> };

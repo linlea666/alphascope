@@ -51,6 +51,11 @@ def overview(s: Session, now: datetime) -> dict:
 
 def source_blockers(s: Session, venue: str, now: datetime, gate_cfg: dict) -> list[dict]:
     """Blocking issues that come from the source rather than from the event itself."""
+    if venue == "binance":  # the kolcue relay: its sync must have succeeded recently
+        ok = s.execute(text("SELECT last_ok_at FROM source_connection WHERE name = 'kolcue_relay'")).scalar()
+        if ok is None or now - ok > timedelta(minutes=gate_cfg["max_sync_age_minutes"]):
+            return [{"code": "SOURCE_STALE", "detail": f"relay last synced {ok}"}]
+        return []
     o = overview(s, now)
     out = []
     if (not o["reachable"] or o["health_at"] is None

@@ -138,14 +138,15 @@ def test_style_versions_and_columns_api(client, sf):
     nr = newsroom(sf)  # noqa: F841
     h = login(client, "chief")
     with sf() as s:
-        assert s.execute(text("SELECT count(DISTINCT key) FROM editorial_style")).scalar() == 40  # 2 seeds + 12 x 2 library + 7 x 2 house
+        assert s.execute(text("SELECT count(DISTINCT key) FROM editorial_style")).scalar() == 44  # 2 seeds + 12 x 2 library + 7 x 2 house + 4 square
     r = client.post("/api/styles", headers=h, json={"key": "zh_breaking", "language": "zh", "name": "突发快讯 v2",
                                                     "guide": "更短：两句以内，先写事实，再写风险。", "forbidden": ["重磅"]})
     assert r.json()["version"] == 2
     cols = {c["key"]: c for c in client.get("/api/columns", headers=h).json()}
     assert {"copy_vs_board", "board_dropouts", "liq_ladder", "forecast_ledger", "funding_divergence",
             "holding_profile", "style_changes", "weekly_scorecard", "long_short_duel", "streak_breaker", "recap",
-            "dossier"} == set(cols)
+            "dossier", "okx_multipliers", "okx_dark_horses", "okx_fallen", "story_turn", "star_daily", "duel",
+            "duel_result", "prediction_followup"} == set(cols)
     assert client.post("/api/columns/dossier/run", json={"params": {}}, headers=h).status_code == 422
     assert client.post("/api/columns/dossier/run", json={"params": {"trader_key": "0x" + "ab" * 20}},
                        headers=h).status_code == 200

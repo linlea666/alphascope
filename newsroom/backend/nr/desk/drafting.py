@@ -26,6 +26,7 @@ from nr.ai.schemas import DraftOut, DraftOutV2
 from nr.articles.versions import Draft, current_version, save_version
 from nr.cards.render import render_for_packet
 from nr.cards.v2 import pick_card
+from nr.desk import squares
 from nr.desk.eic import packet_for_model
 from nr.desk.hooks import hooks
 from nr.facts.builder import T, recency
@@ -94,7 +95,7 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
         a = s.execute(text("""
             SELECT asg.*, acc.handle, acc.display_name, acc.language, acc.positioning, acc.audience_profile, acc.platform,
                    acc.long_post_allowed, acc.link_in_thread, acc.reply_explorer_link, asg.style_key AS asg_style,
-                   acc.style_key AS acc_style,
+                   acc.style_key AS acc_style, acc.name_display,
                    ar.id AS article_id,
                    ne.current_fact_packet_id, ne.event_class, ne.coin, ne.gate_status, ne.story_id
             FROM assignment asg JOIN editorial_account acc ON acc.id = asg.account_id
@@ -131,8 +132,10 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
         v2 = "lede_fact_ids" in (prompt or "")
         v3 = "hooks[0]" in (prompt or "")
         # style: chosen for this run > set on the assignment > the reporter's house style (v3) > the account's
-        house = settings_store.get(s, "styles")["by_reporter"].get(a["agent_key"] or "reporter", "") \
-            .replace("{language}", a["language"]) if v3 else None
+        reporter = a["agent_key"] or "reporter"
+        house = (settings_store.get(s, "styles")["by_reporter"].get(reporter)
+                 or settings_store.DEFAULTS["styles"]["by_reporter"].get(reporter, "")).replace("{language}", a["language"]) \
+            if v3 else None
         style = None
         for key in (style_key, a["asg_style"], house, a["acc_style"]):
             if key and (style := s.execute(text("""SELECT key, name, guide, structure, forbidden, examples
@@ -145,6 +148,9 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
             packet = fresh_recency(packet, now)
         memory = story_memory(s, a["story_id"], a["news_event_id"], packet, a["language"]) \
             if v2 and variant != "baseline" else None
+        square = squares.context(s, a, packet, a["article_id"], a["story_id"], now) \
+            if mode == "draft" and not compare and variant != "baseline" else {}
+        s.commit()
     if mode != "draft" and current is None:
         raise HTTPException(409, "there is no draft to revise yet")
     schema = DraftOutV2 if v2 else DraftOut
@@ -183,6 +189,7 @@ def generate_draft(sf: sessionmaker, assignment_id: int, now: datetime, job_id: 
             "other_drafts_for_this_event": others}
     if memory:
         data["story_memory"] = memory
+    data.update(square)
     if v3 and variant != "baseline":
         data["hooks"] = hooks(packet, a["language"], memory, (style["structure"] or {}).get("prefer_hooks") if style else None)
     if mode != "draft":

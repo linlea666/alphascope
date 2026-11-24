@@ -3,7 +3,7 @@ threads so a slow or failing model never delays sync or detection. Nothing here 
 
 import logging
 import threading
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from apscheduler.schedulers.blocking import BlockingScheduler
@@ -21,6 +21,8 @@ from nr.feed.health import poll_health
 from nr.feed.sync import ensure_source, sync_events
 from nr.jobs.handlers import DETERMINISTIC, default_deps, run_pending
 from nr.jobs.queue import AI_KINDS
+from nr.sources import relay
+from nr.stories import squares
 
 log = logging.getLogger("newsroom.worker")
 STOP = threading.Event()
@@ -63,6 +65,28 @@ def main() -> None:
         if r.get("inserted") or r.get("error") or d["created"] or d["merged"]:
             log.info("sync: %s detect: %s", r, d)
 
+    relay_source = {"id": None}
+
+    def relay_job() -> None:
+        client = deps.relay()
+        if client is None:
+            return
+        with client:
+            if relay_source["id"] is None:
+                with sf() as s:
+                    relay_source["id"] = relay.ensure_source(s, st.relay_url)
+                    s.commit()
+            r = relay.sync(sf, client, relay_source["id"], now())
+        d = process_pending(sf, now(), liq_tol=liq_tol["v"])
+        if r.get("events") or r.get("error") or d["created"] or d["merged"]:
+            log.info("relay: %s detect: %s", r, d)
+
+    def squares_job() -> None:
+        with deps.feed() as c:
+            r = squares.tick(sf, c, now())
+        if any(v for part in r.values() for v in part.values()):
+            log.info("squares: %s", r)
+
     def replay_job() -> None:
         with deps.feed() as c:
             log.info("replay: %s", sync_events(sf, c, source_id, now(), mode="replay", replay_minutes=st.replay_minutes))
@@ -99,6 +123,8 @@ def main() -> None:
                                                              "misfire_grace_time": 120})
     sched.add_job(health_job, "interval", minutes=2, next_run_time=now())
     sched.add_job(sync_job, "interval", seconds=60, next_run_time=now())
+    sched.add_job(relay_job, "interval", seconds=30, next_run_time=now())
+    sched.add_job(squares_job, "interval", minutes=30, next_run_time=now() + timedelta(minutes=2))
     sched.add_job(replay_job, "interval", minutes=30)
     sched.add_job(at_risk_job, "interval", minutes=10, next_run_time=now())
     sched.add_job(refresh_job, "interval", minutes=15)

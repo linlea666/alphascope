@@ -44,6 +44,8 @@ CONSTRAINT_TEXT = {
                        "to the period it covers.",
     "RADAR_SINCE": "Earlier positions are known only since this trader was first observed; say 'since <date>'.",
     "LEADERBOARD_PNL": "Leaderboard P&L is reported by the venue and includes unrealized P&L; never call it realized.",
+    "BINANCE_LEAD_ACCOUNT": "Binance figures are the lead-trading account as the copy-trading platform reports it, not "
+                            "the trader's whole capital; 30-day stats are the platform's own.",
 }
 
 
@@ -59,7 +61,11 @@ def T(v) -> datetime | None:
 
 def short_ref(trader_key: str) -> str:
     """0x9ee…be185: enough to recognise and search, short enough for a post."""
-    return f"OKX·{trader_key[-6:]}" if trader_key.startswith("okx:") else f"{trader_key[:5]}…{trader_key[-5:]}"
+    if trader_key.startswith("okx:"):
+        return f"OKX·{trader_key[-6:]}"
+    if trader_key.startswith("binance:"):
+        return f"币安带单·{trader_key.removeprefix('binance:')}"
+    return f"{trader_key[:5]}…{trader_key[-5:]}"
 
 
 def explorer_url(trader_key: str, venue: str) -> str | None:
@@ -257,7 +263,13 @@ def build(event: dict, episode: dict, source_events: list[dict], ctx: dict | Non
         name = clean_name(tr.get("display_name") or tr.get("handle"))
         flags = set(tr.get("quality_flags") or []) | set(tr.get("enrichment_flags") or [])
         av = D(watch["account_value"]) if watch and watch["account_value"] is not None else D(tr["account_value"])
-        if venue == "okx":
+        if venue == "binance":
+            f.constraints.add("BINANCE_LEAD_ACCOUNT")
+            f.constraints.add("ACCOUNT_RATIO_UNAVAILABLE")
+            bn = ctx.get("binance") or {}
+            f.usd("trader.binance_equity_usd", "notional", D(bn.get("equity")), "relay.snapshot.equity",
+                  label="lead-trading account balance reported by the platform")
+        elif venue == "okx":
             f.constraints.add("OKX_LEAD_ASSETS")
             okx_assets = D(ctx["okx"]["trader"]["asset"]) if ctx.get("okx") and ctx["okx"]["trader"] and \
                 ctx["okx"]["trader"]["asset"] is not None else None
@@ -316,6 +328,8 @@ def build(event: dict, episode: dict, source_events: list[dict], ctx: dict | Non
             f.usd("history.okx_realized_usd", "realized_pnl", D(t["realized"]), "context.okx.totals", coverage=hc)
             f.add("history.okx_liquidations", "count", int(t["liquidations"]), fmt.count(int(t["liquidations"])),
                   "context.okx.totals", coverage=hc)
+        elif venue == "binance" and ctx.get("binance") and (ctx["binance"]["closes"] or ctx["binance"]["stats_30d"]):
+            binance_facts(f, event, ctx["binance"], trigger, now)
         else:
             f.constraints.add("HISTORY_UNAVAILABLE")
         # --- liquidation: confirmation from an exchange record within the observation window
@@ -357,7 +371,8 @@ def build(event: dict, episode: dict, source_events: list[dict], ctx: dict | Non
         if trigger["leverage"] is not None:
             f.add("close.leverage", "leverage", D(trigger["leverage"]), fmt.leverage(D(trigger["leverage"])),
                   "source_event.leverage")
-        if trigger["entry_px"] is not None and trigger["mark_px"] is not None and liq_status != "confirmed":
+        if f.get("close.realized_pnl_usd") is None and trigger["entry_px"] is not None and trigger["mark_px"] is not None \
+                and liq_status != "confirmed":
             sz, entry, mark = abs(D(trigger["szi_before"])), D(trigger["entry_px"]), D(trigger["mark_px"])
             est = (mark - entry) * sz * (1 if trigger["side"] == "long" else -1)
             f.usd("close.pnl_estimate_usd", "estimate", est, "source_event (mark - entry) x size",
@@ -368,7 +383,9 @@ def build(event: dict, episode: dict, source_events: list[dict], ctx: dict | Non
                                                          "en": [liq_status]}, "derived")
         if liq_status != "confirmed":
             f.constraints.add("LIQ_SUSPECTED_ONLY")
-    subject_ref = event.get("public_label") or short_ref(event["trader_key"])
+    # on the copy-trading venues a trader is a public persona: the nickname is how readers know them
+    nick = clean_name(event.get("trader_name")) if venue in ("okx", "binance") else None
+    subject_ref = event.get("public_label") or nick or short_ref(event["trader_key"])
     if not event.get("public_label"):
         f.constraints.add("NO_IDENTITY")
 
@@ -380,7 +397,8 @@ def build(event: dict, episode: dict, source_events: list[dict], ctx: dict | Non
         "source": {"system": "alphascope", "feed_schema": "feed.v1",
                    "source_event_ids": [e["source_event_id"] for e in source_events],
                    "context_as_of": ctx["as_of"] if ctx else None},
-        "subject": {"trader_ref": subject_ref, "trader_key": event["trader_key"], "venue": venue,
+        "subject": {"trader_ref": subject_ref, "trader_key": event["trader_key"], "venue": venue, "name": nick,
+                    "star": bool(event.get("is_star")),
                     "explorer_url": explorer_url(event["trader_key"], venue),
                     "identity": "public_label" if event.get("public_label") else "unknown"},
         "event": {"class": cls, "coin": coin, "direction": event["direction"], "escalation_level": event["escalation_level"],
@@ -390,6 +408,80 @@ def build(event: dict, episode: dict, source_events: list[dict], ctx: dict | Non
         "gate": {"status": gate_status, "blocking": codes},
     }
     return Built(content, gate_status, blocking, score, breakdown, record_strong, liq_status)
+
+
+# ---- Binance lead traders (kolcue relay): the platform's 30-day stats and the closed positions ---------------------
+
+def binance_facts(f: Facts, event: dict, bn: dict, trigger: dict | None, now: datetime) -> None:
+    coin, cls = event["coin"], event["event_class"]
+    st = bn.get("stats_30d") or {}
+    if st:
+        f.constraints.add("LEADERBOARD_PNL")
+        src = "relay.trader.upstream_stats (30d)"
+        if st.get("roi") is not None:
+            v = D(st["roi"]) / 100
+            f.add("trader.binance_roi_30d", "return", v, fmt.pct(v), src, label="30-day return the platform reports")
+        f.usd("trader.binance_pnl_30d_usd", "pnl", D(st.get("pnl")), src, label="30-day P&L the platform reports")
+        if st.get("win_rate") is not None:
+            v = D(st["win_rate"]) / 100
+            f.add("trader.binance_win_rate_30d", "percent", v, fmt.pct(v), src)
+        if st.get("max_drawdown") is not None:
+            v = D(st["max_drawdown"]) / 100
+            f.add("trader.binance_max_drawdown_30d", "return", v, fmt.pct(v), src)
+        if st.get("trades") is not None:
+            f.add("trader.binance_trades_30d", "count", int(st["trades"]), fmt.count(int(st["trades"])), src)
+    closes = [c for c in bn.get("closes") or [] if c["pnl"] is not None]  # most recent first
+    this = None
+    if cls in ("whale_close", "liquidation") and trigger:
+        a = (T(trigger["window_start"]) or T(trigger["observed_at"])) - timedelta(minutes=10)
+        b = T(trigger["observed_at"]) + timedelta(minutes=15)
+        this = next((c for c in closes if c["coin"] == coin and c["side"] == event["direction"]
+                     and a <= T(c["closed_at"]) <= b), None)
+        if this:
+            f.usd("close.realized_pnl_usd", "realized_pnl", D(this["pnl"]), "relay.positions.closed.pnl",
+                  label="realized P&L of this closed position (open to close price x size, as the platform's fills show)")
+            for fid, col in (("close.open_px", "open_px"), ("close.close_px", "close_px")):
+                if this[col] is not None:
+                    f.add(fid, "price", D(this[col]), fmt.price(D(this[col])), f"relay.positions.closed.{col}", unit="USD")
+            if this["opened_at"]:
+                hours = D((T(this["closed_at"]) - T(this["opened_at"])).total_seconds()) / 3600
+                v, unit, disp = fmt.duration(hours)
+                f.add("close.held", "duration", v, disp, "relay.positions.closed (closed - opened)", unit=unit)
+    earlier = [c for c in closes if c is not this]
+    for days, tag in ((1, "24h"), (7, "7d")):
+        win = [c for c in earlier + ([this] if this else []) if T(c["closed_at"]) > now - timedelta(days=days)]
+        if win:
+            hc = {"source": "relay closed positions", "days": days}
+            f.add(f"history.binance_closes_{tag}", "count", len(win), fmt.count(len(win)), "relay.positions.closed",
+                  coverage=hc)
+            wins = sum(1 for c in win if D(c["pnl"]) > 0)
+            f.add(f"history.binance_wins_{tag}", "count", wins, fmt.count(wins), "relay.positions.closed", coverage=hc)
+            f.usd(f"history.binance_pnl_{tag}_usd", "realized_pnl", sum((D(c["pnl"]) for c in win), Decimal(0)),
+                  "relay.positions.closed.pnl", coverage=hc, derivation="sum of realized P&L of positions closed")
+    seq = ([this] if this else []) + earlier
+    if seq:
+        sign = D(seq[0]["pnl"]) > 0
+        run = 0
+        for c in seq:
+            if (D(c["pnl"]) > 0) != sign:
+                break
+            run += 1
+        if 2 <= run < len(seq):  # a streak needs a known start: the opposite result before it
+            fid = "history.binance_win_streak" if sign else "history.binance_loss_streak"
+            f.add(fid, "count", run, fmt.count(run), "relay.positions.closed", label="consecutive closes, latest first")
+    same = next((c for c in earlier if c["coin"] == coin), None)
+    if same:
+        f.usd("contrast.last_coin_close_pnl_usd", "realized_pnl", D(same["pnl"]), "relay.positions.closed.pnl",
+              label=f"realized P&L of the trader's previous closed {coin} position")
+        f.add("contrast.last_coin_close_at", "time", T(same["closed_at"]), fmt.when(T(same["closed_at"])),
+              "relay.positions.closed.closed_at")
+        f.add("contrast.last_coin_close_side", "text", same["side"], {"zh": [SIDE[same["side"]]["zh"]],
+                                                                       "en": [SIDE[same["side"]]["en"]]},
+              "relay.positions.closed.side")
+    best = max(earlier, key=lambda c: D(c["pnl"]), default=None)
+    if best is not None and D(best["pnl"]) > 0:
+        f.usd("history.binance_best_close_30d_usd", "realized_pnl", D(best["pnl"]), "relay.positions.closed.pnl",
+              label=f"largest realized win in 30 days ({best['coin']} {best['side']})")
 
 
 # ---- contrast: how this move compares with the trader's own past, the rest of their book and the crowd -------------
@@ -638,6 +730,8 @@ def _score(event, episode, f: Facts, ctx, record_strong, ratio, liq_status, now)
     comp("risk", min(risk, 15), 15, "leverage>=20 5, within 5% of liquidation 5, adding underwater 5; "
                                     "liquidation 15 confirmed / 8 suspected")
     comp("market_relevance", 4 if event["coin"] in MAJOR_COINS else 0, 10, "major coin 4 (cluster bonus in Phase 2)")
+    if event.get("is_star"):
+        comp("star", 40, 40, "on the star list: readers follow this trader's every move")
     comp("continuity", 2 if event.get("story_published_before") else 0, 5, "story with an earlier publication")
     pen = 0
     w = f.get("change.window")

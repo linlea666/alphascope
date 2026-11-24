@@ -42,10 +42,15 @@ def suspected_liquidation(side: str, mark: Decimal | None, liq: Decimal | None, 
     return mark <= liq * (1 + tol) if side == "long" else mark >= liq * (1 - tol)
 
 
-def evaluate(ch: Change, cfg: dict, liq_tol: Decimal) -> list[Candidate]:
+def evaluate(ch: Change, cfg: dict, liq_tol: Decimal, star_floor: Decimal | None = None) -> list[Candidate]:
+    """`star_floor`: the trader is on the star list, every move from this size on is news (docs/16)."""
     e, ep = ch.event, ch.episode
     venue, kind, mark = e["venue"], e["kind"], e["mark_px"]
-    usd = lambda k: Decimal(str(cfg[k][venue] if isinstance(cfg[k], dict) else cfg[k]))  # noqa: E731
+
+    def usd(k: str) -> Decimal:
+        v = cfg[k]
+        v = Decimal(str(v.get(venue, v.get("okx")) if isinstance(v, dict) else v))
+        return min(v, star_floor) if star_floor is not None else v
     tiers = cfg["tiers_usd"]
 
     def cand(cls: str, level: int = 0, ep_id: int | None = None, liq: str = "none", side: str | None = None):

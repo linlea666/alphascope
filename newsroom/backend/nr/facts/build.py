@@ -16,6 +16,7 @@ from nr.facts import builder
 from nr.feed import health
 from nr.feed.client import FeedClient, FeedError, FeedUnavailable
 from nr.jobs.queue import enqueue
+from nr.sources import relay
 
 log = logging.getLogger(__name__)
 
@@ -26,8 +27,9 @@ class RateLimited(Exception):
 
 def load_event(s: Session, event_id: int) -> dict:
     ev = dict(s.execute(text("""
-        SELECT ne.*, t.trader_key, t.public_label FROM news_event ne JOIN trader t ON t.id = ne.trader_id
-        WHERE ne.id = :i"""), {"i": event_id}).mappings().one())
+        SELECT ne.*, t.trader_key, t.public_label, t.display_name AS trader_name,
+               EXISTS (SELECT 1 FROM star_trader st WHERE st.trader_key = t.trader_key AND st.active) AS is_star
+        FROM news_event ne JOIN trader t ON t.id = ne.trader_id WHERE ne.id = :i"""), {"i": event_id}).mappings().one())
     ev["story_published_before"] = bool(ev["story_id"] and s.execute(text("""
         SELECT 1 FROM publication_record pr JOIN article a ON a.id = pr.article_id
         WHERE a.story_id = :s AND a.news_event_id <> :e AND pr.status = 'published' LIMIT 1"""),
@@ -74,11 +76,15 @@ def build_event_facts(sf: sessionmaker, client: FeedClient, event_id: int, now: 
         ep = dict(s.execute(text("SELECT * FROM position_episode WHERE id = :i"), {"i": ev["episode_id"]}).mappings().one())
         ses = source_events(s, event_id)
         blockers = health.source_blockers(s, ev["venue"], now, settings_store.get(s, "gate"))
-    try:
-        ctx = client.context(ev["trader_key"], coin=ev["coin"])
-        ctx_error = None
-    except (FeedUnavailable, FeedError) as exc:
-        ctx, ctx_error = None, str(exc)
+    if ev["venue"] == "binance":  # the relay's tables (nr/sources/relay.py), kept fresh by the relay sync
+        with sf() as s:
+            ctx, ctx_error = relay.context(s, ev["trader_key"], now), None
+    else:
+        try:
+            ctx = client.context(ev["trader_key"], coin=ev["coin"])
+            ctx_error = None
+        except (FeedUnavailable, FeedError) as exc:
+            ctx, ctx_error = None, str(exc)
     crowd = None
     if ev["venue"] in ("hyperliquid", "okx"):
         try:  # context, not a requirement: the packet is built without it
@@ -157,6 +163,10 @@ def advance(s: Session, ev: dict, built: builder.Built, detect: dict, now: datet
             state = target
         except InvalidTransition:
             pass
+    if state == "candidate" and ev.get("is_star"):  # a star's move goes to the star reporter, not the EIC (docs/16)
+        from nr.desk import stars
+        stars.route(s, ev, built.content, now)
+        return s.execute(text("SELECT state FROM news_event WHERE id = :i"), {"i": ev["id"]}).scalar_one()
     ai = settings_store.get(s, "ai")
     if (state == "candidate" and built.score >= detect["auto_eic_score"] and ai["enabled"] and ai["auto_eic"]
             and not settings_store.emergency_stopped(s)):

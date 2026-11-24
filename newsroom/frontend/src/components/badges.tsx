@@ -14,8 +14,9 @@ export async function StateBadge({ state }: { state: string }) {
 }
 
 export async function ClassLabel({ cls }: { cls: string }) {
-  const t = await getTranslations("classes");
-  return <>{t.has(cls) ? t(cls) : cls}</>;
+  const [t, tc] = await Promise.all([getTranslations("classes"), getTranslations("columnNames")]);
+  const col = cls.startsWith("column:") ? cls.slice(7) : null;
+  return <>{col ? (tc.has(col) ? tc(col) : col) : t.has(cls) ? t(cls) : cls}</>;
 }
 
 export async function GateBadge({ status }: { status: string }) {

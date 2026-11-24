@@ -27,6 +27,9 @@ def process_pending(sf: sessionmaker, now: datetime, batch: int = 2000, liq_tol:
         with sf() as s:
             cfg = settings_store.get(s, "detect")
             oldest = now - timedelta(hours=cfg["max_event_age_hours"])
+            default_floor = Decimal(str(settings_store.get(s, "stars")["min_notional_usd"]))
+            stars = {k: Decimal(str(v)) if v is not None else default_floor for k, v in s.execute(text(
+                "SELECT trader_key, min_notional_usd FROM star_trader WHERE active")).all()}
             pending = episodes.pending(s, batch)
             for e in pending:
                 ch = episodes.apply(s, e)
@@ -41,7 +44,7 @@ def process_pending(sf: sessionmaker, now: datetime, batch: int = 2000, liq_tol:
                 if e["observed_at"] < oldest:
                     out["too_old"] += 1
                     continue
-                for c in rules.evaluate(ch, cfg, liq_tol):
+                for c in rules.evaluate(ch, cfg, liq_tol, stars.get(e["trader_key"])):
                     r = service.upsert(s, c)
                     if r is None:
                         continue

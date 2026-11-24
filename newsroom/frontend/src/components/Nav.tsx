@@ -5,7 +5,7 @@ import type { Me } from "@/lib/types";
 import { LogoutButton } from "./LogoutButton";
 
 const LINKS = [
-  ["/", "dashboard"], ["/publish", "publish"], ["/radar", "radar"], ["/drafts", "drafts"], ["/experiments", "experiments"], ["/assignments", "assignments"], ["/calendar", "calendar"],
+  ["/", "dashboard"], ["/publish", "publish"], ["/stars", "stars"], ["/radar", "radar"], ["/drafts", "drafts"], ["/experiments", "experiments"], ["/assignments", "assignments"], ["/calendar", "calendar"],
   ["/columns", "columns"], ["/library", "library"], ["/stories", "stories"], ["/accounts", "accounts"],
   ["/publications", "publications"], ["/reports", "reports"], ["/settings", "settings"], ["/p", "public"],
 ] as const;

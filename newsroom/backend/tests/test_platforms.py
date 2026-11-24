@@ -27,7 +27,7 @@ def test_okx_material_only_goes_to_okx_square(sf):
     acc = accounts(sf)
     with sf() as s:
         assert set(s.execute(text("SELECT platform || ':' || array_to_string(venues, ',') FROM editorial_account"))
-                   .scalars()) == {"x:hyperliquid", "okx_square:okx"}
+                   .scalars()) == {"x:hyperliquid", "okx_square:okx", "binance_square:binance"}
     feed = FakeFeed()
     feed.events = [ev(1, "open", 0, 30, 100000, trader=OKX, venue="okx", precision="exact")]
     feed.contexts[OKX] = context(trader=OKX, venue="okx", positions=[position(szi=30)], synced=False,
@@ -40,9 +40,21 @@ def test_okx_material_only_goes_to_okx_square(sf):
         with pytest.raises(HTTPException) as e:  # an X account cannot carry OKX material
             assignment.create(s, eid, nr["zh"], source="editor", status="accepted", user_id=nr["chief"])
         assert "venues" in e.value.detail
+        # OKX Square tells a plain open only through a star (docs/16): nobody else carries it, so no EIC call
+        with pytest.raises(HTTPException) as e:
+            assignment.create(s, eid, acc["alphascope_okx_square"], source="editor", user_id=nr["chief"])
+        assert "star" in e.value.detail
+    prov0 = FakeProvider()
+    assert evaluate_event(sf, eid, NOW, transport=prov0)["skipped"] and prov0.requests == []
+    with sf() as s:  # once the trader is a star, OKX Square takes the move
+        s.execute(text("INSERT INTO star_trader (trader_key, venue, name) VALUES (:k, 'okx', '测试明星')"), {"k": OKX})
+        s.execute(text("UPDATE news_event SET state = 'candidate'"))
+        s.commit()
     prov = FakeProvider(eic_output(eid, [(acc["alphascope_okx_square"], "带单员视角")]))
     evaluate_event(sf, eid, NOW, transport=prov)
     assert '"alphascope_okx_square"' in prov.requests[0]["user"] and "alphascope_cn" not in prov.requests[0]["user"]
+    with sf() as s:
+        assert s.execute(text("SELECT agent_key FROM assignment WHERE source = 'eic_ai'")).scalar() == "reporter_star"
     # with the OKX Square account paused the editor-in-chief is not asked at all
     with sf() as s:
         s.execute(text("UPDATE editorial_account SET status = 'paused' WHERE platform = 'okx_square'"))
@@ -89,6 +101,7 @@ def test_platform_urls_and_lengths(sf):
     long_zh = "一个 OKX 带单员开出约3000万美元 BTC 多单。" + "数据来自 AlphaScope 观测样本。" * 12
     with sf() as s:
         eid = s.execute(text("SELECT id FROM news_event")).scalar()
+        s.execute(text("INSERT INTO star_trader (trader_key, venue, name) VALUES (:k, 'okx', '测试明星')"), {"k": trader})
         s.execute(text("UPDATE editorial_account SET status = 'active', authorization_status = 'authorized'"))
         aid = assignment.create(s, eid, acc["alphascope_okx_square"], source="editor", status="accepted",
                                 user_id=nr["chief"])

@@ -20,7 +20,8 @@
     "drafts": "AI drafts",
     "experiments": "Experiments",
     "publish": "Publish",
-    "reports": "Quality report"
+    "reports": "Quality report",
+    "stars": "Star traders"
   },
   "common": {
     "save": "Save",
@@ -302,7 +303,7 @@
     "userId": "User ID",
     "brand": "Brand",
     "platform": "Platform",
-    "venues": "Venues covered (comma-separated: hyperliquid, okx; X accounts: hyperliquid)",
+    "venues": "Venues covered (comma separated: hyperliquid, okx, binance; X accounts hyperliquid, OKX Square okx, Binance Square binance)",
     "linkInThread": "Full wallet address as the first reply",
     "styleHelp": "Used when no reporter style applies; reporters' defaults are under Settings → Rules",
     "statusHelp": "Active: gets coverage; paused: trials only; retired: unused",
@@ -311,7 +312,11 @@
     "authUntil": "authorized until",
     "linkInThreadHelp": "The post shows the short address; a reply like 'Wallet: 0x…' is written for you",
     "replyLink": "Add an explorer link to that reply",
-    "replyLinkHelp": "Off by default: no free ads for the explorer"
+    "replyLinkHelp": "Off by default: no free ads for the explorer",
+    "nameDisplay": "How traders are named",
+    "nameDisplayHelp": "How square posts name traders: the nickname, or masked in the middle. X accounts use short addresses and are unaffected.",
+    "nameFull": "Nickname",
+    "nameMasked": "Masked"
   },
   "publications": {
     "title": "Publications",
@@ -754,6 +759,14 @@
     "reviewer": {
       "name": "AI desk reviewer",
       "desc": "Reads each fact-checked draft like a native reader: AI smell, native voice, hook, ready or not; approves to ready-to-post or sends one revision to the editor."
+    },
+    "reporter_star": {
+      "name": "Star tracker",
+      "desc": "Follows star traders on the squares move by move: opens, closes and results, streaks, the 30-day record"
+    },
+    "reporter_square": {
+      "name": "Square storyteller",
+      "desc": "Turns boards and traders into character stories: multiples, dark horses, falls and comebacks, sequels"
     }
   },
   "guardCodes": {
@@ -1251,6 +1264,34 @@
     "desk__auto_min_priority": {
       "name": "Lowest priority to autopilot",
       "desc": "Only proposals at this priority or higher are taken automatically (P0 is the highest). P1 suggested: major and important stories are written, the rest wait for a pick."
+    },
+    "squares__min_asset_usd": {
+      "name": "Lowest lead assets for a board story (USD)",
+      "desc": "Traders below this are left out of multiples lists: tiny accounts make absurd returns that would mislead readers."
+    },
+    "squares__min_pnl_usd": {
+      "name": "Lowest P&L for a board story (USD)",
+      "desc": "Board P&L below this is not a story."
+    },
+    "squares__big_result_usd": {
+      "name": "Big result threshold (USD)",
+      "desc": "A non-star's close goes to the squares only with a result at least this big."
+    },
+    "squares__fall_off_peak": {
+      "name": "'Fall' drawdown line",
+      "desc": "Off its own peak by more than this (0.4 = 40%) counts as a fall."
+    },
+    "squares__board_top": {
+      "name": "Traders per board story",
+      "desc": "How many traders a multiples list names."
+    },
+    "stars__min_notional_usd": {
+      "name": "Lowest star move (USD)",
+      "desc": "A star's open, add or close this size or bigger is covered (normal whale thresholds don't apply). Each star can override it."
+    },
+    "stars__merge_minutes": {
+      "name": "Merge window (minutes)",
+      "desc": "A star's moves within this many minutes become one piece."
     }
   },
   "scoreParts": {
@@ -1394,7 +1435,9 @@
       "p0": "P0 major",
       "p1": "P1 important",
       "p2": "P2 normal"
-    }
+    },
+    "squaresTitle": "Squares and stars",
+    "squaresHint": "Thresholds for OKX and Binance Square stories, and how star traders are covered"
   },
   "sourcesX": {
     "reachable": "AlphaScope reachable",
@@ -1715,5 +1758,98 @@
       "reposts": "Reposts",
       "replies": "Replies"
     }
+  },
+  "stars": {
+    "title": "Star traders",
+    "subtitle": "Traders you pick; every move, result and turn is followed and written up by the star tracker for the matching square.",
+    "relayTitle": "Binance lead traders (relay)",
+    "relayOff": "The relay is not configured: set NEWSROOM_RELAY_URL and NEWSROOM_RELAY_SECRET in newsroom.env.",
+    "relayOk": "OK, last sync {at}",
+    "relayNever": "Configured; no sync yet (starts once a Binance star is added)",
+    "relayError": "Last error: {e}",
+    "addTitle": "Add a star",
+    "addHint": "Search by name and add. Binance from the relay's catalog, OKX from the traders AlphaScope knows.",
+    "venue": {
+      "binance": "Binance lead trader",
+      "okx": "OKX trader"
+    },
+    "searchBinance": "Name (empty lists all)",
+    "searchOkx": "Part of a nickname",
+    "search": "Search",
+    "binanceHint": "The relay's catalog has a few dozen Binance lead traders; leave empty to see them all.",
+    "okxHint": "OKX traders must be known to AlphaScope (on a board or in its pool).",
+    "noHits": "Nothing found",
+    "inactive": "Not active",
+    "binanceStats": "30d return {roi} · P&L {pnl} · win rate {win}",
+    "okxStats": "30d board #{rank} · return {roi} · lead assets {asset}",
+    "onList": "On the list",
+    "add": "Add",
+    "namePrompt": "What should posts call this trader?",
+    "added": "Added: {name}",
+    "empty": "No stars yet. Search above and add one.",
+    "paused": "Paused",
+    "stats30": "30d: return {roi} · P&L {pnl} · win rate {win} · max drawdown {dd} · {trades} trades",
+    "equity": "account {v}",
+    "positions": "Open positions",
+    "noPositions": "No open positions",
+    "okxPositionsHint": "OKX stars' moves come through AlphaScope's radar",
+    "closes": "Recent closes",
+    "col": {
+      "coin": "Coin",
+      "side": "Side",
+      "notional": "Notional",
+      "lever": "Lever",
+      "upl": "Open P&L"
+    },
+    "side": {
+      "long": "long",
+      "short": "short"
+    },
+    "stage": {
+      "rising": "Rising",
+      "streak": "On a streak",
+      "peak": "At the peak",
+      "crisis": "In trouble",
+      "fall": "Fallen",
+      "comeback": "Comeback",
+      "quiet": "Quiet"
+    },
+    "posts": "{published} posted · {ready} ready",
+    "goPublish": "Publish center",
+    "edit": "Edit / pause / remove",
+    "f": {
+      "name": "Name",
+      "note": "Note (desk only)",
+      "min": "Lowest move to cover (USD; empty = the rule's default)",
+      "minHelp": "Moves this size or bigger are covered; empty uses the default in Rules.",
+      "persona": "Persona note (given to the writer)",
+      "personaHelp": "e.g. a nickname readers use, habits. Tags and the story stage are computed from data."
+    },
+    "pause": "Pause",
+    "resume": "Resume",
+    "remove": "Remove",
+    "removeConfirm": "Remove {name} from the list? Posts and stories stay."
+  },
+  "columnNames": {
+    "weekly_scorecard": "Weekly whale scorecard",
+    "long_short_duel": "Long/short duel",
+    "streak_breaker": "Streak breaker",
+    "recap": "Story recap",
+    "dossier": "Trader dossier",
+    "copy_vs_board": "Board ROI vs copyable returns",
+    "board_dropouts": "Board survivorship",
+    "liq_ladder": "Liquidation ladder",
+    "forecast_ledger": "Forecast ledger",
+    "funding_divergence": "Funding vs specialists",
+    "holding_profile": "Who holds: holding times",
+    "style_changes": "Style change archive",
+    "okx_multipliers": "OKX multiples",
+    "okx_dark_horses": "OKX dark horses",
+    "okx_fallen": "Fallen genius",
+    "story_turn": "A turn in the story",
+    "star_daily": "The stars' day",
+    "duel": "Star duel",
+    "duel_result": "Duel result",
+    "prediction_followup": "The answer"
   }
 }

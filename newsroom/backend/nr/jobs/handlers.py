@@ -15,6 +15,7 @@ from nr.config import get_settings
 from nr.facts.build import RateLimited, build_event_facts
 from nr.feed.client import FeedClient
 from nr.jobs import queue
+from nr.sources.relay import RelayClient
 
 log = logging.getLogger(__name__)
 DETERMINISTIC = ("build_facts", "card_render", "column_build", "experiment_create")
@@ -23,13 +24,15 @@ DETERMINISTIC = ("build_facts", "card_render", "column_build", "experiment_creat
 @dataclass
 class Deps:
     feed: Callable[[], FeedClient]
+    relay: Callable[[], RelayClient | None] = field(default=lambda: None)
     provider: Callable | None = None  # AI transport override (tests); None = real HTTP providers
     now: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
 
 
 def default_deps() -> Deps:
     st = get_settings()
-    return Deps(feed=lambda: FeedClient(st.feed_base_url, st.feed_token, st.feed_timeout_seconds))
+    return Deps(feed=lambda: FeedClient(st.feed_base_url, st.feed_token, st.feed_timeout_seconds),
+                relay=lambda: RelayClient(st.relay_url, st.relay_secret) if st.relay_url and st.relay_secret else None)
 
 
 def handle(sf: sessionmaker, deps: Deps, job: dict, now: datetime) -> dict:

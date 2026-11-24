@@ -4,6 +4,7 @@ import { FieldForm, type Field } from "@/components/FieldForm";
 import { Badge, PageHeader, Panel } from "@/components/ui";
 import { nrGet, nrGetOptional } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
+import { platformName } from "@/lib/glossary";
 import type { Account } from "@/lib/types";
 
 const CLASSES = ["whale_open", "flip", "whale_add", "underwater_add", "whale_close", "liquidation", "near_liquidation", "notable_trader_move"];
@@ -19,8 +20,11 @@ export default async function AccountsPage() {
     { name: "handle", label: t("handle"), value: a?.handle, required: true },
     { name: "display_name", label: t("name"), value: a?.display_name, required: true },
     { name: "language", label: tc("language"), type: "select", options: [{ value: "zh", label: "中文" }, { value: "en", label: "English" }], value: a?.language ?? "zh" },
-    { name: "platform", label: t("platform"), type: "select", options: [{ value: "x", label: "X" }, { value: "okx_square", label: "OKX 广场 / OKX Square" }], value: a?.platform ?? "x" },
-    { name: "venues", label: t("venues"), type: "list", value: a?.venues ?? ["hyperliquid"], placeholder: "hyperliquid, okx" },
+    { name: "platform", label: t("platform"), type: "select", options: [{ value: "x", label: "X" }, { value: "okx_square", label: "OKX 广场 / OKX Square" },
+      { value: "binance_square", label: "币安广场 / Binance Square" }], value: a?.platform ?? "x" },
+    { name: "venues", label: t("venues"), type: "list", value: a?.venues ?? ["hyperliquid"], placeholder: "hyperliquid, okx, binance" },
+    { name: "name_display", label: t("nameDisplay"), type: "select", value: a?.name_display ?? "nickname", help: t("nameDisplayHelp"),
+      options: [{ value: "nickname", label: t("nameFull") }, { value: "masked", label: t("nameMasked") }] },
     { name: "status", label: tc("status"), type: "select", options: ["active", "paused", "retired"].map((v) => ({ value: v, label: tw(v) })),
       value: a?.status ?? "paused", help: t("statusHelp") },
     { name: "brand", label: t("brand"), value: a?.brand ?? "AlphaScope" },
@@ -47,7 +51,7 @@ export default async function AccountsPage() {
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
       <div className="space-y-5">
         {accounts.map((a, i) => (
-          <Panel key={a.id} title={<span>@{a.handle} · {a.display_name} <Badge tone="accent">{a.platform === "okx_square" ? "OKX 广场" : "X"}</Badge> <Badge>{(a.venues ?? []).join(", ") || "all"}</Badge> <StateBadge state={a.status} /> <Badge tone={a.authorization_status === "authorized" ? "up" : ["revoked", "expired"].includes(a.authorization_status) ? "down" : "neutral"}>{t("authShort")}：{tw(a.authorization_status)}</Badge></span>}
+          <Panel key={a.id} title={<span>@{a.handle} · {a.display_name} <Badge tone="accent">{platformName(a.platform)}</Badge> <Badge>{(a.venues ?? []).join(", ") || "all"}</Badge> <StateBadge state={a.status} /> <Badge tone={a.authorization_status === "authorized" ? "up" : ["revoked", "expired"].includes(a.authorization_status) ? "down" : "neutral"}>{t("authShort")}：{tw(a.authorization_status)}</Badge></span>}
             hint={`${a.language === "zh" ? "中文" : "English"} · ${a.timezone} · ${t("style")}：${styleName(a.style_key)}`
               + (a.authorization_expires_at ? ` · ${t("authUntil")} ${fmtTime(a.authorization_expires_at, locale, a.timezone)}` : "")}>
             <p className="mb-3 text-sm">{a.positioning}</p>
