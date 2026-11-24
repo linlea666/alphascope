@@ -104,6 +104,9 @@ def okx_multipliers(s: Session, c: FeedClient, now: datetime, params: dict) -> l
         for i, r in enumerate(rows, 1):
             board_row(f, f"row.{i}", r)
             rows_chart.append({"label_fact": f"row.{i}.trader", "fact_ids": [f"row.{i}.multiple", f"row.{i}.pnl"]})
+        text_fact(f, "selection", f"按带单资产和收益额筛过的前 {len(rows)} 位（榜单第 {rows[0]['rank']}–{rows[-1]['rank']} 名）",
+                  "board rows that pass the square thresholds", label="what this list is: say it this way, not 前五")
+        count_fact(f, "selection.size", len(rows), "board rows that pass the square thresholds")
         small = sum(1 for r in top10 if not eligible(r, cfg))
         if small:
             count_fact(f, "small_accounts_skipped", small, "board top 10",

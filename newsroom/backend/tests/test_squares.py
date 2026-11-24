@@ -220,3 +220,8 @@ def test_with_autopilot_on_a_square_column_is_taken_whatever_its_priority(sf):
     out["newsworthiness"][0]["fact_ids"] = ["row.1.multiple"]
     r = evaluate_event(sf, eid, NOW, transport=FakeProvider(out))
     assert len(r["auto_accepted"]) == 1
+    with sf() as s:  # a multiples list is written as a board story by the square storyteller
+        assert s.execute(text("SELECT agent_key, style_key FROM assignment")).one() == ("reporter_square", "zh_square_board")
+        sel = s.execute(text("""SELECT f->>'value' FROM fact_packet p, jsonb_array_elements(p.content->'facts') f
+                                WHERE p.news_event_id = :e AND f->>'id' = 'selection'"""), {"e": eid}).scalar()
+        assert sel == "按带单资产和收益额筛过的前 5 位（榜单第 1–5 名）"

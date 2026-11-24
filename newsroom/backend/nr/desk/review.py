@@ -40,8 +40,11 @@ def review_version(sf: sessionmaker, version_id: int, now: datetime, job_id: int
         persona = s.execute(text("SELECT name, tags, stage, prev_stage FROM trader_persona WHERE trader_key = :k"),
                             {"k": packet["subject"].get("trader_key")}).mappings().first()
         persona = {**dict(persona), "tags": [t["tag"] for t in persona["tags"]]} if persona else None
-        rounds = s.execute(text("SELECT count(*) FROM article_review r JOIN article_version x ON x.id = r.article_version_id "
-                                "WHERE x.article_id = :a"), {"a": v["article_id"]}).scalar()
+        # rounds since the reporter's latest draft: a rewrite from fresh facts gets its own revision round
+        rounds = s.execute(text("""
+            SELECT count(*) FROM article_review r JOIN article_version x ON x.id = r.article_version_id
+            WHERE x.article_id = :a AND x.version_no >= coalesce((SELECT max(version_no) FROM article_version
+              WHERE article_id = :a AND agent_key LIKE 'reporter%'), 0)"""), {"a": v["article_id"]}).scalar()
     out = call_json(sf, agent_key="reviewer", purpose="draft_review", schema=ReviewOut, semantic=None, now=now,
                     job_id=job_id, event_id=v["news_event_id"], article_id=v["article_id"], transport=transport,
                     inherit_models_from="reporter", language=v["language"],

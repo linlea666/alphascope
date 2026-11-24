@@ -172,12 +172,14 @@ SQUARE = [
             "上一笔 $ETH 空单他赚了 {盈利}。\n\n这次还能吃到吗？你跟不跟？",
             "30 天账户做到 {倍数} 倍，再回吐 {回撤}，{昵称}只用了一周。\n\n{过程一行}\n{现状一行}\n\n是洗盘还是陨落？评论区说说"]),
     _house("square_board", "zh", "榜单盘点",
-           "把榜单写成人：一条讲 3–5 个交易员，每人一行「昵称：倍数 / 收益额 / 名次变化」，最后挑最有戏的那个多说一句。"
-           "带单资产很小的要写出资产规模，不让人以为是大资金。",
-           {"lines": "5-8", "emoji": "1-3", "cashtag": False, "closing": "投票：你最想跟谁 / 谁下周还在榜上",
+           "把榜单写成人，不是写成表：挑最有戏的一个人当主角（反差最大：小资金大倍数、新上榜就冲高、名次暴涨或下滑），"
+           "用 2–3 句讲他；再用一句带过另外一两个人。全文最多 3 个人，每人最多 2 个数字，不要每人一行同样的格式。"
+           "名次照 selection 和 rank 事实写，不要自己说「前五」「两个人」这种没有事实的计数。带单资产很小的要写出来。",
+           {"lines": "4-6", "emoji": "1-2", "cashtag": False, "closing": "投票：你最想跟谁 / 谁下周还在榜上",
             "allow": ["梭哈"], "prefer_hooks": ["board_top", "new_entry"]},
-           ["OKX 7 天收益榜，前五名都翻了倍👇\n\n{昵称1}：{倍数1} 倍，赚 {收益1}\n{昵称2}：{倍数2} 倍，排名 ↑{名次}\n"
-            "{昵称3}：新上榜，{倍数3} 倍\n\n{昵称1} 的带单资产只有 {资产}，你敢跟吗？"]),
+           ["带单账户只有 {资产}，{昵称1} 7 天把账户做到 {倍数1} 倍，冲到 OKX 7 天榜第 {名次1}。\n\n"
+            "{一句他这周的变化：名次、离高点多远}\n\n另一边，{昵称2} 刚上榜就 {倍数2} 倍；{昵称3} 一口气升了 {名次变化} 位。\n\n"
+            "下周谁还在榜上？A {昵称1} B {昵称2} C {昵称3}"]),
     _house("square_fall", "zh", "陨落 / 逆袭",
            "强反差：先写他最猛的时候（倍数、名次、收益），再写现在（回撤多少、掉出榜单、爆仓，或者从谷底爬回来），"
            "一句点出转折在哪。不幸灾乐祸，不下结论，让读者判断。",
@@ -195,7 +197,7 @@ SQUARE = [
 ]
 # version 2 of these two: multiples written as "做到 X 倍", not "翻 X 倍" (which reads as X+1 and the guard stops)
 for _st in SQUARE:
-    if _st["key"] in ("zh_square_story", "zh_square_fall"):
+    if _st["key"] in ("zh_square_story", "zh_square_fall", "zh_square_board"):
         _st["version"] = 2
 
 # English house voices, second version: the hooks and closers CT actually uses (WHALE ALERT!!, BREAKING:, JUST IN:)

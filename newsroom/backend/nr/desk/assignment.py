@@ -11,6 +11,9 @@ from nr import audit, settings_store
 from nr.events.states import InvalidTransition, transition
 
 SQUARES = ("okx_square", "binance_square")  # platforms where the story is the trader (docs/16)
+SQUARE_COLUMN_STYLE = {"okx_multipliers": "zh_square_board", "okx_dark_horses": "zh_square_board",
+                       "okx_fallen": "zh_square_fall", "story_turn": "zh_square_story", "star_daily": "zh_square_board",
+                       "duel": "zh_square_story", "duel_result": "zh_square_story", "prediction_followup": "zh_square_star"}
 
 
 def account_fits(s: Session, account_id: int, event_id: int, trial: bool = False) -> tuple[bool, str]:
@@ -74,6 +77,9 @@ def create(s: Session, event_id: int, account_id: int, *, source: str, angle: st
         return None
     if agent_key is None or source in ("eic_ai", "star"):
         agent_key = square_agent(s, account_id, event_id) or agent_key
+    if style_key is None and agent_key in ("reporter_square", "reporter_star"):
+        col = s.execute(text("SELECT column_key FROM news_event WHERE id = :e"), {"e": event_id}).scalar()
+        style_key = SQUARE_COLUMN_STYLE.get(col or "")
     return s.execute(text("""
         INSERT INTO assignment (news_event_id, account_id, angle, reason, format, source, eic_evaluation_id, needs_human,
                                 status, decided_by, decided_at, agent_key, style_key, model_config_id, due_at)
