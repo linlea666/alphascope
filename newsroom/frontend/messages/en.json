@@ -306,7 +306,7 @@
     "platform": "Platform",
     "venues": "Venues covered (comma separated: hyperliquid, okx, binance; X accounts hyperliquid, OKX Square okx, Binance Square binance)",
     "linkInThread": "Full wallet address as the first reply",
-    "styleHelp": "Used when no reporter style applies; reporters' defaults are under Settings → Rules",
+    "styleHelp": "Accounts are not tied to reporters: any reporter can post here in their own style (Settings → Rules → reporter styles). This is only used when a reporter has none",
     "statusHelp": "Active: gets coverage; paused: trials only; retired: unused",
     "authShort": "Authorization",
     "classesHelp": "None ticked = every event type",

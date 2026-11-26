@@ -7,7 +7,7 @@ from datetime import timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -126,6 +126,11 @@ class AccountIn(BaseModel):
     authorization_status: Literal["pending", "authorized", "expired", "revoked"] = "pending"
     authorization_expires_at: str | None = None
     authorization_note: str | None = Field(None, max_length=1000)
+
+    @field_validator("positioning", mode="before")
+    @classmethod
+    def _blank_positioning(cls, v):  # the form sends an empty textarea as null
+        return "" if v is None else v
 
 
 @router.get("/accounts")
