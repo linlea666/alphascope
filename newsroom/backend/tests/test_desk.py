@@ -369,3 +369,15 @@ def test_the_eic_does_not_evaluate_news_past_its_shelf_life(sf):
     prov = FakeProvider()
     assert evaluate_event(sf, eid, NOW + timedelta(days=1), transport=prov) == {"skipped": "the event is past its shelf life"}
     assert prov.requests == []
+
+
+
+def test_autopilot_takes_proposals_the_eic_flags_with_routine_risks(sf):
+    nr = newsroom(sf)
+    eid = candidate_event(sf)
+    with sf() as s:
+        settings_store.put(s, "desk", {"auto_accept": True, "auto_min_priority": "p1"})
+        s.commit()
+    out = eic_output(eid, [(nr["zh"], "size")], silent=[nr["en"]])
+    out["risk_flags"] = ["identity_risk", "liquidation_unconfirmed", "stale_risk"]  # what the EIC says of most events
+    assert len(evaluate(sf, eid, FakeProvider(out))["auto_accepted"]) == 1

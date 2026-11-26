@@ -131,10 +131,12 @@ def evaluate_event(sf: sessionmaker, event_id: int, now: datetime, job_id: int |
                         ).scalar_one()
         created, auto = [], []
         pilot = settings_store.get(s, "desk")
-        # autopilot: a proposal at or above the chosen priority, for an active account, with no reason for a person to
-        # look first, is accepted and drafted at once; the draft still goes through the guard and the AI reviewer
-        safe = pilot.get("auto_accept") and o.decision == "cover" and \
-            not flags & {"duplicate_risk", "identity_risk", "liquidation_unconfirmed", "stale_risk"}
+        # autopilot: a proposal at or above the chosen priority, for an active account, is accepted and drafted at once.
+        # The EIC's risk flags (identity, unconfirmed liquidation, staleness...) describe wording the packet's
+        # constraints, the guard and the AI reviewer already enforce on every draft, and it raises them on nearly every
+        # event: gating on them held back everything. Only two same-language accounts with near-identical angles
+        # (`similar`, computed below the EIC) wait for a person.
+        safe = pilot.get("auto_accept") and o.decision == "cover"
         piloted = safe and o.priority <= pilot.get("auto_min_priority", "p1")
         # the squares' columns are their daily programme (docs/16): taken whatever priority the EIC gives them
         square_column = safe and ev.get("column_key") is not None

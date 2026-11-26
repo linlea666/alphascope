@@ -235,8 +235,9 @@ def sync(sf: sessionmaker, client: RelayClient, source_id: int, now: datetime) -
             if gone:
                 s.execute(text("UPDATE relay_position SET open = false WHERE trader_key = :k AND position_id = ANY(:g)"),
                           {"k": key, "g": gone})
+            # freshness is when we last heard from the relay: an idle account's snapshot keeps its old taken_at
             s.execute(text("UPDATE star_trader SET equity = :e, snapshot_at = :t WHERE trader_key = :k"),
-                      {"e": D(snap.get("equity")), "t": taken, "k": key})
+                      {"e": D(snap.get("equity")), "t": now, "k": key})
         for tid, rows in closes.items():
             key = key_of(tid)
             for c in rows:
