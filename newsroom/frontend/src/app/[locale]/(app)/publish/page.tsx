@@ -6,7 +6,7 @@ import { Empty, PageHeader, button, input } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { nrGet } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
-import { factName, named } from "@/lib/glossary";
+import { factName, named, styleLabel } from "@/lib/glossary";
 import type { Account } from "@/lib/types";
 
 const TILES = ["ready", "review", "attention"] as const;
@@ -96,7 +96,7 @@ export default async function PublishPage({ searchParams }: { searchParams: Prom
         </select>
         <select name="style" defaultValue={sp.style ?? ""} className={`${input} w-44`}>
           <option value="">{t("allStyles")}</option>
-          {d.styles.map((s) => <option key={s.key} value={s.key}>{s.name}（{s.language === "zh" ? "中文" : "EN"}）</option>)}
+          {d.styles.map((s) => <option key={s.key} value={s.key}>{styleLabel(d.styles, s.key)}</option>)}
         </select>
         {(tab === "ready" || tab === "review" || tab === "attention") && (
           <select name="within" defaultValue={sp.within ?? ""} className={`${input} w-40`}>

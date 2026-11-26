@@ -25,7 +25,7 @@ ADMIN = require_roles("admin")
 def list_examples(status: str = Query("candidate", pattern="^(candidate|adopted|dismissed)$"),
                   s: Session = Depends(get_session), user: CurrentUser = Depends(CHIEF)):
     return rows(s, """
-        SELECT c.*, st.name AS style_name, acc.handle FROM style_example_candidate c
+        SELECT c.*, st.name AS style_name, (SELECT z.name FROM editorial_style z WHERE z.key = 'zh_' || substring(c.style_key from 4) ORDER BY z.version DESC LIMIT 1) AS style_zh, acc.handle FROM style_example_candidate c
         LEFT JOIN LATERAL (SELECT name FROM editorial_style WHERE key = c.style_key ORDER BY version DESC LIMIT 1) st ON true
         JOIN article_version v ON v.id = c.article_version_id JOIN article a ON a.id = v.article_id
         JOIN editorial_account acc ON acc.id = a.account_id

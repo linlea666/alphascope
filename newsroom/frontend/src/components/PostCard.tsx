@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Link } from "@/i18n/routing";
 import { bff, toast } from "@/lib/bff";
 import { copyText } from "@/lib/clipboard";
+import { styleLabel } from "@/lib/glossary";
 import type { Review } from "@/lib/types";
 import { ReviewCard } from "./ReviewCard";
 import { Badge, button, input, primary } from "./ui";
@@ -16,7 +17,7 @@ export type Card = {
   column_key: string | null; venue: string; n_versions: number; claimed_by: string | null; claimed_at: string | null;
   why: "stale" | "guard" | "rejected" | null;
   version_id: number; headline: string; body: string; thread: string[] | null; reply_text: string | null;
-  style_key: string | null; style_name: string | null; model: string | null; agent_key: string | null; guard_status: string;
+  style_key: string | null; style_name: string | null; style_zh: string | null; model: string | null; agent_key: string | null; guard_status: string;
   facts_used: string[] | null;
   x_length: number | null; length_limit: number | null; card_asset_id: number | null; review: Review | null;
   publication: { x_url: string | null; reply_url: string | null; channel: string; published_at: string;
@@ -95,7 +96,7 @@ export function PostCard({ c, now, roleName, className, statusName }: { c: Card;
     <div className={`rounded-lg border border-border bg-panel p-4 ${className}`}>
       <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
         <Badge tone="accent">{c.language === "zh" ? "中文" : "English"}</Badge>
-        {c.style_name && <Badge>{c.style_name}</Badge>}
+        {c.style_name && <Badge>{styleLabel([{ key: c.style_key ?? "", name: c.style_name }], c.style_key, c.style_zh)}</Badge>}
         {c.source === "trial" && <Badge tone="warn">{t("trial")}</Badge>}
         <span className="text-muted">{subject} · {roleName}{c.model ? ` · ${c.model}` : ""}</span>
         {left && c.status !== "published" && <Badge tone={left.tone}>{left.text === "0" ? t("expiredNow") : t("left", { t: left.text })}</Badge>}

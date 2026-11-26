@@ -4,9 +4,9 @@ import { Badge, Empty, Panel } from "./ui";
 import { Link } from "@/i18n/routing";
 import { nrGetOptional } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
-import { named } from "@/lib/glossary";
+import { named, styleLabel } from "@/lib/glossary";
 
-type Candidate = { id: number; style_key: string; style_name: string | null; handle: string; original: string; example: string;
+type Candidate = { id: number; style_key: string; style_name: string | null; style_zh: string | null; handle: string; original: string; example: string;
   reason: "review" | "engagement"; score: Record<string, number>; created_at: string };
 type Scores = { n: number; publishable: number | null; hook: number | null; native: number | null; ai_tone: number | null;
   clarity: number | null; approved: number } | null;
@@ -28,7 +28,7 @@ export async function ExampleCandidates() {
           {list.map((c) => (
             <div key={c.id} className="rounded border border-border p-3 text-sm">
               <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-                <Badge tone="accent">{c.style_name ?? c.style_key}</Badge>
+                <Badge tone="accent">{styleLabel([{ key: c.style_key, name: c.style_name ?? c.style_key }], c.style_key, c.style_zh)}</Badge>
                 <Badge tone={c.reason === "review" ? "up" : "warn"}>{t(`reason.${c.reason}`)}</Badge>
                 <span className="text-muted">@{c.handle} · {fmtTime(c.created_at, locale)}</span>
                 <span className="text-muted">{c.reason === "review" ? t("reviewScore", { n: c.score.publishable ?? "—" })

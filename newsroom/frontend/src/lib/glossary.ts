@@ -54,3 +54,16 @@ export function auditName(groups: T, actions: T, action: string): string {
 export function platformName(p: string | null | undefined): string {
   return { okx_square: "OKX 广场", binance_square: "币安广场", x: "X" }[p ?? "x"] ?? p ?? "X";
 }
+
+// the one English house voice without a Chinese twin
+const STYLE_ZH_EXTRA: Record<string, string> = { en_market_desk: "全球市场版" };
+
+/** A style as a Chinese reader recognises it: Chinese styles by their name, English ones by their Chinese twin's
+ * name with the English name after it, e.g. 鲸鱼警报（英文版 · Whale alert）. */
+export function styleLabel(styles: { key: string; name: string }[], key: string | null | undefined, zhName?: string | null): string {
+  if (!key) return "";
+  const name = styles.find((s) => s.key === key)?.name ?? key;
+  if (!key.startsWith("en_")) return `${name}（中文）`;
+  const twin = zhName ?? styles.find((s) => s.key === `zh_${key.slice(3)}`)?.name ?? STYLE_ZH_EXTRA[key];
+  return twin ? `${twin}（英文版 · ${name}）` : `${name}（英文版）`;
+}

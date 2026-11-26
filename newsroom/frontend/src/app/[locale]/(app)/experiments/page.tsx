@@ -3,6 +3,7 @@ import { AutoRefresh } from "@/components/AutoRefresh";
 import { FieldForm } from "@/components/FieldForm";
 import { Badge, Empty, PageHeader, Panel, td, th } from "@/components/ui";
 import { Link } from "@/i18n/routing";
+import { styleLabel } from "@/lib/glossary";
 import { nrGet } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
 import type { Account } from "@/lib/types";
@@ -18,7 +19,7 @@ export default async function ExperimentsPage() {
     nrGet<{ id: number; name: string; model: string; last_test_ok: boolean | null }[]>("ai/model-options"),
     nrGet<{ key: string; name: string; language: string }[]>("styles")]);
   const styleOpts = [{ value: "", label: t("styleDefault") },
-    ...[...new Map(styleRows.map((s) => [s.key, s])).values()].map((s) => ({ value: s.key, label: `${s.name} (${s.key})` }))];
+    ...[...new Map(styleRows.map((s) => [s.key, s])).values()].map((s) => ({ value: s.key, label: styleLabel(styleRows, s.key) }))];
   const promptOpts = ["5", "4", "3", "2", "1"].map((v) => ({ value: v, label: `v${v}` }));
   const modelOpts = models.map((m) => ({ value: String(m.id), label: `${m.name} · ${m.model}${m.last_test_ok ? " ✓" : m.last_test_ok === false ? ` ⚠ ${t("modelFailed")}` : ""}` }));
   const busy = d.pending.some((p) => p.status === "queued" || p.status === "running") || d.experiments.some((x) => x.ready + x.failed < x.pairs);

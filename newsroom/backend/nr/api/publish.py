@@ -45,7 +45,7 @@ CARD_SQL = """
            ne.id AS event_id, ne.event_class, ne.coin, ne.direction, ne.column_key, ne.venue,
            v.id AS version_id, v.headline, v.body, v.thread, v.reply_text, v.style_key, v.model, v.agent_key, v.facts_used,
            v.guard_status, (v.guard_report->>'x_length')::int AS x_length, (v.guard_report->>'length_limit')::int AS length_limit,
-           st.name AS style_name, (SELECT count(*) FROM article_version x WHERE x.article_id = a.id) AS n_versions,
+           st.name AS style_name, (SELECT z.name FROM editorial_style z WHERE z.key = 'zh_' || substring(v.style_key from 4) ORDER BY z.version DESC LIMIT 1) AS style_zh, (SELECT count(*) FROM article_version x WHERE x.article_id = a.id) AS n_versions,
            (SELECT t.name FROM api_token t WHERE t.id = a.claimed_by_token) AS claimed_by,
            a.claimed_at, {why} AS why,
            (SELECT m.id FROM media_asset m JOIN fact_packet mp ON mp.id = m.fact_packet_id

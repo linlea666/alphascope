@@ -4,7 +4,7 @@ import { FieldForm, type Field } from "@/components/FieldForm";
 import { Badge, PageHeader, Panel } from "@/components/ui";
 import { nrGet, nrGetOptional } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
-import { platformName } from "@/lib/glossary";
+import { platformName, styleLabel } from "@/lib/glossary";
 import type { Account } from "@/lib/types";
 
 const CLASSES = ["whale_open", "flip", "whale_add", "underwater_add", "whale_close", "liquidation", "near_liquidation", "notable_trader_move"];
@@ -14,8 +14,8 @@ export default async function AccountsPage() {
   const [t, tc, tw, locale, accounts, styles] = await Promise.all([getTranslations("accounts"), getTranslations("common"),
     getTranslations("statusWords"), getLocale(), nrGet<Account[]>("accounts"), nrGet<{ key: string; name: string }[]>("styles")]);
   const styleKeys = [...new Set(styles.map((s) => s.key))];
-  const styleOpts = styleKeys.map((k) => ({ value: k, label: `${styles.find((s) => s.key === k)?.name ?? k}（${k.startsWith("zh_") ? "中文" : "English"}）` }));
-  const styleName = (k: string | null) => (k ? styles.find((s) => s.key === k)?.name ?? k : "");
+  const styleOpts = styleKeys.map((k) => ({ value: k, label: styleLabel(styles, k) }));
+  const styleName = (k: string | null) => styleLabel(styles, k);
   const fields = (a?: Account): Field[] => [
     { name: "handle", label: t("handle"), value: a?.handle, required: true },
     { name: "display_name", label: t("name"), value: a?.display_name, required: true },

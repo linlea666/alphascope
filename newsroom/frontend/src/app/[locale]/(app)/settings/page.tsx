@@ -8,7 +8,7 @@ import { Badge, Empty, KV, PageHeader, Panel, td, th } from "@/components/ui";
 import { Link } from "@/i18n/routing";
 import { nrGet, nrGetOptional } from "@/lib/api";
 import { fmtTime } from "@/lib/format";
-import { auditName, named, word } from "@/lib/glossary";
+import { auditName, named, styleLabel, word } from "@/lib/glossary";
 
 const TABS = ["sources", "ai", "agents", "prompts", "styles", "users", "costs", "rules", "jobs", "rpa", "audit"] as const;
 type Tab = (typeof TABS)[number];
@@ -387,7 +387,7 @@ async function Rules() {
     nrGet<{ key: string; name: string; language: string }[]>("styles")]);
   const field = (section: string, key: string) => (tf.has(`${section}__${key}.name`)
     ? { label: tf(`${section}__${key}.name`), help: tf(`${section}__${key}.desc`) } : { label: key });
-  const zhName = (k: string) => styles.find((x) => x.key === `zh_${k}`)?.name ?? k;
+  const zhName = (k: string) => `${styles.find((x) => x.key === `zh_${k}`)?.name ?? k}（中文账号用中文版，英文账号用英文版）`;
   const styleOpts = HOUSE_STYLES.map((k) => ({ value: `{language}_${k}`, label: zhName(k) }));
   const byReporter = (s.styles?.by_reporter ?? {}) as Record<string, string>;
   const reporters = ["reporter_breaking", "reporter_investigator", "reporter_data", "reporter_derivatives", "reporter_historian", "reporter"];
@@ -526,7 +526,7 @@ async function Styles() {
       </Panel>
       <div className="grid gap-3 md:grid-cols-2">
         {[...latest.values()].map((st) => (
-          <Panel key={st.key} title={<>{st.name} <span className="text-xs font-normal text-muted">{st.key} · {tx("styleVersion", { v: st.version })}</span></>} hint={st.guide}>
+          <Panel key={st.key} title={<>{styleLabel(styles, st.key)} <span className="text-xs font-normal text-muted">{st.key} · {tx("styleVersion", { v: st.version })}</span></>} hint={st.guide}>
             <p className="text-xs text-muted">{st.forbidden.join(" · ")}</p>
           </Panel>
         ))}
